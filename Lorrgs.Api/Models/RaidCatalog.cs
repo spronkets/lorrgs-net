@@ -2,7 +2,6 @@ namespace Lorrgs.Api.Models;
 
 public class RaidEdition
 {
-    public int Id { get; set; }
     public string Slug { get; set; } = "";
     public string Name { get; set; } = "";
     public int Order { get; set; }
@@ -11,7 +10,7 @@ public class RaidEdition
 
 public class RaidInstance
 {
-    public int Id { get; set; }
+    public int ZoneId { get; set; }
     public string Slug { get; set; } = "";
     public string Name { get; set; } = "";
     public string Edition { get; set; } = "";
@@ -22,6 +21,7 @@ public class RaidInstance
 
 public class RaidBossOption
 {
+    public int Id { get; set; }
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
     public bool Mapped { get; set; }

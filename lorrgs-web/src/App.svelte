@@ -1,16 +1,12 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import * as API from './lib/api'
-  import * as Cache from './lib/cache'
-  import HomePage from './lib/pages/HomePage.svelte'
-  import RankingsPage from './lib/pages/RankingsPage.svelte'
-  import CompRankingsPage from './lib/pages/CompRankingsPage.svelte'
-  import WorldDataPage from './lib/pages/WorldDataPage.svelte'
-  import RotationAnalyzerPage from './lib/pages/RotationAnalyzerPage.svelte'
+  import { onMount } from 'svelte';
+  import * as API from './lib/api';
+  import HomePage from './lib/pages/HomePage.svelte';
+  import CompRankingsPage from './lib/pages/CompRankingsPage.svelte';
+  import WorldDataPage from './lib/pages/WorldDataPage.svelte';
+  import RotationAnalyzerPage from './lib/pages/RotationAnalyzerPage.svelte';
 
-  let currentPage = 'home'
-  let preselectedSpec = ''
-  let preselectedBoss = ''
+  let currentPage = 'home';
   let worldData = {
     classes: [],
     specs: [],
@@ -20,149 +16,117 @@
     spells: [],
     trinkets: [],
     seasons: []
-  }
+  };
   let raidCatalog = {
     editions: [],
     instances: {}
-  }
-  let loading = true
-  let error = ''
-  let theme = 'light'
-  let hasHydratedQuery = false
+  };
+  let loading = true;
+  let error = '';
+  let theme = 'light';
+  let hasHydratedQuery = false;
 
-  const THEME_STORAGE_KEY = 'lorrgs-theme'
-  const PAGE_QUERY_KEY = 'page'
-  const APP_PAGES = new Set(['home', 'rankings', 'comp', 'worlddata', 'rotation'])
+  const THEME_STORAGE_KEY = 'lorrgs-theme';
+  const PAGE_QUERY_KEY = 'page';
+  const APP_PAGES = new Set(['home', 'comp', 'worlddata', 'rotation']);
 
   function applyTheme(nextTheme) {
-    theme = nextTheme === 'dark' ? 'dark' : 'light'
+    theme = nextTheme === 'dark' ? 'dark' : 'light';
   }
 
   function toggleTheme() {
-    applyTheme(theme === 'dark' ? 'light' : 'dark')
-    localStorage.setItem(THEME_STORAGE_KEY, theme)
+    applyTheme(theme === 'dark' ? 'light' : 'dark');
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
   }
 
   function initializeTheme() {
-    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY)
+    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
     if (storedTheme === 'light' || storedTheme === 'dark') {
-      applyTheme(storedTheme)
-      return
+      applyTheme(storedTheme);
+      return;
     }
 
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    applyTheme(prefersDark ? 'dark' : 'light')
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(prefersDark ? 'dark' : 'light');
   }
 
   function initializeSelectionsFromQuery() {
-    const params = new URLSearchParams(window.location.search)
-    const requestedPage = params.get(PAGE_QUERY_KEY)
+    const params = new URLSearchParams(window.location.search);
+    const requestedPage = params.get(PAGE_QUERY_KEY);
 
     if (requestedPage && APP_PAGES.has(requestedPage)) {
-      currentPage = requestedPage
+      currentPage = requestedPage;
     }
-
-    preselectedSpec = params.get('spec') || preselectedSpec
-    preselectedBoss = params.get('boss') || preselectedBoss
   }
 
   function syncPageQueryParam() {
-    const url = new URL(window.location.href)
+    const url = new URL(window.location.href);
 
     if (currentPage === 'home') {
-      url.searchParams.delete(PAGE_QUERY_KEY)
+      url.searchParams.delete(PAGE_QUERY_KEY);
     } else {
-      url.searchParams.set(PAGE_QUERY_KEY, currentPage)
+      url.searchParams.set(PAGE_QUERY_KEY, currentPage);
     }
 
-    const nextUrl = `${url.pathname}${url.search}${url.hash}`
-    window.history.replaceState({}, '', nextUrl)
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+    window.history.replaceState({}, '', nextUrl);
   }
 
   async function loadWorldData() {
     try {
-      const apiHealthy = await API.waitForHealthReady()
+      const apiHealthy = await API.waitForHealthReady();
       if (!apiHealthy) {
-        throw new Error('API is not ready yet (health endpoint did not return healthy).')
+        throw new Error('API is not ready yet (health endpoint did not return healthy).');
       }
 
-      // Try loading from cache first
-      const cacheKey = 'worldData-v3'
-      let data = Cache.getWorldDataCache(cacheKey)
       const initialRaidCatalog = await API.getRaidCatalog().catch(() => ({
         editions: [],
         instances: {}
-      }))
+      }));
 
-      const hasValidWorldData =
-        data &&
-        Array.isArray(data.bosses) &&
-        data.bosses.length > 0 &&
-        Array.isArray(data.specs) &&
-        data.specs.length > 0
+      const [classes, specs, roles, bosses, zones, spells, trinkets, seasons] = await Promise.all([
+        API.getClasses().catch(() => ({})),
+        API.getSpecs().catch(() => ({ specs: [] })),
+        API.getRoles().catch(() => ({ roles: [] })),
+        API.getBosses().catch(() => ({ bosses: [] })),
+        API.getZones().catch(() => ({ zones: [] })),
+        API.getSpells().catch(() => ({ spells: [] })),
+        API.getTrinkets().catch(() => ({ trinkets: [] })),
+        API.getSeasons().catch(() => ({ seasons: [] }))
+      ]);
 
-      if (!hasValidWorldData) {
-        data = null
-      }
+      const data = {
+        classes: API.normalizeApiCollection(classes, 'classes'),
+        specs: API.normalizeApiCollection(specs, 'specs'),
+        roles: API.normalizeApiCollection(roles, 'roles'),
+        bosses: API.normalizeApiCollection(bosses, 'bosses'),
+        zones: API.normalizeApiCollection(zones, 'zones'),
+        spells: API.normalizeApiCollection(spells, 'spells'),
+        trinkets: API.normalizeApiCollection(trinkets, 'trinkets'),
+        seasons: API.normalizeApiCollection(seasons, 'seasons')
+      };
 
-      if (!data) {
-        const [classes, specs, roles, bosses, zones, spells, trinkets, seasons] = await Promise.all(
-          [
-            API.getClasses().catch(() => ({})),
-            API.getSpecs().catch(() => ({ specs: [] })),
-            API.getRoles().catch(() => ({ roles: [] })),
-            API.getBosses().catch(() => ({ bosses: [] })),
-            API.getZones().catch(() => ({ zones: [] })),
-            API.getSpells().catch(() => ({ spells: [] })),
-            API.getTrinkets().catch(() => ({ trinkets: [] })),
-            API.getSeasons().catch(() => ({ seasons: [] }))
-          ]
-        )
-
-        data = {
-          classes: API.normalizeApiCollection(classes, 'classes'),
-          specs: API.normalizeApiCollection(specs, 'specs'),
-          roles: API.normalizeApiCollection(roles, 'roles'),
-          bosses: API.normalizeApiCollection(bosses, 'bosses'),
-          zones: API.normalizeApiCollection(zones, 'zones'),
-          spells: API.normalizeApiCollection(spells, 'spells'),
-          trinkets: API.normalizeApiCollection(trinkets, 'trinkets'),
-          seasons: API.normalizeApiCollection(seasons, 'seasons')
-        }
-        Cache.cacheWorldData(cacheKey, data)
-      }
-
-      worldData = data
-      raidCatalog = initialRaidCatalog
-      error = ''
+      worldData = data;
+      raidCatalog = initialRaidCatalog;
+      error = '';
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Unknown error'
-      console.error('Failed to load world data:', err)
+      error = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Failed to load world data:', err);
     } finally {
-      loading = false
+      loading = false;
     }
   }
 
-  /**
-   * @param {string} specSlug
-   * @param {string} bossSlug
-   */
-  function goToRankings(specSlug, bossSlug) {
-    preselectedSpec = specSlug
-    preselectedBoss = bossSlug
-    currentPage = 'rankings'
-  }
-
   onMount(() => {
-    initializeTheme()
-    initializeSelectionsFromQuery()
-    hasHydratedQuery = true
-    loadWorldData()
-  })
+    initializeTheme();
+    initializeSelectionsFromQuery();
+    hasHydratedQuery = true;
+    loadWorldData();
+  });
 
   $: if (typeof window !== 'undefined' && hasHydratedQuery) {
-    void currentPage
-    syncPageQueryParam()
+    void currentPage;
+    syncPageQueryParam();
   }
 </script>
 
@@ -185,9 +149,6 @@
     </div>
     <nav class="app-nav">
       <button class:active={currentPage === 'home'} on:click={() => (currentPage = 'home')}>
-        Home
-      </button>
-      <button class:active={currentPage === 'rankings'} on:click={() => (currentPage = 'rankings')}>
         Spec Rankings
       </button>
       <button class:active={currentPage === 'comp'} on:click={() => (currentPage = 'comp')}>
@@ -216,14 +177,7 @@
       <div class="loading">Loading...</div>
     {:else}
       {#if currentPage === 'home'}
-        <HomePage {worldData} {raidCatalog} onSelectSpec={goToRankings} />
-      {:else if currentPage === 'rankings'}
-        <RankingsPage
-          {worldData}
-          {raidCatalog}
-          initialSpec={preselectedSpec}
-          initialBoss={preselectedBoss}
-        />
+        <HomePage {worldData} {raidCatalog} />
       {:else if currentPage === 'comp'}
         <CompRankingsPage {worldData} />
       {:else if currentPage === 'worlddata'}

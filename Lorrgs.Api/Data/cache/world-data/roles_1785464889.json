@@ -1,1 +1,0 @@
-[{"Id":1,"Name":"Tank","NameSlug":"tank","Code":"tank","Metric":"dps","Color":"#0070dd"},{"Id":2,"Name":"Healer","NameSlug":"healer","Code":"heal","Metric":"hps","Color":"#1eff00"},{"Id":3,"Name":"Melee DPS","NameSlug":"melee-dps","Code":"mdps","Metric":"dps","Color":"#ff8000"},{"Id":4,"Name":"Ranged DPS","NameSlug":"ranged-dps","Code":"rdps","Metric":"dps","Color":"#ff80ff"}]

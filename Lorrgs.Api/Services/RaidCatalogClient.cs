@@ -12,11 +12,11 @@ public class RaidCatalogClient(
     private const string CacheKey = "raid-catalog";
     private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(6);
 
-    private static readonly Lazy<Dictionary<string, string>> BossSlugByName = new(() =>
+    private static readonly Lazy<Dictionary<string, RaidBoss>> BossByName = new(() =>
         WorldDataService.Instance.Bosses
             .Where(b => !string.IsNullOrWhiteSpace(b.Name) && !string.IsNullOrWhiteSpace(b.NameSlug))
             .GroupBy(b => NormalizeLookupKey(b.Name))
-            .ToDictionary(g => g.Key, g => g.First().NameSlug, StringComparer.OrdinalIgnoreCase));
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase));
 
     private readonly ILogger<RaidCatalogClient> _logger = logger;
     private readonly IMemoryCache _cache = cache;
@@ -42,7 +42,6 @@ public class RaidCatalogClient(
         var editions = _options.Editions
             .Select(edition => new RaidEdition
             {
-                Id = edition.Id,
                 Slug = edition.Slug,
                 Name = edition.Name,
                 Order = edition.Order,
@@ -69,7 +68,7 @@ public class RaidCatalogClient(
 
                 configuredRaids.Add(new RaidInstance
                 {
-                    Id = raid.Id,
+                    ZoneId = raid.ZoneId,
                     Slug = raid.Slug,
                     Name = raid.Name,
                     Edition = editionSlug,
@@ -91,18 +90,19 @@ public class RaidCatalogClient(
 
     private static List<RaidBossOption> MapBosses(IEnumerable<string> bossNames)
     {
-        var slugByName = BossSlugByName.Value;
+        var bossByName = BossByName.Value;
         var results = new List<RaidBossOption>();
 
         foreach (var bossName in bossNames)
         {
             var key = NormalizeLookupKey(bossName);
-            var mapped = slugByName.TryGetValue(key, out var slug) && !string.IsNullOrWhiteSpace(slug);
+            var mapped = bossByName.TryGetValue(key, out var boss) && !string.IsNullOrWhiteSpace(boss?.NameSlug);
 
             results.Add(new RaidBossOption
             {
+                Id = mapped ? boss!.Id : 0,
                 Name = bossName,
-                Slug = mapped ? slug! : string.Empty,
+                Slug = mapped ? boss!.NameSlug : string.Empty,
                 Mapped = mapped
             });
         }

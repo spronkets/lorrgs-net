@@ -1,30 +1,60 @@
 <script lang="ts">
-  import { getDisplayPercentile, getSortedReports } from '../rankingUtils'
+  import { getDisplayPercentile } from '../rankingUtils';
 
-  export let rankings = {}
+  export let rankings = {};
+  export let specLabel = '';
+  export let bossLabel = '';
 
-  let sortBy = 'percentile'
-  let sortDesc = true
-
-  function toggleSort(field) {
-    if (sortBy === field) {
-      sortDesc = !sortDesc
-    } else {
-      sortBy = field
-      sortDesc = true
-    }
+  function formatSlugLabel(value) {
+    return String(value || '')
+      .split('-')
+      .filter(Boolean)
+      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+      .join(' ');
   }
 
-  $: sortedReports = getSortedReports(rankings.reports, sortBy, sortDesc)
+  function formatLogDate(value) {
+    if (!value) {
+      return 'N/A';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return 'N/A';
+    }
+
+    return date.toLocaleDateString();
+  }
+
+  function formatPrimaryPlayer(report) {
+    const player = report?.players?.[0];
+    if (!player?.name) {
+      return 'N/A';
+    }
+
+    return player.name;
+  }
+
+  function formatPrimaryGuild(report) {
+    const guild = report?.players?.[0]?.guildName;
+    if (!guild) {
+      return '';
+    }
+
+    return String(guild).trim();
+  }
+
+  $: apiReports = Array.isArray(rankings?.reports) ? rankings.reports : [];
+  $: resolvedSpecLabel = specLabel || formatSlugLabel(rankings.specSlug);
+  $: resolvedBossLabel = bossLabel || formatSlugLabel(rankings.bossSlug);
 </script>
 
 <div class="rankings-list">
   <div class="rankings-header">
     <div class="rankings-info">
-      <h3>{rankings.specSlug} - {rankings.bossSlug}</h3>
+      <h3>{resolvedSpecLabel} - {resolvedBossLabel}</h3>
       <p>{rankings.difficulty} • Metric: {rankings.metric}</p>
       <p class="meta">
-        Average Percentile: {getDisplayPercentile(rankings.percentile)}
         <span class="updated">
           Updated: {rankings.updated ? new Date(rankings.updated).toLocaleDateString() : 'N/A'}
         </span>
@@ -37,33 +67,24 @@
       <thead>
         <tr>
           <th>#</th>
+          <th>Player</th>
           <th>Report</th>
-          <th>
-            <button
-              class:active={sortBy === 'percentile'}
-              on:click={() => toggleSort('percentile')}
-            >
-              Percentile {sortBy === 'percentile' ? (sortDesc ? '↓' : '↑') : ''}
-            </button>
-          </th>
-          <th>
-            <button class:active={sortBy === 'dps'} on:click={() => toggleSort('dps')}>
-              Performance {sortBy === 'dps' ? (sortDesc ? '↓' : '↑') : ''}
-            </button>
-          </th>
-          <th>
-            <button class:active={sortBy === 'duration'} on:click={() => toggleSort('duration')}>
-              Duration {sortBy === 'duration' ? (sortDesc ? '↓' : '↑') : ''}
-            </button>
-          </th>
-          <th>Players</th>
-          <th>Kill</th>
+          <th>Percentile</th>
+          <th>Performance</th>
+          <th>Duration</th>
+          <th>Date</th>
         </tr>
       </thead>
       <tbody>
-        {#each sortedReports as report, idx (report.reportId ?? report.title ?? idx)}
+        {#each apiReports as report, idx (`${report.reportId ?? 'report'}-${report.startTime ?? 'time'}-${report.fights?.[0]?.fightId ?? 'fight'}-${idx}`)}
           <tr class:killed={report.fights?.[0]?.isKill}>
             <td class="rank">{idx + 1}</td>
+            <td class="player">
+              <div class="player-name">{formatPrimaryPlayer(report)}</div>
+              {#if formatPrimaryGuild(report)}
+                <div class="player-guild">&lt;{formatPrimaryGuild(report)}&gt;</div>
+              {/if}
+            </td>
             <td class="report">
               <a
                 href="https://www.warcraftlogs.com/reports/{report.reportId}"
@@ -73,21 +94,12 @@
                 {report.title || 'Untitled report'}
               </a>
             </td>
-            <td class="percentile"
-              >{report.percentile ? `${report.percentile.toFixed(1)}%` : 'N/A'}</td
-            >
+            <td class="percentile">{getDisplayPercentile(report.percentile)}</td>
             <td class="performance">
               {report.players?.[0]?.performance || 'N/A'}
             </td>
             <td class="duration">{report.durationDisplay || 'N/A'}</td>
-            <td class="players">{report.players?.length || 0}</td>
-            <td class="kill">
-              {#if report.fights?.[0]?.isKill}
-                <span class="badge kill">✓</span>
-              {:else}
-                <span class="badge wipe">✗</span>
-              {/if}
-            </td>
+            <td class="log-date">{formatLogDate(report.startTime)}</td>
           </tr>
         {/each}
       </tbody>
@@ -134,7 +146,7 @@
   .meta {
     margin-top: 0.5rem !important;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
   }
 
@@ -215,6 +227,21 @@
     word-break: break-word;
   }
 
+  .player {
+    color: #3e607f;
+  }
+
+  .player-name {
+    white-space: nowrap;
+  }
+
+  .player-guild {
+    margin-top: 0.15rem;
+    color: #6c89a2;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
   .report a:hover {
     text-decoration: underline;
   }
@@ -234,28 +261,6 @@
 
   .players {
     text-align: center;
-  }
-
-  .kill {
-    text-align: center;
-  }
-
-  .badge {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-  }
-
-  .badge.kill {
-    background: rgba(76, 175, 80, 0.3);
-    color: #4caf50;
-  }
-
-  .badge.wipe {
-    background: rgba(244, 67, 54, 0.3);
-    color: #f44336;
   }
 
   :global(.theme-dark) .rankings-header {
@@ -310,6 +315,10 @@
 
   :global(.theme-dark) .report a {
     color: #8ec9ff;
+  }
+
+  :global(.theme-dark) .player-guild {
+    color: #99b7cf;
   }
 
   :global(.theme-dark) .percentile {

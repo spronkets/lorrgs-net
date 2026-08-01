@@ -7,8 +7,6 @@ public sealed class RaidCatalogOptions
 
 public sealed class RaidCatalogEditionSeed
 {
-    public int Id { get; set; }
-
     public string Slug { get; set; } = string.Empty;
 
     public string Name { get; set; } = string.Empty;
@@ -22,7 +20,7 @@ public sealed class RaidCatalogEditionSeed
 
 public sealed class RaidCatalogRaidSeed
 {
-    public int Id { get; set; }
+    public int ZoneId { get; set; }
 
     public string Slug { get; set; } = string.Empty;
 

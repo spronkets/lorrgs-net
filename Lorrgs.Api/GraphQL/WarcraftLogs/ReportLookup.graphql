@@ -1,0 +1,24 @@
+query ReportLookup($code: String!) {
+  reportData {
+    report(code: $code) {
+      title
+      zone {
+        id
+        name
+      }
+      fights {
+        id
+        name
+        kill
+        difficulty
+      }
+      masterData {
+        actors(type: "Player") {
+          id
+          name
+          subType
+        }
+      }
+    }
+  }
+}

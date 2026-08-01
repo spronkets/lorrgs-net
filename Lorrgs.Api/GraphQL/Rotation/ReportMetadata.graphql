@@ -1,0 +1,29 @@
+query ReportMetadata($code: String!) {
+  reportData {
+    report(code: $code) {
+      title
+      startTime
+      endTime
+      zone {
+        id
+        name
+      }
+      fights {
+        id
+        name
+        startTime
+        endTime
+        kill
+        difficulty
+      }
+      masterData {
+        actors(type: "Player") {
+          id
+          name
+          subType
+          type
+        }
+      }
+    }
+  }
+}

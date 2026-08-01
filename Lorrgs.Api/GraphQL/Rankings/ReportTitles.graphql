@@ -1,0 +1,5 @@
+query ReportTitles {
+  reportData {
+    __REPORTS_BLOCK__
+  }
+}

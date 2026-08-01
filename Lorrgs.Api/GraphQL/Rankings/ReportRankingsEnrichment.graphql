@@ -1,0 +1,5 @@
+query ReportRankingsEnrichment($playerMetric: ReportRankingMetricType) {
+  reportData {
+    __REPORTS_BLOCK__
+  }
+}

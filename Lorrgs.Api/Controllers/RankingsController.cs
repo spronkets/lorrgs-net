@@ -1,13 +1,18 @@
 using Microsoft.AspNetCore.Mvc;
 using Lorrgs.Api.Models;
 using Lorrgs.Api.Services;
+using Lorrgs.WarcraftLogs;
+using Lorrgs.WarcraftLogs.Contracts;
+using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
+using WclClient = Lorrgs.WarcraftLogs.WarcraftLogsClient;
 
 namespace Lorrgs.Api.Controllers;
 
 /// <summary>
 /// Provides ranking data for specs and compositions.
-/// Data is cached for 5 minutes. Background tasks (Phase 4) will update rankings from WarcraftLogs.
+/// Data is cached for 1 day by default.
 /// This controller serves pre-computed rankings from the cache, avoiding real-time API calls.
 /// </summary>
 [ApiController]
@@ -15,7 +20,8 @@ namespace Lorrgs.Api.Controllers;
 public class RankingsController(
     ILogger<RankingsController> logger,
     CacheService cacheService,
-    WarcraftLogsClient warcraftLogsClient) : ControllerBase
+    WclClient warcraftLogsClient,
+    IOptions<RaidCatalogOptions> raidCatalogOptions) : ControllerBase
 {
     private static readonly HashSet<string> AllowedCharacterRankingMetrics = new(StringComparer.Ordinal)
     {
@@ -54,30 +60,18 @@ public class RankingsController(
 
     private readonly ILogger<RankingsController> _logger = logger;
     private readonly CacheService _cacheService = cacheService;
-    private readonly WarcraftLogsClient _warcraftLogsClient = warcraftLogsClient;
+    private readonly WclClient _warcraftLogsClient = warcraftLogsClient;
+    private readonly RaidCatalogOptions _raidCatalogOptions = raidCatalogOptions.Value;
     private readonly WorldDataService _worldDataService = WorldDataService.Instance;
 
-    // GraphQL query for spec rankings - follows WarcraftLogs API structure
-        // Returns characterRankings for a specific zone encounter/spec/metric/difficulty
-        private const string SpecRankingsQuery = """
-                                query SpecRankings($zoneId: Int!, $className: String!, $specName: String!, $metric: CharacterRankingMetricType!, $difficulty: Int!) {
-          worldData {
-                        zone(id: $zoneId) {
-                            encounters {
-                                id
-                                name
-                                characterRankings(
-                                    className: $className
-                                    specName: $specName
-                                    metric: $metric
-                                    difficulty: $difficulty
-                                    includeCombatantInfo: false
-                                )
-                            }
-            }
-          }
-        }
-    """;
+    private static readonly string SpecRankingsQuery =
+        GraphQlResourceLoader.Load("Rankings.SpecRankings.graphql");
+
+    private static readonly string ReportRankingsEnrichmentQueryTemplate =
+        GraphQlResourceLoader.Load("Rankings.ReportRankingsEnrichment.graphql");
+
+    private static readonly string ReportTitlesQueryTemplate =
+        GraphQlResourceLoader.Load("Rankings.ReportTitles.graphql");
 
     /// <summary>
     /// Get full ranking data for a spec on a specific boss.
@@ -87,18 +81,31 @@ public class RankingsController(
     public async Task<IActionResult> GetSpecRanking(
         string specSlug,
         string bossSlug,
+        [FromQuery] string? edition = null,
+        [FromQuery] bool refresh = false,
         [FromQuery] string difficulty = "mythic",
         [FromQuery] string metric = "",
         [FromQuery] int? zoneId = null,
         [FromQuery] int? encounterId = null,
         [FromQuery] string? className = null,
         [FromQuery] string? specName = null,
-        [FromQuery] int? difficultyId = null)
+        [FromQuery] int? difficultyId = null,
+        [FromQuery] int? page = null,
+        [FromQuery] int? partition = null,
+        [FromQuery] int? bracket = null,
+        [FromQuery] int? size = null,
+        [FromQuery] string? serverRegion = null,
+        [FromQuery] string? serverSlug = null,
+        [FromQuery] string? filter = null,
+        [FromQuery] string? hardModeLevel = null,
+        [FromQuery] string? externalBuffs = null,
+        [FromQuery] bool includeCombatantInfo = false,
+        [FromQuery] bool includeOtherPlayers = true)
     {
-        _logger.LogInformation("Fetching spec ranking: {SpecSlug}/{BossSlug} ({Difficulty}/{Metric})", 
+        _logger.LogInformation("Fetching spec ranking: {SpecSlug}/{BossSlug} ({Difficulty}/{Metric})",
             specSlug, bossSlug, difficulty, metric);
 
-        if (!TryResolveSpecRankingQuery(specSlug, bossSlug, zoneId, encounterId, className, specName, out var queryContext, out var queryError))
+        if (!TryResolveSpecRankingQuery(specSlug, bossSlug, edition, zoneId, encounterId, className, specName, out var queryContext, out var queryError))
         {
             return BadRequest(new { error = queryError });
         }
@@ -114,11 +121,12 @@ public class RankingsController(
 
         var difficultyLabel = BuildDifficultyLabel(difficulty, difficultyValue.Value);
 
-        // Determine metric from spec role if not provided
-        if (string.IsNullOrEmpty(metric))
+        if (string.IsNullOrWhiteSpace(metric))
         {
-            var spec = _worldDataService.GetSpec(specSlug);
-            metric = spec?.Role?.Metric ?? "dps";
+            return BadRequest(new
+            {
+                error = "metric is required. Frontend must provide an explicit metric value."
+            });
         }
 
         var normalizedMetric = NormalizeMetric(metric);
@@ -130,28 +138,51 @@ public class RankingsController(
             });
         }
 
-        var cacheKey = BuildSpecRankingCacheKey(queryContext, difficultyValue.Value, normalizedMetric);
-
-        // Try cache first (5-minute TTL for rankings, use short-lived cache)
-        var cached = await _cacheService.GetAsync<SpecRankingData>("rankings", cacheKey);
-        if (cached != null)
+        if (!TryBuildRankingRequestOptions(page, partition, bracket, size, serverRegion, serverSlug, filter, hardModeLevel, externalBuffs, includeCombatantInfo, includeOtherPlayers, out var requestOptions, out var optionsError))
         {
-            _logger.LogDebug("Returning cached spec ranking");
-            return Ok(cached);
+            return BadRequest(new { error = optionsError });
+        }
+
+        var cacheKey = BuildSpecRankingCacheKey(queryContext, difficultyValue.Value, normalizedMetric, edition, requestOptions);
+
+        if (!refresh)
+        {
+            var cached = await _cacheService.GetAsync<SpecRankingData>("rankings", cacheKey);
+            if (cached != null)
+            {
+                if (ShouldRefetchCachedRanking(cached))
+                {
+                    _logger.LogInformation(
+                        "Cached spec ranking appears stale (missing guild names). Refetching: {SpecSlug}/{BossSlug}",
+                        specSlug,
+                        bossSlug);
+                }
+                else
+                {
+                    _logger.LogDebug("Returning cached spec ranking");
+                    return Ok(cached);
+                }
+            }
         }
 
         try
         {
             // Fetch from WarcraftLogs API
-            var ranking = await FetchSpecRankingFromWCL(queryContext, difficultyValue.Value, difficultyLabel, normalizedMetric);
-            
+            var ranking = await FetchSpecRankingFromWCL(
+                queryContext,
+                difficultyValue.Value,
+                difficultyLabel,
+                normalizedMetric,
+                edition,
+                requestOptions);
+
             if (ranking == null)
             {
                 return NotFound(new { error = "Ranking not found" });
             }
 
-            // Cache with 5-minute TTL (rankings change frequently)
-            await CacheRankingWithShortTTL(cacheKey, ranking);
+            // Cache persists for 1 day by default.
+            await CacheRanking(cacheKey, ranking);
 
             return Ok(ranking);
         }
@@ -170,17 +201,30 @@ public class RankingsController(
     public async Task<IActionResult> GetSpecRankingInfo(
         string specSlug,
         string bossSlug,
+        [FromQuery] string? edition = null,
+        [FromQuery] bool refresh = false,
         [FromQuery] string difficulty = "mythic",
         [FromQuery] string metric = "",
         [FromQuery] int? zoneId = null,
         [FromQuery] int? encounterId = null,
         [FromQuery] string? className = null,
         [FromQuery] string? specName = null,
-        [FromQuery] int? difficultyId = null)
+        [FromQuery] int? difficultyId = null,
+        [FromQuery] int? page = null,
+        [FromQuery] int? partition = null,
+        [FromQuery] int? bracket = null,
+        [FromQuery] int? size = null,
+        [FromQuery] string? serverRegion = null,
+        [FromQuery] string? serverSlug = null,
+        [FromQuery] string? filter = null,
+        [FromQuery] string? hardModeLevel = null,
+        [FromQuery] string? externalBuffs = null,
+        [FromQuery] bool includeCombatantInfo = false,
+        [FromQuery] bool includeOtherPlayers = true)
     {
         _logger.LogInformation("Fetching spec ranking info: {SpecSlug}/{BossSlug}", specSlug, bossSlug);
 
-        if (!TryResolveSpecRankingQuery(specSlug, bossSlug, zoneId, encounterId, className, specName, out var queryContext, out var queryError))
+        if (!TryResolveSpecRankingQuery(specSlug, bossSlug, edition, zoneId, encounterId, className, specName, out var queryContext, out var queryError))
         {
             return BadRequest(new { error = queryError });
         }
@@ -196,10 +240,12 @@ public class RankingsController(
 
         var difficultyLabel = BuildDifficultyLabel(difficulty, difficultyValue.Value);
 
-        if (string.IsNullOrEmpty(metric))
+        if (string.IsNullOrWhiteSpace(metric))
         {
-            var spec = _worldDataService.GetSpec(specSlug);
-            metric = spec?.Role?.Metric ?? "dps";
+            return BadRequest(new
+            {
+                error = "metric is required. Frontend must provide an explicit metric value."
+            });
         }
 
         var normalizedMetric = NormalizeMetric(metric);
@@ -211,22 +257,35 @@ public class RankingsController(
             });
         }
 
-        var cacheKey = $"{BuildSpecRankingCacheKey(queryContext, difficultyValue.Value, normalizedMetric)}_info";
-
-        // Try cache
-        var cached = await _cacheService.GetAsync<SpecRankingData>("rankings", cacheKey);
-        if (cached != null)
+        if (!TryBuildRankingRequestOptions(page, partition, bracket, size, serverRegion, serverSlug, filter, hardModeLevel, externalBuffs, includeCombatantInfo, includeOtherPlayers, out var requestOptions, out var optionsError))
         {
-            _logger.LogDebug("Returning cached spec ranking info");
-            // Clear reports from cached data before returning (info only, no reports)
-            cached.Reports?.Clear();
-            return Ok(cached);
+            return BadRequest(new { error = optionsError });
+        }
+
+        var cacheKey = $"{BuildSpecRankingCacheKey(queryContext, difficultyValue.Value, normalizedMetric, edition, requestOptions)}_info";
+
+        if (!refresh)
+        {
+            var cached = await _cacheService.GetAsync<SpecRankingData>("rankings", cacheKey);
+            if (cached != null)
+            {
+                _logger.LogDebug("Returning cached spec ranking info");
+                // Clear reports from cached data before returning (info only, no reports)
+                cached.Reports?.Clear();
+                return Ok(cached);
+            }
         }
 
         try
         {
-            var ranking = await FetchSpecRankingFromWCL(queryContext, difficultyValue.Value, difficultyLabel, normalizedMetric);
-            
+            var ranking = await FetchSpecRankingFromWCL(
+                queryContext,
+                difficultyValue.Value,
+                difficultyLabel,
+                normalizedMetric,
+                edition,
+                requestOptions);
+
             if (ranking == null)
             {
                 return NotFound(new { error = "Ranking not found" });
@@ -234,7 +293,7 @@ public class RankingsController(
 
             // Clear reports before caching (info only)
             ranking.Reports?.Clear();
-            await CacheRankingWithShortTTL(cacheKey, ranking);
+            await CacheRanking(cacheKey, ranking);
 
             return Ok(ranking);
         }
@@ -254,6 +313,7 @@ public class RankingsController(
     public async Task<IActionResult> GetCompRanking(
         string bossSlug,
         [FromQuery] int limit = 20,
+        [FromQuery] bool refresh = false,
         [FromQuery(Name = "role")] string[]? roles = null,
         [FromQuery(Name = "spec")] string[]? specs = null)
     {
@@ -262,25 +322,27 @@ public class RankingsController(
         var filterKey = $"{string.Join(",", roles ?? [])}_{string.Join(",", specs ?? [])}";
         var cacheKey = $"{bossSlug}_{limit}_{filterKey}".TrimEnd('_');
 
-        // Try cache
-        var cached = await _cacheService.GetAsync<CompRankingData>("rankings", cacheKey);
-        if (cached != null)
+        if (!refresh)
         {
-            _logger.LogDebug("Returning cached comp ranking");
-            return Ok(cached);
+            var cached = await _cacheService.GetAsync<CompRankingData>("rankings", cacheKey);
+            if (cached != null)
+            {
+                _logger.LogDebug("Returning cached comp ranking");
+                return Ok(cached);
+            }
         }
 
         try
         {
             var ranking = await FetchCompRankingFromWCL(bossSlug, limit, roles, specs);
-            
+
             if (ranking == null)
             {
                 return NotFound(new { error = "Comp ranking not found" });
             }
 
-            // Cache with 5-minute TTL
-            await CacheRankingWithShortTTL(cacheKey, ranking);
+            // Cache persists for 1 day by default.
+            await CacheRanking(cacheKey, ranking);
 
             return Ok(ranking);
         }
@@ -344,6 +406,7 @@ public class RankingsController(
     public async Task<IActionResult> MarkSpecRankingDirty(
         [FromQuery] string specSlug,
         [FromQuery] string bossSlug,
+        [FromQuery] string? edition = null,
         [FromQuery] string difficulty = "mythic",
         [FromQuery] string metric = "",
         [FromQuery] int? zoneId = null,
@@ -351,11 +414,22 @@ public class RankingsController(
         [FromQuery] string? className = null,
         [FromQuery] string? specName = null,
         [FromQuery] int? difficultyId = null,
+        [FromQuery] int? page = null,
+        [FromQuery] int? partition = null,
+        [FromQuery] int? bracket = null,
+        [FromQuery] int? size = null,
+        [FromQuery] string? serverRegion = null,
+        [FromQuery] string? serverSlug = null,
+        [FromQuery] string? filter = null,
+        [FromQuery] string? hardModeLevel = null,
+        [FromQuery] string? externalBuffs = null,
+        [FromQuery] bool includeCombatantInfo = false,
+        [FromQuery] bool includeOtherPlayers = true,
         [FromQuery] bool dirty = true)
     {
         _logger.LogInformation("Marking spec ranking dirty: {SpecSlug}/{BossSlug}", specSlug, bossSlug);
 
-        if (!TryResolveSpecRankingQuery(specSlug, bossSlug, zoneId, encounterId, className, specName, out var queryContext, out var queryError))
+        if (!TryResolveSpecRankingQuery(specSlug, bossSlug, edition, zoneId, encounterId, className, specName, out var queryContext, out var queryError))
         {
             return BadRequest(new { error = queryError });
         }
@@ -371,10 +445,12 @@ public class RankingsController(
 
         var difficultyLabel = BuildDifficultyLabel(difficulty, difficultyValue.Value);
 
-        if (string.IsNullOrEmpty(metric))
+        if (string.IsNullOrWhiteSpace(metric))
         {
-            var spec = _worldDataService.GetSpec(specSlug);
-            metric = spec?.Role?.Metric ?? "dps";
+            return BadRequest(new
+            {
+                error = "metric is required. Frontend must provide an explicit metric value."
+            });
         }
 
         var normalizedMetric = NormalizeMetric(metric);
@@ -386,8 +462,13 @@ public class RankingsController(
             });
         }
 
+        if (!TryBuildRankingRequestOptions(page, partition, bracket, size, serverRegion, serverSlug, filter, hardModeLevel, externalBuffs, includeCombatantInfo, includeOtherPlayers, out var requestOptions, out var optionsError))
+        {
+            return BadRequest(new { error = optionsError });
+        }
+
         // Invalidate cache for this ranking
-        var cacheKey = BuildSpecRankingCacheKey(queryContext, difficultyValue.Value, normalizedMetric);
+        var cacheKey = BuildSpecRankingCacheKey(queryContext, difficultyValue.Value, normalizedMetric, edition, requestOptions);
         await _cacheService.InvalidateAsync("rankings", cacheKey);
         await _cacheService.InvalidateAsync("rankings", $"{cacheKey}_info");
 
@@ -407,10 +488,15 @@ public class RankingsController(
 
     /// <summary>
     /// Fetch spec ranking data from WarcraftLogs GraphQL API.
-    /// Executes the characterRankings query and parses response into model objects.
+    /// Executes the characterRankings query and maps response DTOs into domain models.
     /// </summary>
     private async Task<SpecRankingData?> FetchSpecRankingFromWCL(
-        RankingQueryContext queryContext, int difficultyValue, string difficultyLabel, string metric)
+        RankingQueryContext queryContext,
+        int difficultyValue,
+        string difficultyLabel,
+        string metric,
+        string? edition,
+        RankingRequestOptions requestOptions)
     {
         _logger.LogDebug(
             "Querying WarcraftLogs API for spec ranking: {SpecSlug}/{BossSlug} zone={ZoneId} encounter={EncounterId} class={ClassName} spec={SpecName}",
@@ -423,145 +509,668 @@ public class RankingsController(
 
         try
         {
-            // Build GraphQL variables
-            var variables = new
-            {
-                zoneId = queryContext.ZoneId,
-                className = queryContext.ClassName,
-                specName = queryContext.SpecName,
-                metric,
-                difficulty = difficultyValue
-            };
-
-            // Execute GraphQL query
-            var response = await _warcraftLogsClient.QueryGraphQLAsync(
-                SpecRankingsQuery,
-                variables
-            );
-
-            // Parse response into SpecRankingData
             var ranking = new SpecRankingData
             {
                 SpecSlug = queryContext.SpecSlug,
                 BossSlug = queryContext.BossSlug,
                 Difficulty = difficultyLabel,
                 Metric = metric,
+                Page = requestOptions.Page,
                 Updated = DateTime.UtcNow,
                 IsDirty = false,
                 Reports = new List<RankingReport>()
             };
 
-            // Extract rankings from response
-            if (response.TryGetProperty("worldData", out var worldData) &&
-                worldData.TryGetProperty("zone", out var zone) &&
-                zone.TryGetProperty("encounters", out var encounters) &&
-                encounters.ValueKind == JsonValueKind.Array)
+            var activeOptions = requestOptions;
+            var activeDifficulty = (int?)difficultyValue;
+
+            var queryResult = await QueryCharacterRankingsAsync(
+                queryContext,
+                metric,
+                activeDifficulty,
+                activeOptions,
+                edition);
+
+            if (queryResult.CharacterRankings == null)
             {
-                var encounter = encounters.EnumerateArray().FirstOrDefault(encounterElem =>
-                    TryGetInt32(encounterElem, "id") == queryContext.EncounterId);
+                return ranking;
+            }
 
-                if (encounter.ValueKind == JsonValueKind.Undefined)
+            if (IsInvalidDifficultyOrSizeError(queryResult.CharacterRankings.Error) && activeOptions.Size.HasValue)
+            {
+                var sizeFallbackOptions = activeOptions with { Size = null };
+                _logger.LogInformation(
+                    "WarcraftLogs rejected size={Size} for {SpecSlug}/{BossSlug}; retrying without size filter",
+                    activeOptions.Size,
+                    queryContext.SpecSlug,
+                    queryContext.BossSlug);
+
+                var retryWithoutSize = await QueryCharacterRankingsAsync(
+                    queryContext,
+                    metric,
+                    activeDifficulty,
+                    sizeFallbackOptions,
+                    edition);
+
+                if (retryWithoutSize.CharacterRankings != null)
                 {
-                    _logger.LogWarning(
-                        "Encounter {BossSlug} ({BossId}) was not returned for zone {ZoneId}",
-                        queryContext.BossSlug,
-                        queryContext.EncounterId,
-                        queryContext.ZoneId);
-                    return ranking;
-                }
-
-                if (encounter.TryGetProperty("characterRankings", out var characterRankings))
-                {
-                    var rankingsArray = characterRankings;
-                    if (characterRankings.ValueKind == JsonValueKind.Object &&
-                        characterRankings.TryGetProperty("rankings", out var nestedRankings))
-                    {
-                        rankingsArray = nestedRankings;
-                    }
-
-                    if (rankingsArray.ValueKind != JsonValueKind.Array)
-                    {
-                        _logger.LogWarning(
-                            "characterRankings was not an array/object rankings payload for {SpecSlug}/{BossSlug}",
-                            queryContext.SpecSlug,
-                            queryContext.BossSlug);
-                        return ranking;
-                    }
-
-                    var percentiles = new List<int>();
-
-                    foreach (var rankingElem in rankingsArray.EnumerateArray())
-                    {
-                        // Skip hidden reports
-                        if (rankingElem.TryGetProperty("hidden", out var hidden) && hidden.GetBoolean())
-                            continue;
-
-                        // Skip if no report data
-                        if (!rankingElem.TryGetProperty("report", out var reportData))
-                            continue;
-
-                        var percentile = TryGetInt32(rankingElem, "percentile");
-                        var duration = TryGetInt32(rankingElem, "duration");
-                        var amount = TryGetDouble(rankingElem, "amount");
-                        var rankingStart = TryGetInt64(rankingElem, "startTime");
-                        var reportStart = TryGetInt64(reportData, "startTime");
-                        var fightId = TryGetInt32(reportData, "fightID");
-                        var isKill = TryGetBool(rankingElem, "kill") ?? true;
-
-                        var report = new RankingReport
-                        {
-                            ReportId = TryGetString(reportData, "code") ?? "",
-                            Title = TryGetString(reportData, "title") ?? "",
-                            Percentile = percentile,
-                            Duration = duration,
-                            StartTime = UnixTimeStampToDateTime(rankingStart),
-                            Fights = new List<RankingFight>
-                            {
-                                new RankingFight
-                                {
-                                    FightId = fightId,
-                                    Name = queryContext.BossName,
-                                    Duration = duration,
-                                    IsKill = isKill,
-                                    StartTime = UnixTimeStampToDateTime(reportStart),
-                                    Percentile = percentile
-                                }
-                            },
-                            Players = new List<RankingPlayer>
-                            {
-                                new RankingPlayer
-                                {
-                                    PlayerId = 0, // WarcraftLogs doesn't provide player ID in ranking response
-                                    Name = TryGetString(rankingElem, "name") ?? "",
-                                    ClassId = queryContext.ClassId,
-                                    SpecId = queryContext.SpecId,
-                                    SpecSlug = queryContext.SpecSlug,
-                                    Performance = amount
-                                }
-                            }
-                        };
-
-                        if (!string.IsNullOrWhiteSpace(report.ReportId))
-                        {
-                            ranking.Reports.Add(report);
-                            percentiles.Add(report.Percentile);
-                        }
-                    }
-
-                    // Calculate average percentile
-                    if (percentiles.Count > 0)
-                    {
-                        ranking.Percentile = (int)percentiles.Average();
-                }
+                    queryResult = retryWithoutSize;
+                    activeOptions = sizeFallbackOptions;
                 }
             }
+
+            // Some WCL partitions silently return zero rows when `size` is provided.
+            // Retry once without size to recover real data for affected encounters.
+            if (activeOptions.Size.HasValue &&
+                queryResult.CharacterRankings.Count == 0 &&
+                queryResult.CharacterRankings.Rankings.Count == 0)
+            {
+                var sizeFallbackOptions = activeOptions with { Size = null };
+                _logger.LogInformation(
+                    "WarcraftLogs returned empty rankings with size={Size} for {SpecSlug}/{BossSlug}; retrying without size filter",
+                    activeOptions.Size,
+                    queryContext.SpecSlug,
+                    queryContext.BossSlug);
+
+                var retryWithoutSize = await QueryCharacterRankingsAsync(
+                    queryContext,
+                    metric,
+                    activeDifficulty,
+                    sizeFallbackOptions,
+                    edition);
+
+                if (retryWithoutSize.CharacterRankings != null)
+                {
+                    queryResult = retryWithoutSize;
+                    activeOptions = sizeFallbackOptions;
+                }
+            }
+
+            if (IsInvalidDifficultyOrSizeError(queryResult.CharacterRankings?.Error) && activeDifficulty.HasValue)
+            {
+                _logger.LogInformation(
+                    "WarcraftLogs rejected difficulty={Difficulty} for {SpecSlug}/{BossSlug}; retrying without explicit difficulty",
+                    activeDifficulty,
+                    queryContext.SpecSlug,
+                    queryContext.BossSlug);
+
+                var retryWithoutDifficulty = await QueryCharacterRankingsAsync(
+                    queryContext,
+                    metric,
+                    null,
+                    activeOptions,
+                    edition);
+
+                if (retryWithoutDifficulty.CharacterRankings != null)
+                {
+                    queryResult = retryWithoutDifficulty;
+                }
+            }
+
+            var characterRankings = queryResult.CharacterRankings;
+            if (characterRankings == null)
+            {
+                return ranking;
+            }
+
+            if (!string.IsNullOrWhiteSpace(characterRankings.Error))
+            {
+                _logger.LogWarning(
+                    "WarcraftLogs characterRankings returned error for {SpecSlug}/{BossSlug}: {Error}",
+                    queryContext.SpecSlug,
+                    queryContext.BossSlug,
+                    characterRankings.Error);
+                return ranking;
+            }
+
+            if (characterRankings.Page > 0)
+            {
+                ranking.Page = characterRankings.Page;
+            }
+
+            ranking.TotalCount = characterRankings.Count;
+            ranking.HasMorePages = characterRankings.HasMorePages;
+
+            foreach (var rankingElem in characterRankings.Rankings)
+            {
+                if (rankingElem.Hidden)
+                {
+                    continue;
+                }
+
+                var reportData = rankingElem.Report;
+                if (reportData == null || string.IsNullOrWhiteSpace(reportData.Code))
+                {
+                    continue;
+                }
+
+                var primaryPlayer = new RankingPlayer
+                {
+                    PlayerId = 0,
+                    Name = rankingElem.Name ?? string.Empty,
+                    GuildName = string.IsNullOrWhiteSpace(rankingElem.GuildName) ? null : rankingElem.GuildName,
+                    ClassId = queryContext.ClassId,
+                    SpecId = queryContext.SpecId,
+                    SpecSlug = queryContext.SpecSlug,
+                    Performance = rankingElem.Amount
+                };
+
+                var report = new RankingReport
+                {
+                    ReportId = reportData.Code,
+                    Title = string.IsNullOrWhiteSpace(reportData.Title)
+                        ? $"Report {reportData.Code}"
+                        : reportData.Title,
+                    Percentile = rankingElem.Percentile,
+                    Duration = rankingElem.Duration,
+                    StartTime = UnixTimeStampToDateTime(rankingElem.StartTime),
+                    Fights = new List<RankingFight>
+                    {
+                        new RankingFight
+                        {
+                            FightId = reportData.FightId,
+                            Name = queryContext.BossName,
+                            Duration = rankingElem.Duration,
+                            IsKill = rankingElem.Kill ?? true,
+                            StartTime = UnixTimeStampToDateTime(reportData.StartTime),
+                            Percentile = rankingElem.Percentile
+                        }
+                    },
+                    Players = BuildRankingPlayers(rankingElem, primaryPlayer)
+                };
+
+                ranking.Reports.Add(report);
+            }
+
+            await PopulatePlayerPercentilesAsync(ranking.Reports, queryContext, metric, edition);
+            await PopulateReportTitlesAsync(ranking.Reports, edition);
 
             return ranking;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching spec ranking from WarcraftLogs API");
-            return null; // Return null instead of throwing to handle gracefully
+            return null;
+        }
+    }
+
+    private async Task<(WclCharacterRankingsPayload? CharacterRankings, WclEncounterNode? Encounter)> QueryCharacterRankingsAsync(
+        RankingQueryContext queryContext,
+        string metric,
+        int? difficulty,
+        RankingRequestOptions requestOptions,
+        string? edition)
+    {
+        var variables = new
+        {
+            zoneId = queryContext.ZoneId,
+            className = queryContext.ClassName,
+            specName = queryContext.SpecName,
+            metric,
+            difficulty,
+            page = requestOptions.Page,
+            partition = requestOptions.Partition,
+            bracket = requestOptions.Bracket,
+            size = requestOptions.Size,
+            serverRegion = requestOptions.ServerRegion,
+            serverSlug = requestOptions.ServerSlug,
+            filter = requestOptions.Filter,
+            hardModeLevel = requestOptions.HardModeLevel,
+            externalBuffs = requestOptions.ExternalBuffs,
+            includeCombatantInfo = requestOptions.IncludeCombatantInfo,
+            includeOtherPlayers = requestOptions.IncludeOtherPlayers
+        };
+
+        var specRankingsResponse = await _warcraftLogsClient.QueryGraphQLAsync<WclSpecRankingsResponse>(
+            SpecRankingsQuery,
+            variables,
+            edition);
+
+        var encounters = specRankingsResponse.WorldData?.Zone?.Encounters;
+        if (encounters == null)
+        {
+            return (null, null);
+        }
+
+        if (!TryFindEncounter(encounters, queryContext, out var encounter))
+        {
+            _logger.LogWarning(
+                "Encounter {BossSlug} ({BossId}) was not returned for zone {ZoneId}",
+                queryContext.BossSlug,
+                queryContext.EncounterId,
+                queryContext.ZoneId);
+            return (null, null);
+        }
+
+        return (WclCharacterRankingsParser.Parse(encounter.CharacterRankings), encounter);
+    }
+
+    private static bool IsInvalidDifficultyOrSizeError(string? error)
+    {
+        return !string.IsNullOrWhiteSpace(error)
+            && error.Contains("Invalid difficulty setting or size specified.", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task PopulatePlayerPercentilesAsync(
+        List<RankingReport> reports,
+        RankingQueryContext queryContext,
+        string metric,
+        string? edition)
+    {
+        if (reports.Count == 0)
+        {
+            return;
+        }
+
+        var metricForReportRanking = ResolveReportRankingMetric(metric);
+        if (metricForReportRanking == null)
+        {
+            return;
+        }
+
+        var unresolvedReports = reports
+            .Where(static report =>
+                !string.IsNullOrWhiteSpace(report.ReportId) &&
+                (!report.Percentile.HasValue || report.Fights.Any(fight => !fight.Percentile.HasValue)))
+            .ToList();
+
+        if (unresolvedReports.Count == 0)
+        {
+            return;
+        }
+
+        const int chunkSize = 10;
+
+        for (var offset = 0; offset < unresolvedReports.Count; offset += chunkSize)
+        {
+            var chunk = unresolvedReports.Skip(offset).Take(chunkSize).ToList();
+            var aliasToReport = new Dictionary<string, RankingReport>(StringComparer.OrdinalIgnoreCase);
+            var reportsBlock = new StringBuilder();
+
+            for (var i = 0; i < chunk.Count; i++)
+            {
+                var report = chunk[i];
+                var alias = $"r{i}";
+                aliasToReport[alias] = report;
+                reportsBlock.AppendLine($"    {alias}: report(code: \"{report.ReportId}\") {{ code rankings(playerMetric: $playerMetric) }}");
+            }
+
+            var queryText = ReportRankingsEnrichmentQueryTemplate.Replace(
+                "__REPORTS_BLOCK__",
+                reportsBlock.ToString().TrimEnd());
+
+            JsonElement response;
+            try
+            {
+                response = await _warcraftLogsClient.QueryGraphQLAsync(
+                    queryText,
+                    new { playerMetric = metricForReportRanking },
+                    edition);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to enrich report percentiles for ranking response");
+                continue;
+            }
+
+            if (!response.TryGetProperty("reportData", out var reportData) || reportData.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            foreach (var entry in aliasToReport)
+            {
+                if (!reportData.TryGetProperty(entry.Key, out var reportElement) || reportElement.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                if (!reportElement.TryGetProperty("rankings", out var rankingsElement))
+                {
+                    continue;
+                }
+
+                var percentile = TryResolvePlayerRankPercent(rankingsElement, entry.Value, queryContext);
+                if (!percentile.HasValue)
+                {
+                    continue;
+                }
+
+                entry.Value.Percentile = percentile;
+                foreach (var fight in entry.Value.Fights)
+                {
+                    fight.Percentile = percentile;
+                }
+            }
+        }
+    }
+
+    private static double? TryResolvePlayerRankPercent(
+        JsonElement rankingsElement,
+        RankingReport report,
+        RankingQueryContext queryContext)
+    {
+        if (!TryGetRankingsDataArray(rankingsElement, out var rankingsData))
+        {
+            return null;
+        }
+
+        var primaryPlayer = report.Players.FirstOrDefault();
+        if (primaryPlayer == null || string.IsNullOrWhiteSpace(primaryPlayer.Name))
+        {
+            return null;
+        }
+
+        var targetFightId = report.Fights.FirstOrDefault()?.FightId ?? 0;
+
+        foreach (var rankingDataElem in rankingsData.EnumerateArray())
+        {
+            if (rankingDataElem.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            if (targetFightId > 0 && TryGetInt32(rankingDataElem, "fightID") != targetFightId)
+            {
+                continue;
+            }
+
+            if (!rankingDataElem.TryGetProperty("roles", out var rolesElement) || rolesElement.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var rankPercent = TryFindBestCharacterRankPercent(rolesElement, primaryPlayer, queryContext);
+            if (rankPercent.HasValue)
+            {
+                return rankPercent;
+            }
+        }
+
+        return null;
+    }
+
+    private static double? TryFindBestCharacterRankPercent(
+        JsonElement rolesElement,
+        RankingPlayer primaryPlayer,
+        RankingQueryContext queryContext)
+    {
+        var targetName = primaryPlayer.Name.Trim();
+        var targetClass = NormalizeComparableToken(queryContext.ClassName);
+        var targetSpec = NormalizeComparableToken(queryContext.SpecName);
+
+        var bestMatchScore = int.MinValue;
+        var bestAmountDelta = double.MaxValue;
+        double? bestRankPercent = null;
+
+        foreach (var roleProperty in rolesElement.EnumerateObject())
+        {
+            if (roleProperty.Value.ValueKind != JsonValueKind.Object ||
+                !roleProperty.Value.TryGetProperty("characters", out var charactersElement) ||
+                charactersElement.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var character in charactersElement.EnumerateArray())
+            {
+                if (character.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                var name = TryGetString(character, "name");
+                if (!string.Equals(name?.Trim(), targetName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var rankPercent = TryGetNullableDouble(character, "rankPercent");
+                if (!rankPercent.HasValue)
+                {
+                    continue;
+                }
+
+                var className = TryGetString(character, "class") ?? string.Empty;
+                var specName = TryGetString(character, "spec") ?? string.Empty;
+                var amount = TryGetDouble(character, "amount");
+
+                var matchScore = 0;
+                if (NormalizeComparableToken(className) == targetClass)
+                {
+                    matchScore += 2;
+                }
+
+                if (NormalizeComparableToken(specName) == targetSpec)
+                {
+                    matchScore += 3;
+                }
+
+                var amountDelta = Math.Abs(amount - primaryPlayer.Performance);
+                if (matchScore > bestMatchScore || (matchScore == bestMatchScore && amountDelta < bestAmountDelta))
+                {
+                    bestMatchScore = matchScore;
+                    bestAmountDelta = amountDelta;
+                    bestRankPercent = rankPercent;
+                }
+            }
+        }
+
+        return bestRankPercent;
+    }
+
+    private static bool TryGetRankingsDataArray(JsonElement rankingsElement, out JsonElement dataArray)
+    {
+        if (rankingsElement.ValueKind == JsonValueKind.Array)
+        {
+            dataArray = rankingsElement;
+            return true;
+        }
+
+        if (rankingsElement.ValueKind == JsonValueKind.Object &&
+            rankingsElement.TryGetProperty("data", out var nestedData) &&
+            nestedData.ValueKind == JsonValueKind.Array)
+        {
+            dataArray = nestedData;
+            return true;
+        }
+
+        dataArray = default;
+        return false;
+    }
+
+    private static bool ShouldRefetchCachedRanking(SpecRankingData cached)
+    {
+        if (cached.Reports == null || cached.Reports.Count == 0)
+        {
+            return false;
+        }
+
+        var hasAnyPlayers = cached.Reports.Any(r => r.Players != null && r.Players.Count > 0);
+        if (!hasAnyPlayers)
+        {
+            return false;
+        }
+
+        var hasAnyGuildNames = cached.Reports
+            .Where(r => r.Players != null)
+            .SelectMany(r => r.Players)
+            .Any(p => !string.IsNullOrWhiteSpace(p.GuildName));
+
+        return !hasAnyGuildNames;
+    }
+
+    private static string? ResolveReportRankingMetric(string metric)
+    {
+        var normalized = string.IsNullOrWhiteSpace(metric)
+            ? "dps"
+            : metric.Trim().ToLowerInvariant();
+
+        return normalized switch
+        {
+            "dps" => "dps",
+            "hps" => "hps",
+            "rdps" => "rdps",
+            "ndps" => "ndps",
+            "wdps" => "wdps",
+            "cdps" => "cdps",
+            _ => null
+        };
+    }
+
+    private List<RankingPlayer> BuildRankingPlayers(WclCharacterRankingEntry rankingElem, RankingPlayer primaryPlayer)
+    {
+        var players = new List<RankingPlayer> { primaryPlayer };
+
+        if (rankingElem.AllCharacters == null || rankingElem.AllCharacters.Count == 0)
+        {
+            return players;
+        }
+
+        foreach (var character in rankingElem.AllCharacters)
+        {
+            var name = character.Name;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            var className = character.Class;
+            var specName = character.Spec;
+
+            if (string.Equals(name, primaryPlayer.Name, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(className, _worldDataService.GetClass(primaryPlayer.ClassId)?.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var mappedClass = !string.IsNullOrWhiteSpace(className)
+                ? _worldDataService.Classes.FirstOrDefault(c => string.Equals(c.Name, className, StringComparison.OrdinalIgnoreCase))
+                : null;
+
+            var mappedSpec = ResolveSpecByNames(mappedClass?.Id, specName);
+
+            players.Add(new RankingPlayer
+            {
+                PlayerId = 0,
+                Name = name,
+                ClassId = mappedClass?.Id ?? 0,
+                SpecId = mappedSpec?.Id ?? 0,
+                SpecSlug = mappedSpec?.FullNameSlug ?? "unknown",
+                Performance = 0
+            });
+        }
+
+        return players;
+    }
+
+    private WowSpec? ResolveSpecByNames(int? classId, string? specName)
+    {
+        if (classId == null || string.IsNullOrWhiteSpace(specName))
+        {
+            return null;
+        }
+
+        var normalizedSpecName = NormalizeComparableToken(specName);
+        return _worldDataService.Specs.FirstOrDefault(spec =>
+            spec.ClassId == classId.Value &&
+            (
+                NormalizeComparableToken(spec.Name) == normalizedSpecName ||
+                NormalizeComparableToken(spec.NameSlug) == normalizedSpecName
+            ));
+    }
+
+    private static string NormalizeComparableToken(string value)
+    {
+        var chars = value
+            .Where(char.IsLetterOrDigit)
+            .Select(char.ToLowerInvariant)
+            .ToArray();
+
+        return new string(chars);
+    }
+
+    private async Task PopulateReportTitlesAsync(List<RankingReport> reports, string? edition)
+    {
+        if (reports.Count == 0)
+        {
+            return;
+        }
+
+        var unresolvedCodes = reports
+            .Where(static r => !string.IsNullOrWhiteSpace(r.ReportId))
+            .Select(static r => r.ReportId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (unresolvedCodes.Count == 0)
+        {
+            return;
+        }
+
+        var titleByCode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        const int chunkSize = 20;
+
+        for (var offset = 0; offset < unresolvedCodes.Count; offset += chunkSize)
+        {
+            var chunk = unresolvedCodes.Skip(offset).Take(chunkSize).ToList();
+            var aliasToCode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var reportsBlock = new StringBuilder();
+
+            for (var i = 0; i < chunk.Count; i++)
+            {
+                var alias = $"r{i}";
+                aliasToCode[alias] = chunk[i];
+                reportsBlock.AppendLine($"    {alias}: report(code: \"{chunk[i]}\") {{ code title }}");
+            }
+
+            var queryText = ReportTitlesQueryTemplate.Replace(
+                "__REPORTS_BLOCK__",
+                reportsBlock.ToString().TrimEnd());
+
+            JsonElement response;
+            try
+            {
+                response = await _warcraftLogsClient.QueryGraphQLAsync(queryText, null, edition);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to enrich report titles for ranking response");
+                continue;
+            }
+
+            if (!response.TryGetProperty("reportData", out var reportData) || reportData.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            foreach (var alias in aliasToCode.Keys)
+            {
+                if (!reportData.TryGetProperty(alias, out var reportElement) || reportElement.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                var code = TryGetString(reportElement, "code");
+                var title = TryGetString(reportElement, "title");
+                if (!string.IsNullOrWhiteSpace(code) && !string.IsNullOrWhiteSpace(title))
+                {
+                    titleByCode[code] = title;
+                }
+            }
+        }
+
+        if (titleByCode.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var report in reports)
+        {
+            if (!string.IsNullOrWhiteSpace(report.ReportId) && titleByCode.TryGetValue(report.ReportId, out var resolvedTitle))
+            {
+                report.Title = resolvedTitle;
+            }
         }
     }
 
@@ -605,10 +1214,9 @@ public class RankingsController(
     }
 
     /// <summary>
-    /// Cache a ranking with 5-minute TTL.
-    /// Rankings change frequently, so we use a shorter cache time than world data.
+    /// Cache a ranking using the default cache TTL.
     /// </summary>
-    private async Task CacheRankingWithShortTTL<T>(string cacheKey, T data) where T : class
+    private async Task CacheRanking<T>(string cacheKey, T data) where T : class
     {
         await _cacheService.SetAsync("rankings", cacheKey, data);
         _logger.LogDebug("Cached ranking: {CacheKey}", cacheKey);
@@ -693,14 +1301,219 @@ public class RankingsController(
         };
     }
 
-    private static string BuildSpecRankingCacheKey(RankingQueryContext queryContext, int difficultyValue, string metric)
+    private static string BuildSpecRankingCacheKey(
+        RankingQueryContext queryContext,
+        int difficultyValue,
+        string metric,
+        string? edition,
+        RankingRequestOptions requestOptions)
     {
-        return $"{queryContext.SpecSlug}_{queryContext.BossSlug}_{queryContext.ZoneId}_{queryContext.EncounterId}_{queryContext.ClassName}_{queryContext.SpecName}_{difficultyValue}_{metric}";
+        var editionSegment = string.IsNullOrWhiteSpace(edition)
+            ? "default"
+            : string.Concat(edition.Where(char.IsLetterOrDigit)).ToLowerInvariant();
+
+        var requestSegment = BuildRankingRequestSegment(requestOptions);
+
+        return $"{editionSegment}_{queryContext.SpecSlug}_{queryContext.BossSlug}_{queryContext.ZoneId}_{queryContext.EncounterId}_{queryContext.ClassName}_{queryContext.SpecName}_{difficultyValue}_{metric}_{requestSegment}";
+    }
+
+    private static string BuildRankingRequestSegment(RankingRequestOptions options)
+    {
+        var filterSegment = string.IsNullOrWhiteSpace(options.Filter)
+            ? "nofilter"
+            : string.Concat(options.Filter.Where(char.IsLetterOrDigit)).ToLowerInvariant();
+
+        var regionSegment = string.IsNullOrWhiteSpace(options.ServerRegion)
+            ? "allregions"
+            : options.ServerRegion.Trim().ToLowerInvariant();
+
+        var serverSegment = string.IsNullOrWhiteSpace(options.ServerSlug)
+            ? "allservers"
+            : options.ServerSlug.Trim().ToLowerInvariant();
+
+        var hardModeSegment = string.IsNullOrWhiteSpace(options.HardModeLevel)
+            ? "nahm"
+            : string.Concat(options.HardModeLevel.Where(char.IsLetterOrDigit)).ToLowerInvariant();
+
+        var externalBuffsSegment = string.IsNullOrWhiteSpace(options.ExternalBuffs)
+            ? "naeb"
+            : string.Concat(options.ExternalBuffs.Where(char.IsLetterOrDigit)).ToLowerInvariant();
+
+        return $"p{options.Page}_part{options.Partition?.ToString() ?? "na"}_br{options.Bracket?.ToString() ?? "na"}_sz{options.Size?.ToString() ?? "na"}_r{regionSegment}_s{serverSegment}_f{filterSegment}_hm{hardModeSegment}_eb{externalBuffsSegment}_oc{(options.IncludeOtherPlayers ? 1 : 0)}_cc{(options.IncludeCombatantInfo ? 1 : 0)}";
+    }
+
+    private static bool TryBuildRankingRequestOptions(
+        int? page,
+        int? partition,
+        int? bracket,
+        int? size,
+        string? serverRegion,
+        string? serverSlug,
+        string? filter,
+        string? hardModeLevel,
+        string? externalBuffs,
+        bool includeCombatantInfo,
+        bool includeOtherPlayers,
+        out RankingRequestOptions options,
+        out string error)
+    {
+        if (page.HasValue && page.Value <= 0)
+        {
+            options = default;
+            error = "page must be greater than 0.";
+            return false;
+        }
+
+        if (partition.HasValue && partition.Value <= 0)
+        {
+            options = default;
+            error = "partition must be greater than 0.";
+            return false;
+        }
+
+        if (bracket.HasValue && bracket.Value <= 0)
+        {
+            options = default;
+            error = "bracket must be greater than 0.";
+            return false;
+        }
+
+        if (size.HasValue && size.Value <= 0)
+        {
+            options = default;
+            error = "size must be greater than 0.";
+            return false;
+        }
+
+        if (!TryNormalizeHardModeLevel(hardModeLevel, out var normalizedHardModeLevel, out var hardModeError))
+        {
+            options = default;
+            error = hardModeError;
+            return false;
+        }
+
+        if (!TryNormalizeExternalBuffs(externalBuffs, out var normalizedExternalBuffs, out var externalBuffsError))
+        {
+            options = default;
+            error = externalBuffsError;
+            return false;
+        }
+
+        options = new RankingRequestOptions(
+            page ?? 1,
+            partition,
+            bracket,
+            size,
+            NormalizeOptionalValue(serverRegion),
+            NormalizeOptionalValue(serverSlug),
+            NormalizeOptionalValue(filter),
+            normalizedHardModeLevel,
+            normalizedExternalBuffs,
+            includeOtherPlayers,
+            includeCombatantInfo);
+
+        error = string.Empty;
+        return true;
+    }
+
+    private static string? NormalizeOptionalValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value.Trim();
+    }
+
+    private static bool TryNormalizeHardModeLevel(string? value, out string? normalizedValue, out string error)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            normalizedValue = null;
+            error = string.Empty;
+            return true;
+        }
+
+        var raw = value.Trim();
+        var key = raw.Replace("_", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
+            .ToLowerInvariant();
+
+        normalizedValue = key switch
+        {
+            "any" => "Any",
+            "-1" => "Any",
+            "highest" => "Highest",
+            "normalmode" => "NormalMode",
+            "normal" => "NormalMode",
+            "level0" => "Level0",
+            "0" => "Level0",
+            "level1" => "Level1",
+            "1" => "Level1",
+            "level2" => "Level2",
+            "2" => "Level2",
+            "level3" => "Level3",
+            "3" => "Level3",
+            "level4" => "Level4",
+            "4" => "Level4",
+            _ => null
+        };
+
+        if (normalizedValue != null)
+        {
+            error = string.Empty;
+            return true;
+        }
+
+        error = "Invalid hardModeLevel. Supported values: Any, Highest, NormalMode, Level0, Level1, Level2, Level3, Level4.";
+        return false;
+    }
+
+    private static bool TryNormalizeExternalBuffs(string? value, out string? normalizedValue, out string error)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            normalizedValue = null;
+            error = string.Empty;
+            return true;
+        }
+
+        var raw = value.Trim();
+        var key = raw.Replace("_", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
+            .ToLowerInvariant();
+
+        normalizedValue = key switch
+        {
+            "any" => "Any",
+            "require" => "Require",
+            "with" => "Require",
+            "include" => "Require",
+            "withexternalbuffs" => "Require",
+            "exclude" => "Exclude",
+            "without" => "Exclude",
+            "no" => "Exclude",
+            "withoutexternalbuffs" => "Exclude",
+            _ => null
+        };
+
+        if (normalizedValue != null)
+        {
+            error = string.Empty;
+            return true;
+        }
+
+        error = "Invalid externalBuffs. Supported values: Any, Require, Exclude.";
+        return false;
     }
 
     private bool TryResolveSpecRankingQuery(
         string specSlug,
         string bossSlug,
+        string? edition,
         int? zoneId,
         int? encounterId,
         string? className,
@@ -710,52 +1523,51 @@ public class RankingsController(
     {
         var spec = _worldDataService.GetSpec(specSlug);
         var boss = _worldDataService.GetBoss(bossSlug);
+        var requestedEdition = NormalizeOptionalValue(edition);
 
-        var resolvedZoneId = zoneId ?? boss?.RaidId;
-        var resolvedEncounterId = encounterId ?? boss?.Id;
-        var resolvedClassName = string.IsNullOrWhiteSpace(className)
-            ? spec?.WowClass?.NameSlug
-            : className.Trim().ToLowerInvariant();
-        var resolvedSpecName = string.IsNullOrWhiteSpace(specName)
-            ? spec?.NameSlug
-            : specName.Trim().ToLowerInvariant();
+        var resolvedZoneId = zoneId;
+        var resolvedEncounterId = encounterId;
+        var resolvedClassName = NormalizeOptionalValue(className);
+        var resolvedSpecName = NormalizeOptionalValue(specName);
+        var resolvedBossName = boss?.Name ?? bossSlug;
+        var resolvedBossSlug = boss?.NameSlug ?? bossSlug;
+
+        if (string.IsNullOrWhiteSpace(requestedEdition))
+        {
+            queryContext = default!;
+            error = "edition is required. Frontend must provide an explicit edition slug.";
+            return false;
+        }
 
         if (resolvedZoneId == null || resolvedZoneId.Value <= 0)
         {
             queryContext = default!;
-            error = "Unable to resolve zoneId. Provide zoneId explicitly for Classic/Anniversary or unsupported raids.";
-            return false;
-        }
-
-        if (resolvedEncounterId == null || resolvedEncounterId.Value <= 0)
-        {
-            queryContext = default!;
-            error = "Unable to resolve encounterId. Provide encounterId explicitly for Classic/Anniversary or unsupported bosses.";
+            error = "zoneId is required. Frontend must provide an explicit raid zone id.";
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(resolvedClassName))
         {
             queryContext = default!;
-            error = "Unable to resolve className. Provide className explicitly for Classic/Anniversary specs.";
+            error = "className is required. Frontend must provide an explicit class name.";
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(resolvedSpecName))
         {
             queryContext = default!;
-            error = "Unable to resolve specName. Provide specName explicitly for Classic/Anniversary specs.";
+            error = "specName is required. Frontend must provide an explicit spec name.";
             return false;
         }
 
         queryContext = new RankingQueryContext(
             resolvedZoneId.Value,
-            resolvedEncounterId.Value,
+            resolvedEncounterId.GetValueOrDefault(),
             resolvedClassName,
             resolvedSpecName,
             spec?.FullNameSlug ?? specSlug,
-            boss?.NameSlug ?? bossSlug,
-            boss?.Name ?? bossSlug,
+            resolvedBossSlug,
+            resolvedBossName,
             spec?.WowClass?.Id ?? 0,
             spec?.Id ?? 0);
 
@@ -774,11 +1586,83 @@ public class RankingsController(
         int ClassId,
         int SpecId);
 
+    private readonly record struct RankingRequestOptions(
+        int Page,
+        int? Partition,
+        int? Bracket,
+        int? Size,
+        string? ServerRegion,
+        string? ServerSlug,
+        string? Filter,
+        string? HardModeLevel,
+        string? ExternalBuffs,
+        bool IncludeOtherPlayers,
+        bool IncludeCombatantInfo);
+
+    private bool TryFindEncounter(IReadOnlyList<WclEncounterNode> encounters, RankingQueryContext queryContext, out WclEncounterNode encounter)
+    {
+        if (queryContext.EncounterId > 0)
+        {
+            encounter = encounters.FirstOrDefault(encounterElem => encounterElem.Id == queryContext.EncounterId)!;
+            if (encounter != null)
+            {
+                return true;
+            }
+        }
+
+        var targetSlug = NormalizeBossSlugForLookup(queryContext.BossSlug);
+        if (string.IsNullOrWhiteSpace(targetSlug))
+        {
+            encounter = null!;
+            return false;
+        }
+
+        encounter = encounters.FirstOrDefault(encounterElem =>
+            string.Equals(
+                NormalizeBossSlugForLookup(SlugifyEncounterName(encounterElem.Name)),
+                targetSlug,
+                StringComparison.OrdinalIgnoreCase))!;
+
+        return encounter != null;
+    }
+
+    private static string SlugifyEncounterName(string? value)
+    {
+        var raw = value ?? string.Empty;
+        raw = raw.Replace("'", string.Empty).Replace("’", string.Empty);
+        var chars = raw
+            .ToLowerInvariant()
+            .Select(c => char.IsLetterOrDigit(c) ? c : '-')
+            .ToArray();
+        var slug = new string(chars);
+        while (slug.Contains("--", StringComparison.Ordinal))
+        {
+            slug = slug.Replace("--", "-", StringComparison.Ordinal);
+        }
+
+        return slug.Trim('-');
+    }
+
+    private static string NormalizeBossSlugForLookup(string? value)
+    {
+        var slug = (value ?? string.Empty).Trim().ToLowerInvariant().Trim('-');
+        if (slug.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var lastDashIndex = slug.LastIndexOf('-');
+        if (lastDashIndex > 0 && int.TryParse(slug[(lastDashIndex + 1)..], out _))
+        {
+            return slug[..lastDashIndex];
+        }
+
+        return slug;
+    }
+
     private static string? NormalizeMetric(string metric)
     {
-        var normalized = string.IsNullOrWhiteSpace(metric)
-            ? "dps"
-            : metric.Trim().ToLowerInvariant();
+        var normalized = metric.Trim().ToLowerInvariant();
 
         return AllowedCharacterRankingMetrics.Contains(normalized)
             ? normalized
@@ -856,6 +1740,21 @@ public class RankingsController(
         }
 
         return 0;
+    }
+
+    private static double? TryGetNullableDouble(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            return null;
+        }
+
+        if (property.ValueKind == JsonValueKind.Number && property.TryGetDouble(out var value))
+        {
+            return value;
+        }
+
+        return null;
     }
 
     private static bool? TryGetBool(JsonElement element, string propertyName)

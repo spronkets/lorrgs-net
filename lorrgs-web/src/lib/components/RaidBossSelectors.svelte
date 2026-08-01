@@ -1,17 +1,26 @@
 <script lang="ts">
-  export let raidPhaseGroups: Array<{ key: string; label: string; raids: Array<{ slug: string; name: string }> }> = []
-  export let bosses: Array<{ slug: string; name: string; mapped?: boolean }> = []
+  export let raidPhaseGroups: Array<{
+    key: string;
+    label: string;
+    raids: Array<{ slug: string; name: string }>;
+  }> = [];
+  export let bosses: Array<{ slug: string; name: string; mapped?: boolean }> = [];
 
-  export let selectedRaid = ''
-  export let selectedBoss = ''
+  export let selectedRaid = '';
+  export let selectedBoss = '';
 
-  export let raidLabel = 'Raid'
-  export let bossLabel = 'Boss'
-  export let raidPlaceholder = 'Select a raid...'
-  export let bossPlaceholder = 'Select a boss...'
+  export let raidLabel = 'Raid';
+  export let bossLabel = 'Boss';
+  export let raidPlaceholder = 'Select a raid...';
+  export let bossPlaceholder = 'Select a boss...';
+
+  $: if (selectedRaid && !selectedBoss && bosses.length > 0) {
+    selectedBoss = bosses[0].slug;
+  }
 
   function handleRaidChange() {
-    selectedBoss = ''
+    // Clear first; reactive block will auto-select first boss from the updated raid list.
+    selectedBoss = '';
   }
 </script>
 
@@ -34,9 +43,9 @@
     <span>{bossLabel}</span>
     <select bind:value={selectedBoss} disabled={!selectedRaid}>
       <option value="">{bossPlaceholder}</option>
-      {#each bosses as boss (boss.slug)}
-        <option value={boss.slug} disabled={!boss.mapped}>
-          {boss.name}{boss.mapped ? '' : ' (unsupported)'}
+      {#each bosses as boss, index (`${boss.slug}-${index}`)}
+        <option value={boss.slug}>
+          {boss.name}
         </option>
       {/each}
     </select>

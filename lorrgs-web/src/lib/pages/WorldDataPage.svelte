@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { getBlizzardClassColor } from '../classColors'
-  import { getWowheadIconUrl } from '../wowheadIcons'
-  import { getClassIconUrl, getRoleIconUrl, getSpecIconUrl } from '../wowAssets'
+  import { getBlizzardClassColor } from '../classColors';
+  import { getWowheadIconUrl } from '../wowheadIcons';
+  import { getClassIconUrl, getRoleIconUrl, getSpecIconUrl } from '../wowAssets';
 
-  export let worldData = {}
+  export let worldData = {};
 
-  let activeTab = 'classes'
+  let activeTab = 'classes';
 
-  const tabs = ['classes', 'specs', 'roles', 'bosses', 'zones', 'spells', 'trinkets', 'seasons']
+  const tabs = ['classes', 'specs', 'roles', 'bosses', 'zones', 'spells', 'trinkets', 'seasons'];
 
   function classColor(classSlug: string, fallbackColor = '#7BA4BF'): string {
-    return getBlizzardClassColor(classSlug, fallbackColor)
+    return getBlizzardClassColor(classSlug, fallbackColor);
   }
 </script>
 

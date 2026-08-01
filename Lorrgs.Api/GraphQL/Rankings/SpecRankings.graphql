@@ -1,0 +1,44 @@
+query SpecRankings(
+  $zoneId: Int!
+  $className: String!
+  $specName: String!
+  $metric: CharacterRankingMetricType!
+  $difficulty: Int
+  $page: Int
+  $partition: Int
+  $bracket: Int
+  $size: Int
+  $serverRegion: String
+  $serverSlug: String
+  $filter: String
+  $hardModeLevel: HardModeLevelRankFilter
+  $externalBuffs: ExternalBuffRankFilter
+  $includeCombatantInfo: Boolean!
+  $includeOtherPlayers: Boolean!
+) {
+  worldData {
+    zone(id: $zoneId) {
+      encounters {
+        id
+        name
+        characterRankings(
+          className: $className
+          specName: $specName
+          metric: $metric
+          difficulty: $difficulty
+          page: $page
+          partition: $partition
+          bracket: $bracket
+          size: $size
+          serverRegion: $serverRegion
+          serverSlug: $serverSlug
+          filter: $filter
+          hardModeLevel: $hardModeLevel
+          externalBuffs: $externalBuffs
+          includeCombatantInfo: $includeCombatantInfo
+          includeOtherPlayers: $includeOtherPlayers
+        )
+      }
+    }
+  }
+}

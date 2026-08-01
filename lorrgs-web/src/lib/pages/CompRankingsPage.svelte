@@ -1,46 +1,40 @@
 <script lang="ts">
-  import * as API from '../api'
-  import * as Cache from '../cache'
-  import { getBlizzardClassColor } from '../classColors'
-  import { getWowheadIconUrl } from '../wowheadIcons'
+  import * as API from '../api';
+  import { getBlizzardClassColor } from '../classColors';
+  import { getWowheadIconUrl } from '../wowheadIcons';
 
-  export let worldData = {}
+  export let worldData = {};
 
-  let selectedBoss = ''
-  let rankings = null
-  let loading = false
-  let error = ''
+  let selectedBoss = '';
+  let rankings = null;
+  let loading = false;
+  let error = '';
 
-  $: boss = (worldData.bosses || []).find((b) => b.nameSlug === selectedBoss)
-  $: classesById = new Map((worldData.classes || []).map((cls) => [Number(cls.id), cls]))
-  $: specsBySlug = new Map((worldData.specs || []).map((spec) => [spec.fullNameSlug, spec]))
+  $: boss = (worldData.bosses || []).find((b) => b.nameSlug === selectedBoss);
+  $: classesById = new Map((worldData.classes || []).map((cls) => [Number(cls.id), cls]));
+  $: specsBySlug = new Map((worldData.specs || []).map((spec) => [spec.fullNameSlug, spec]));
 
   async function loadComp() {
-    if (!selectedBoss) return
-    loading = true
-    error = ''
+    if (!selectedBoss) return;
+    loading = true;
+    error = '';
 
-    const cacheKey = `comp-${selectedBoss}`
     try {
-      rankings = Cache.getRankingsCache(cacheKey)
-      if (!rankings) {
-        rankings = await API.getCompRankings(selectedBoss)
-        Cache.cacheRankings(cacheKey, rankings)
-      }
+      rankings = await API.getCompRankings(selectedBoss);
     } catch (err) {
-      error = err.message
-      rankings = null
+      error = err.message;
+      rankings = null;
     } finally {
-      loading = false
+      loading = false;
     }
   }
 
-  $: if (selectedBoss) loadComp()
+  $: if (selectedBoss) loadComp();
 
   function specColor(specSlug) {
-    const spec = specsBySlug.get(specSlug)
-    const wowClass = spec ? classesById.get(Number(spec.classId)) : null
-    return getBlizzardClassColor(wowClass?.nameSlug, wowClass?.color || '#7BA4BF')
+    const spec = specsBySlug.get(specSlug);
+    const wowClass = spec ? classesById.get(Number(spec.classId)) : null;
+    return getBlizzardClassColor(wowClass?.nameSlug, wowClass?.color || '#7BA4BF');
   }
 </script>
 

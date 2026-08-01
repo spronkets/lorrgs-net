@@ -1,17 +1,25 @@
 using System.Diagnostics;
+using Lorrgs.WarcraftLogs;
+using Lorrgs.WarcraftLogs.Configuration;
 using Microsoft.OpenApi.Models;
+using WclClient = Lorrgs.WarcraftLogs.WarcraftLogsClient;
+using WclOptions = Lorrgs.WarcraftLogs.Configuration.WarcraftLogsApiOptions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration
     .AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
 
-builder.Services.AddOptions<WarcraftLogsApiOptions>()
-    .Bind(builder.Configuration.GetSection(WarcraftLogsApiOptions.SectionName))
+builder.Services.AddOptions<WclOptions>()
+    .Bind(builder.Configuration.GetSection(WclOptions.SectionName))
     .ValidateOnStart();
 
 builder.Services.AddOptions<RaidCatalogOptions>()
     .Bind(builder.Configuration)
+    .ValidateOnStart();
+
+builder.Services.AddOptions<CacheOptions>()
+    .Bind(builder.Configuration.GetSection(CacheOptions.SectionName))
     .ValidateOnStart();
 
 builder.Services.AddMemoryCache();
@@ -20,7 +28,7 @@ builder.Services.AddScoped<Lorrgs.Api.Services.RotationAnalysisService>();
 builder.Services.AddHostedService<Lorrgs.Api.Services.CacheCleanupBackgroundService>();
 
 // HTTP client for WarcraftLogs API
-builder.Services.AddHttpClient<Lorrgs.Api.Services.WarcraftLogsClient>();
+builder.Services.AddHttpClient<WclClient>();
 builder.Services.AddScoped<Lorrgs.Api.Services.RaidCatalogClient>();
 builder.Services.AddHealthChecks();
 

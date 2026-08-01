@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte'
+  import { createEventDispatcher } from 'svelte';
 
-  export let versions: string[] = []
-  export let selectedVersion = ''
-  export let getVersionIconUrl: (version: string) => string
-  export let variant: 'cards' | 'select' = 'cards'
-  export let placeholder = '— choose an edition —'
+  export let versions: string[] = [];
+  export let selectedVersion = '';
+  export let getVersionIconUrl: (_version: string) => string;
+  export let variant: 'cards' | 'select' = 'cards';
+  export let placeholder = '— choose an edition —';
 
-  const dispatch = createEventDispatcher<{ select: { version: string } }>()
+  const dispatch = createEventDispatcher<{ select: { version: string } }>();
 
   function onSelect(version: string) {
-    if (!version || selectedVersion === version) return
-    dispatch('select', { version })
+    if (!version || selectedVersion === version) return;
+    dispatch('select', { version });
   }
 </script>
 
@@ -41,7 +41,11 @@
       >
         <span class="banner-frame">
           <span class="banner-image-stack">
-            <img src={getVersionIconUrl(version)} alt={version} class="selector-icon banner banner-base" />
+            <img
+              src={getVersionIconUrl(version)}
+              alt={version}
+              class="selector-icon banner banner-base"
+            />
             <img
               src={getVersionIconUrl(version)}
               alt=""
@@ -210,9 +214,9 @@
   }
 
   .icon-card.version-card.active .banner-frame {
-    border-color: var(--select-border);
-    box-shadow: none;
-    background: var(--select-bg);
+    border-color: var(--edition-card-active-border, var(--select-focus-border));
+    box-shadow: var(--edition-card-active-ring, var(--select-focus-ring));
+    background: var(--edition-card-bg, var(--select-bg));
   }
 
   .icon-card.version-card.active .selector-icon.banner-base {
@@ -232,8 +236,8 @@
   }
 
   .icon-card.version-card:focus-visible .banner-frame {
-    border-color: var(--select-border);
-    box-shadow: none;
-    background: var(--select-bg);
+    border-color: var(--edition-card-active-border, var(--select-focus-border));
+    box-shadow: var(--edition-card-active-ring, var(--select-focus-ring));
+    background: var(--edition-card-bg, var(--select-bg));
   }
 </style>

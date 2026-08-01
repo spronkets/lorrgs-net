@@ -1,16 +1,19 @@
 namespace Lorrgs.Api.Services;
 
+using Microsoft.Extensions.Options;
+
 /// <summary>
 /// Background service that periodically cleans up expired cache files.
 /// Runs every hour automatically after the API starts.
 /// </summary>
 public class CacheCleanupBackgroundService(
     ILogger<CacheCleanupBackgroundService> logger,
-    IServiceProvider serviceProvider) : BackgroundService
+    IServiceProvider serviceProvider,
+    IOptions<CacheOptions> cacheOptions) : BackgroundService
 {
     private readonly ILogger<CacheCleanupBackgroundService> _logger = logger;
     private readonly IServiceProvider _serviceProvider = serviceProvider;
-    private const int CleanupIntervalMinutes = 60;
+    private readonly TimeSpan _cleanupInterval = TimeSpan.FromMinutes(Math.Max(1, cacheOptions.Value.CleanupIntervalMinutes));
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -40,7 +43,7 @@ public class CacheCleanupBackgroundService(
             // Wait for the next cleanup interval
             try
             {
-                await Task.Delay(TimeSpan.FromMinutes(CleanupIntervalMinutes), stoppingToken);
+                await Task.Delay(_cleanupInterval, stoppingToken);
             }
             catch (TaskCanceledException)
             {

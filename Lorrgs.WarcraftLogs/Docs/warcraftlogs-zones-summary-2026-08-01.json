@@ -1,0 +1,1770 @@
+[
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1000,
+    "zoneName": "Molten Core",
+    "encounterCount": 10
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1001,
+    "zoneName": "Onyxia",
+    "encounterCount": 1
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1002,
+    "zoneName": "Blackwing Lair",
+    "encounterCount": 9
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1003,
+    "zoneName": "Zul'Gurub",
+    "encounterCount": 11
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1004,
+    "zoneName": "Ruins of Ahn'Qiraj",
+    "encounterCount": 6
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1005,
+    "zoneName": "Temple of Ahn'Qiraj",
+    "encounterCount": 9
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1006,
+    "zoneName": "Naxxramas",
+    "encounterCount": 15
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1028,
+    "zoneName": "Molten Core",
+    "encounterCount": 10
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1029,
+    "zoneName": "Onyxia",
+    "encounterCount": 1
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1030,
+    "zoneName": "Zul'Gurub",
+    "encounterCount": 11
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1031,
+    "zoneName": "Ruins of Ahn'Qiraj",
+    "encounterCount": 6
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1034,
+    "zoneName": "Blackwing Lair",
+    "encounterCount": 9
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1035,
+    "zoneName": "Temple of Ahn'Qiraj",
+    "encounterCount": 9
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1036,
+    "zoneName": "Naxxramas",
+    "encounterCount": 15
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1500,
+    "zoneName": "Classic Raids (40-Man)",
+    "encounterCount": 4
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1514,
+    "zoneName": "Molten Core (Classic Fresh Complete Raid)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1517,
+    "zoneName": "Blackwing Lair (Classic Fresh Complete Raid)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1518,
+    "zoneName": "Temple of Ahn'Qiraj (Classic Fresh Complete Raid)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1519,
+    "zoneName": "Naxxramas (Classic Fresh Complete Raid)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1007,
+    "zoneName": "Karazhan",
+    "encounterCount": 10
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1008,
+    "zoneName": "Gruul / Magtheridon",
+    "encounterCount": 3
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1009,
+    "zoneName": "Heroic Dungeons",
+    "encounterCount": 16
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1010,
+    "zoneName": "SSC / TK",
+    "encounterCount": 10
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1011,
+    "zoneName": "BT / Hyjal",
+    "encounterCount": 14
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1012,
+    "zoneName": "Zul'Aman",
+    "encounterCount": 6
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1013,
+    "zoneName": "Sunwell Plateau",
+    "encounterCount": 6
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1047,
+    "zoneName": "Karazhan",
+    "encounterCount": 10
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1048,
+    "zoneName": "Gruul / Magtheridon",
+    "encounterCount": 3
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1056,
+    "zoneName": "SSC / TK",
+    "encounterCount": 10
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1060,
+    "zoneName": "BT / Hyjal",
+    "encounterCount": 14
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1501,
+    "zoneName": "TBC Raids (25-Man Tier 5)",
+    "encounterCount": 2
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1502,
+    "zoneName": "TBC Raids (10-Man Tier 4)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1503,
+    "zoneName": "TBC Raids (25-Man Tier 6)",
+    "encounterCount": 2
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1504,
+    "zoneName": "TBC Raids (10-Man Tier 6)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1505,
+    "zoneName": "TBC Raids (25-Man Tier 6.5)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1524,
+    "zoneName": "Complete Raid (Karazhan)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1532,
+    "zoneName": "SSC / TK Complete Raid",
+    "encounterCount": 2
+  },
+  {
+    "edition": "anniversary",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1536,
+    "zoneName": "BT / Hyjal Complete Raid",
+    "encounterCount": 2
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2000,
+    "zoneName": "Molten Core",
+    "encounterCount": 10
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2001,
+    "zoneName": "Onyxia",
+    "encounterCount": 1
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2002,
+    "zoneName": "Blackwing Lair",
+    "encounterCount": 9
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2003,
+    "zoneName": "Zul'Gurub",
+    "encounterCount": 11
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2004,
+    "zoneName": "Ruins of Ahn'Qiraj",
+    "encounterCount": 6
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2005,
+    "zoneName": "Temple of Ahn'Qiraj",
+    "encounterCount": 9
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2006,
+    "zoneName": "Naxxramas",
+    "encounterCount": 15
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2007,
+    "zoneName": "Blackfathom Deeps",
+    "encounterCount": 7
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2008,
+    "zoneName": "Gnomeregan",
+    "encounterCount": 6
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2009,
+    "zoneName": "Sunken Temple",
+    "encounterCount": 8
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2010,
+    "zoneName": "Public Testing Realm - Testwerk",
+    "encounterCount": 1
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2011,
+    "zoneName": "Onyxia",
+    "encounterCount": 1
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2012,
+    "zoneName": "Molten Core",
+    "encounterCount": 11
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2013,
+    "zoneName": "Blackwing Lair",
+    "encounterCount": 7
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2014,
+    "zoneName": "Zul'Gurub",
+    "encounterCount": 10
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2015,
+    "zoneName": "Ruins of Ahn'Qiraj",
+    "encounterCount": 6
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2016,
+    "zoneName": "Temple of Ahn'Qiraj",
+    "encounterCount": 9
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2017,
+    "zoneName": "Naxxramas",
+    "encounterCount": 15
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2018,
+    "zoneName": "Scarlet Enclave",
+    "encounterCount": 8
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2500,
+    "zoneName": "Classic Era Raids (40-Man)",
+    "encounterCount": 4
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2501,
+    "zoneName": "Blackfathom Deeps Complete Raids",
+    "encounterCount": 1
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2502,
+    "zoneName": "Gnomeregan Complete Raids",
+    "encounterCount": 1
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2503,
+    "zoneName": "Sunken Temple Complete Raids",
+    "encounterCount": 1
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2504,
+    "zoneName": "Molten Core Complete Raids",
+    "encounterCount": 1
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2505,
+    "zoneName": "Blackwing Lair Complete Raids",
+    "encounterCount": 1
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2506,
+    "zoneName": "Zul'Gurub Complete Raids",
+    "encounterCount": 1
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2508,
+    "zoneName": "Ahn'Qiraj Complete Raids",
+    "encounterCount": 1
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2509,
+    "zoneName": "Naxxramas Complete Raids",
+    "encounterCount": 1
+  },
+  {
+    "edition": "era",
+    "expansionId": 2000,
+    "expansionName": "Classic",
+    "zoneId": 2510,
+    "zoneName": "Scarlet Enclave Complete Raids",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1000,
+    "zoneName": "Molten Core",
+    "encounterCount": 10
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1001,
+    "zoneName": "Onyxia",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1002,
+    "zoneName": "Blackwing Lair",
+    "encounterCount": 9
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1003,
+    "zoneName": "Zul'Gurub",
+    "encounterCount": 11
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1004,
+    "zoneName": "Ruins of Ahn'Qiraj",
+    "encounterCount": 6
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1005,
+    "zoneName": "Temple of Ahn'Qiraj",
+    "encounterCount": 9
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1006,
+    "zoneName": "Naxxramas",
+    "encounterCount": 15
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1028,
+    "zoneName": "Molten Core",
+    "encounterCount": 10
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1029,
+    "zoneName": "Onyxia",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1030,
+    "zoneName": "Zul'Gurub",
+    "encounterCount": 11
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1031,
+    "zoneName": "Ruins of Ahn'Qiraj",
+    "encounterCount": 6
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1034,
+    "zoneName": "Blackwing Lair",
+    "encounterCount": 9
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1035,
+    "zoneName": "Temple of Ahn'Qiraj",
+    "encounterCount": 9
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1036,
+    "zoneName": "Naxxramas",
+    "encounterCount": 15
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1500,
+    "zoneName": "Classic Raids (40-Man)",
+    "encounterCount": 4
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1514,
+    "zoneName": "Molten Core (Classic Fresh Complete Raid)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1517,
+    "zoneName": "Blackwing Lair (Classic Fresh Complete Raid)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1518,
+    "zoneName": "Temple of Ahn'Qiraj (Classic Fresh Complete Raid)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1000,
+    "expansionName": "Classic",
+    "zoneId": 1519,
+    "zoneName": "Naxxramas (Classic Fresh Complete Raid)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1007,
+    "zoneName": "Karazhan",
+    "encounterCount": 10
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1008,
+    "zoneName": "Gruul / Magtheridon",
+    "encounterCount": 3
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1009,
+    "zoneName": "Heroic Dungeons",
+    "encounterCount": 16
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1010,
+    "zoneName": "SSC / TK",
+    "encounterCount": 10
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1011,
+    "zoneName": "BT / Hyjal",
+    "encounterCount": 14
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1012,
+    "zoneName": "Zul'Aman",
+    "encounterCount": 6
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1013,
+    "zoneName": "Sunwell Plateau",
+    "encounterCount": 6
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1047,
+    "zoneName": "Karazhan",
+    "encounterCount": 10
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1048,
+    "zoneName": "Gruul / Magtheridon",
+    "encounterCount": 3
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1056,
+    "zoneName": "SSC / TK",
+    "encounterCount": 10
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1060,
+    "zoneName": "BT / Hyjal",
+    "encounterCount": 14
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1501,
+    "zoneName": "TBC Raids (25-Man Tier 5)",
+    "encounterCount": 2
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1502,
+    "zoneName": "TBC Raids (10-Man Tier 4)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1503,
+    "zoneName": "TBC Raids (25-Man Tier 6)",
+    "encounterCount": 2
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1504,
+    "zoneName": "TBC Raids (10-Man Tier 6)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1505,
+    "zoneName": "TBC Raids (25-Man Tier 6.5)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1524,
+    "zoneName": "Complete Raid (Karazhan)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1532,
+    "zoneName": "SSC / TK Complete Raid",
+    "encounterCount": 2
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1001,
+    "expansionName": "The Burning Crusade",
+    "zoneId": 1536,
+    "zoneName": "BT / Hyjal Complete Raid",
+    "encounterCount": 2
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1014,
+    "zoneName": "Heroic Dungeons",
+    "encounterCount": 16
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1015,
+    "zoneName": "Naxx / Sarth / Maly",
+    "encounterCount": 17
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1016,
+    "zoneName": "Vault of Archavon",
+    "encounterCount": 4
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1017,
+    "zoneName": "Ulduar",
+    "encounterCount": 14
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1018,
+    "zoneName": "Trial of the Crusader",
+    "encounterCount": 5
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1019,
+    "zoneName": "Onyxia",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1020,
+    "zoneName": "Icecrown Citadel",
+    "encounterCount": 12
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1021,
+    "zoneName": "Ruby Sanctum",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1025,
+    "zoneName": "Naxx / Sarth / Maly (2)",
+    "encounterCount": 17
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1026,
+    "zoneName": "Ulduar",
+    "encounterCount": 14
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1032,
+    "zoneName": "Trial of the Crusader",
+    "encounterCount": 5
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1037,
+    "zoneName": "Icecrown Citadel",
+    "encounterCount": 12
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1041,
+    "zoneName": "Ruby Sanctum",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1506,
+    "zoneName": "WotLK Complete Raids (Tier 7)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1507,
+    "zoneName": "WotLK Complete Raids (Tier 8)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1508,
+    "zoneName": "WotLK Complete Raids (Tier 9)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1509,
+    "zoneName": "WotLK Complete Raids (Tier 10)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1511,
+    "zoneName": "WotLK Complete Raids (Tier 7)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1512,
+    "zoneName": "WotLK Complete Raids (Tier 8)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1515,
+    "zoneName": "WotLK Complete Raids (Tier 9 - ToC)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1002,
+    "expansionName": "Wrath of the Lich King",
+    "zoneId": 1520,
+    "zoneName": "Icecrown Citadel Complete Raid",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1003,
+    "expansionName": "Cataclysm",
+    "zoneId": 1022,
+    "zoneName": "Heroic Dungeons",
+    "encounterCount": 9
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1003,
+    "expansionName": "Cataclysm",
+    "zoneId": 1023,
+    "zoneName": "TotFW / BWD / BoT",
+    "encounterCount": 13
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1003,
+    "expansionName": "Cataclysm",
+    "zoneId": 1024,
+    "zoneName": "Baradin Hold",
+    "encounterCount": 3
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1003,
+    "expansionName": "Cataclysm",
+    "zoneId": 1027,
+    "zoneName": "Firelands",
+    "encounterCount": 7
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1003,
+    "expansionName": "Cataclysm",
+    "zoneId": 1033,
+    "zoneName": "Dragon Soul",
+    "encounterCount": 8
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1003,
+    "expansionName": "Cataclysm",
+    "zoneId": 1042,
+    "zoneName": "TotFW / BWD / BoT",
+    "encounterCount": 13
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1003,
+    "expansionName": "Cataclysm",
+    "zoneId": 1043,
+    "zoneName": "Baradin Hold",
+    "encounterCount": 3
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1003,
+    "expansionName": "Cataclysm",
+    "zoneId": 1044,
+    "zoneName": "Firelands",
+    "encounterCount": 7
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1003,
+    "expansionName": "Cataclysm",
+    "zoneId": 1045,
+    "zoneName": "Dragon Soul",
+    "encounterCount": 8
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1003,
+    "expansionName": "Cataclysm",
+    "zoneId": 1510,
+    "zoneName": "Cataclysm Complete Raids (Tier 11)",
+    "encounterCount": 3
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1003,
+    "expansionName": "Cataclysm",
+    "zoneId": 1513,
+    "zoneName": "Cataclysm Complete Raids (Tier 12)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1003,
+    "expansionName": "Cataclysm",
+    "zoneId": 1516,
+    "zoneName": "Dragon Soul Complete Raids",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1038,
+    "zoneName": "Mogu'shan Vaults",
+    "encounterCount": 6
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1039,
+    "zoneName": "Challenge Modes",
+    "encounterCount": 9
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1040,
+    "zoneName": "HoF / ToES",
+    "encounterCount": 10
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1046,
+    "zoneName": "Throne of Thunder",
+    "encounterCount": 13
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1050,
+    "zoneName": "Mogu'shan Vaults",
+    "encounterCount": 6
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1051,
+    "zoneName": "HoF / ToES",
+    "encounterCount": 10
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1054,
+    "zoneName": "Siege of Orgrimmar",
+    "encounterCount": 14
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1055,
+    "zoneName": "Throne of Thunder",
+    "encounterCount": 13
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1058,
+    "zoneName": "Siege of Orgrimmar",
+    "encounterCount": 14
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1521,
+    "zoneName": "Mogu'shan Vaults Complete Raid",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1522,
+    "zoneName": "HoF / ToES Complete Raid",
+    "encounterCount": 2
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1523,
+    "zoneName": "Throne of Thunder Complete Raid",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1526,
+    "zoneName": "Mogu'shan Vaults (CN Complete Raid)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1527,
+    "zoneName": "HOF / ToES (CN Complete Raid)",
+    "encounterCount": 2
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1530,
+    "zoneName": "Siege of Orgrimmar Complete Raid",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1531,
+    "zoneName": "Throne of Thunder (CN Complete Raid)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "mistsofpandaria",
+    "expansionId": 1004,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 1534,
+    "zoneName": "Siege of Orgrimmar Complete Raid",
+    "encounterCount": 1
+  },
+  {
+    "edition": "retail",
+    "expansionId": 0,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 4,
+    "zoneName": "Throne of Thunder",
+    "encounterCount": 13
+  },
+  {
+    "edition": "retail",
+    "expansionId": 0,
+    "expansionName": "Mists of Pandaria",
+    "zoneId": 5,
+    "zoneName": "Siege of Orgrimmar",
+    "encounterCount": 14
+  },
+  {
+    "edition": "retail",
+    "expansionId": 1,
+    "expansionName": "Warlords of Draenor",
+    "zoneId": 3,
+    "zoneName": "Challenge Modes",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 1,
+    "expansionName": "Warlords of Draenor",
+    "zoneId": 6,
+    "zoneName": "Highmaul",
+    "encounterCount": 7
+  },
+  {
+    "edition": "retail",
+    "expansionId": 1,
+    "expansionName": "Warlords of Draenor",
+    "zoneId": 7,
+    "zoneName": "Blackrock Foundry",
+    "encounterCount": 10
+  },
+  {
+    "edition": "retail",
+    "expansionId": 1,
+    "expansionName": "Warlords of Draenor",
+    "zoneId": 8,
+    "zoneName": "Hellfire Citadel",
+    "encounterCount": 13
+  },
+  {
+    "edition": "retail",
+    "expansionId": 2,
+    "expansionName": "Legion",
+    "zoneId": 9,
+    "zoneName": "Mythic+ Dungeons",
+    "encounterCount": 13
+  },
+  {
+    "edition": "retail",
+    "expansionId": 2,
+    "expansionName": "Legion",
+    "zoneId": 10,
+    "zoneName": "Emerald Nightmare",
+    "encounterCount": 7
+  },
+  {
+    "edition": "retail",
+    "expansionId": 2,
+    "expansionName": "Legion",
+    "zoneId": 11,
+    "zoneName": "The Nighthold",
+    "encounterCount": 10
+  },
+  {
+    "edition": "retail",
+    "expansionId": 2,
+    "expansionName": "Legion",
+    "zoneId": 12,
+    "zoneName": "Trial of Valor",
+    "encounterCount": 3
+  },
+  {
+    "edition": "retail",
+    "expansionId": 2,
+    "expansionName": "Legion",
+    "zoneId": 13,
+    "zoneName": "Tomb of Sargeras",
+    "encounterCount": 9
+  },
+  {
+    "edition": "retail",
+    "expansionId": 2,
+    "expansionName": "Legion",
+    "zoneId": 14,
+    "zoneName": "Mythic+ 7.2",
+    "encounterCount": 9
+  },
+  {
+    "edition": "retail",
+    "expansionId": 2,
+    "expansionName": "Legion",
+    "zoneId": 15,
+    "zoneName": "Mage Tower Challenges",
+    "encounterCount": 0
+  },
+  {
+    "edition": "retail",
+    "expansionId": 2,
+    "expansionName": "Legion",
+    "zoneId": 16,
+    "zoneName": "Mythic+ 7.2.5",
+    "encounterCount": 13
+  },
+  {
+    "edition": "retail",
+    "expansionId": 2,
+    "expansionName": "Legion",
+    "zoneId": 17,
+    "zoneName": "Antorus, The Burning Throne",
+    "encounterCount": 11
+  },
+  {
+    "edition": "retail",
+    "expansionId": 2,
+    "expansionName": "Legion",
+    "zoneId": 18,
+    "zoneName": "Mythic+ 7.3",
+    "encounterCount": 13
+  },
+  {
+    "edition": "retail",
+    "expansionId": 3,
+    "expansionName": "Battle for Azeroth",
+    "zoneId": 19,
+    "zoneName": "Uldir",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 3,
+    "expansionName": "Battle for Azeroth",
+    "zoneId": 20,
+    "zoneName": "Mythic+ Dungeons",
+    "encounterCount": 12
+  },
+  {
+    "edition": "retail",
+    "expansionId": 3,
+    "expansionName": "Battle for Azeroth",
+    "zoneId": 21,
+    "zoneName": "Battle of Dazar'alor",
+    "encounterCount": 9
+  },
+  {
+    "edition": "retail",
+    "expansionId": 3,
+    "expansionName": "Battle for Azeroth",
+    "zoneId": 22,
+    "zoneName": "Crucible of Storms",
+    "encounterCount": 2
+  },
+  {
+    "edition": "retail",
+    "expansionId": 3,
+    "expansionName": "Battle for Azeroth",
+    "zoneId": 23,
+    "zoneName": "The Eternal Palace",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 3,
+    "expansionName": "Battle for Azeroth",
+    "zoneId": 24,
+    "zoneName": "Ny'alotha",
+    "encounterCount": 12
+  },
+  {
+    "edition": "retail",
+    "expansionId": 3,
+    "expansionName": "Battle for Azeroth",
+    "zoneId": 500,
+    "zoneName": "Complete Raids (BFA)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "retail",
+    "expansionId": 4,
+    "expansionName": "Shadowlands",
+    "zoneId": 25,
+    "zoneName": "Mythic+ Seasons 1 - 3",
+    "encounterCount": 10
+  },
+  {
+    "edition": "retail",
+    "expansionId": 4,
+    "expansionName": "Shadowlands",
+    "zoneId": 26,
+    "zoneName": "Castle Nathria",
+    "encounterCount": 10
+  },
+  {
+    "edition": "retail",
+    "expansionId": 4,
+    "expansionName": "Shadowlands",
+    "zoneId": 27,
+    "zoneName": "Torghast",
+    "encounterCount": 7
+  },
+  {
+    "edition": "retail",
+    "expansionId": 4,
+    "expansionName": "Shadowlands",
+    "zoneId": 28,
+    "zoneName": "Sanctum of Domination",
+    "encounterCount": 10
+  },
+  {
+    "edition": "retail",
+    "expansionId": 4,
+    "expansionName": "Shadowlands",
+    "zoneId": 29,
+    "zoneName": "Sepulcher of the First Ones",
+    "encounterCount": 11
+  },
+  {
+    "edition": "retail",
+    "expansionId": 4,
+    "expansionName": "Shadowlands",
+    "zoneId": 30,
+    "zoneName": "Mythic+ Season 4",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 4,
+    "expansionName": "Shadowlands",
+    "zoneId": 501,
+    "zoneName": "Complete Raids (Nathria)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "retail",
+    "expansionId": 4,
+    "expansionName": "Shadowlands",
+    "zoneId": 502,
+    "zoneName": "Complete Raids (Sanctum)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "retail",
+    "expansionId": 4,
+    "expansionName": "Shadowlands",
+    "zoneId": 503,
+    "zoneName": "Complete Raids (Sepulcher)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "retail",
+    "expansionId": 5,
+    "expansionName": "Dragonflight",
+    "zoneId": 31,
+    "zoneName": "Vault of the Incarnates",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 5,
+    "expansionName": "Dragonflight",
+    "zoneId": 32,
+    "zoneName": "Mythic+ Season 1",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 5,
+    "expansionName": "Dragonflight",
+    "zoneId": 33,
+    "zoneName": "Aberrus, the Shadowed Crucible",
+    "encounterCount": 9
+  },
+  {
+    "edition": "retail",
+    "expansionId": 5,
+    "expansionName": "Dragonflight",
+    "zoneId": 34,
+    "zoneName": "Mythic+ Season 2",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 5,
+    "expansionName": "Dragonflight",
+    "zoneId": 35,
+    "zoneName": "Amirdrassil, the Dream's Hope",
+    "encounterCount": 9
+  },
+  {
+    "edition": "retail",
+    "expansionId": 5,
+    "expansionName": "Dragonflight",
+    "zoneId": 36,
+    "zoneName": "Mythic+ Season 3",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 5,
+    "expansionName": "Dragonflight",
+    "zoneId": 37,
+    "zoneName": "Mythic+ Season 4",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 5,
+    "expansionName": "Dragonflight",
+    "zoneId": 504,
+    "zoneName": "Complete Raids (Aberrus)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "retail",
+    "expansionId": 5,
+    "expansionName": "Dragonflight",
+    "zoneId": 505,
+    "zoneName": "Complete Raids (Amirdrassil)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "retail",
+    "expansionId": 6,
+    "expansionName": "The War Within",
+    "zoneId": 38,
+    "zoneName": "Nerub-ar Palace",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 6,
+    "expansionName": "The War Within",
+    "zoneId": 39,
+    "zoneName": "Mythic+ Season 1",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 6,
+    "expansionName": "The War Within",
+    "zoneId": 40,
+    "zoneName": "Blackrock Depths",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 6,
+    "expansionName": "The War Within",
+    "zoneId": 41,
+    "zoneName": "Delves",
+    "encounterCount": 6
+  },
+  {
+    "edition": "retail",
+    "expansionId": 6,
+    "expansionName": "The War Within",
+    "zoneId": 42,
+    "zoneName": "Liberation of Undermine",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 6,
+    "expansionName": "The War Within",
+    "zoneId": 43,
+    "zoneName": "Mythic+ Season 2",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 6,
+    "expansionName": "The War Within",
+    "zoneId": 44,
+    "zoneName": "Manaforge Omega",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 6,
+    "expansionName": "The War Within",
+    "zoneId": 45,
+    "zoneName": "Mythic+ Season 3",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 6,
+    "expansionName": "The War Within",
+    "zoneId": 506,
+    "zoneName": "Complete Raids (Nerub'ar Palace)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "retail",
+    "expansionId": 6,
+    "expansionName": "The War Within",
+    "zoneId": 507,
+    "zoneName": "Complete Raids (Liberation of Undermine)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "retail",
+    "expansionId": 6,
+    "expansionName": "The War Within",
+    "zoneId": 508,
+    "zoneName": "Complete Raids (Manaforge Omega)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 46,
+    "zoneName": "VS / DR / MQD",
+    "encounterCount": 9
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 47,
+    "zoneName": "Mythic+ Season 1",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 48,
+    "zoneName": "VS / DR / MQD (Beta)",
+    "encounterCount": 9
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 49,
+    "zoneName": "Mythic+ Beta",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 50,
+    "zoneName": "Sporefall",
+    "encounterCount": 1
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 51,
+    "zoneName": "Sporefall (PTR)",
+    "encounterCount": 1
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 52,
+    "zoneName": "Dummy Dome",
+    "encounterCount": 5
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 53,
+    "zoneName": "The Venomous Abyss",
+    "encounterCount": 9
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 54,
+    "zoneName": "The Venomous Abyss",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 55,
+    "zoneName": "Mythic+ Season 2",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 56,
+    "zoneName": "Mythic+ Season 2 (PTR)",
+    "encounterCount": 8
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 57,
+    "zoneName": "The Tidebound Grotto",
+    "encounterCount": 0
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 509,
+    "zoneName": "Complete Raids (VS / DR / MQD)",
+    "encounterCount": 2
+  },
+  {
+    "edition": "retail",
+    "expansionId": 7,
+    "expansionName": "Midnight",
+    "zoneId": 510,
+    "zoneName": "The Venomous Abyss Complete Raid",
+    "encounterCount": 1
+  }
+]

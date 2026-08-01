@@ -1,73 +1,21 @@
 using System.Text.Json;
 using Lorrgs.Api.Models;
+using WclClient = Lorrgs.WarcraftLogs.WarcraftLogsClient;
 
 namespace Lorrgs.Api.Services;
 
 public class RotationAnalysisService(
     ILogger<RotationAnalysisService> logger,
-    WarcraftLogsClient warcraftLogsClient)
+    WclClient warcraftLogsClient)
 {
     private readonly ILogger<RotationAnalysisService> _logger = logger;
-    private readonly WarcraftLogsClient _warcraftLogsClient = warcraftLogsClient;
+    private readonly WclClient _warcraftLogsClient = warcraftLogsClient;
 
-    private const string ReportMetadataQuery = """
-        query ReportMetadata($code: String!) {
-          reportData {
-            report(code: $code) {
-              title
-              startTime
-              endTime
-              gameZone {
-                id
-                name
-              }
-              fights {
-                id
-                name
-                startTime
-                endTime
-                kill
-                difficulty
-              }
-              masterData {
-                actors(type: "Player") {
-                  id
-                  name
-                  subType
-                  type
-                }
-              }
-            }
-          }
-        }
-    """;
+    private static readonly string ReportMetadataQuery =
+            GraphQlResourceLoader.Load("Rotation.ReportMetadata.graphql");
 
-    private const string RotationEventsQuery = """
-        query RotationEvents(
-          $code: String!,
-          $startTime: Float!,
-          $endTime: Float!,
-          $sourceId: Int!,
-          $fightIds: [Int!],
-          $limit: Int!
-        ) {
-          reportData {
-            report(code: $code) {
-              events(
-                dataType: Casts,
-                sourceID: $sourceId,
-                fightIDs: $fightIds,
-                startTime: $startTime,
-                endTime: $endTime,
-                limit: $limit
-              ) {
-                data
-                                nextPageTimestamp
-              }
-            }
-          }
-        }
-    """;
+    private static readonly string RotationEventsQuery =
+            GraphQlResourceLoader.Load("Rotation.RotationEvents.graphql");
 
     public async Task<RotationAnalysisResponse> AnalyzeAsync(RotationAnalysisRequest request)
     {
@@ -147,7 +95,7 @@ public class RotationAnalysisService(
             SourceId = selectedActor.id,
             SpecHint = selectedActor.subType,
             RoleHint = InferRole(selectedActor.subType),
-            GameExpansionHint = TryGetNestedString(report.element, "gameZone", "name"),
+            GameExpansionHint = TryGetNestedString(report.element, "zone", "name"),
             ParsePercentile = request.ParsePercentile,
             ItemLevel = request.ItemLevel,
             FightDurationSeconds = durationSeconds,

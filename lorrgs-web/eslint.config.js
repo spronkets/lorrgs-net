@@ -1,6 +1,7 @@
-import js from '@eslint/js'
-import globals from 'globals'
-import svelte from 'eslint-plugin-svelte'
+import js from '@eslint/js';
+import globals from 'globals';
+import svelte from 'eslint-plugin-svelte';
+import tsParser from '@typescript-eslint/parser';
 
 export default [
   {
@@ -21,9 +22,22 @@ export default [
   {
     files: ['**/*.svelte'],
     languageOptions: {
+      parserOptions: {
+        parser: tsParser
+      },
       globals: {
         ...globals.browser
       }
+    },
+    rules: {
+      'no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_'
+        }
+      ]
     }
   }
-]
+];

@@ -12,16 +12,19 @@ const BLIZZARD_CLASS_COLORS: Record<string, string> = {
   shaman: '#0070DD',
   warlock: '#8788EE',
   warrior: '#C69B6D'
-}
+};
 
-export function getBlizzardClassColor(classSlug: string | undefined | null, fallback = '#7BA4BF'): string {
+export function getBlizzardClassColor(
+  classSlug: string | undefined | null,
+  fallback = '#7BA4BF'
+): string {
   if (!classSlug) {
-    return fallback
+    return fallback;
   }
 
-  return BLIZZARD_CLASS_COLORS[classSlug] || fallback
+  return BLIZZARD_CLASS_COLORS[classSlug] || fallback;
 }
 
 export function getBlizzardClassColors(): Record<string, string> {
-  return BLIZZARD_CLASS_COLORS
+  return BLIZZARD_CLASS_COLORS;
 }

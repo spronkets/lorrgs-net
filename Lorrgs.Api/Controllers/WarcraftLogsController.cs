@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Lorrgs.Api.Models;
 using Lorrgs.Api.Services;
+using Lorrgs.WarcraftLogs;
+using WclClient = Lorrgs.WarcraftLogs.WarcraftLogsClient;
 
 namespace Lorrgs.Api.Controllers;
 
@@ -9,38 +11,14 @@ namespace Lorrgs.Api.Controllers;
 public class WarcraftLogsController(
         ILogger<WarcraftLogsController> logger,
         RotationAnalysisService rotationAnalysisService,
-        WarcraftLogsClient warcraftLogsClient) : ControllerBase
+    WclClient warcraftLogsClient) : ControllerBase
 {
     private readonly ILogger<WarcraftLogsController> _logger = logger;
-        private readonly RotationAnalysisService _rotationAnalysisService = rotationAnalysisService;
-        private readonly WarcraftLogsClient _warcraftLogsClient = warcraftLogsClient;
+    private readonly RotationAnalysisService _rotationAnalysisService = rotationAnalysisService;
+    private readonly WclClient _warcraftLogsClient = warcraftLogsClient;
 
-        private const string ReportLookupQuery = """
-                query ReportLookup($code: String!) {
-                    reportData {
-                        report(code: $code) {
-                            title
-                            gameZone {
-                                id
-                                name
-                            }
-                            fights {
-                                id
-                                name
-                                kill
-                                difficulty
-                            }
-                            masterData {
-                                actors(type: "Player") {
-                                    id
-                                    name
-                                    subType
-                                }
-                            }
-                        }
-                    }
-                }
-        """;
+    private static readonly string ReportLookupQuery =
+        GraphQlResourceLoader.Load("WarcraftLogs.ReportLookup.graphql");
 
     [HttpGet("seasons")]
     public IActionResult GetSeasons()

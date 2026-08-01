@@ -1,5 +1,8 @@
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 
 namespace Lorrgs.Api.Services;
 
@@ -12,13 +15,19 @@ public class CacheService
     private readonly ILogger<CacheService> _logger;
     private readonly IMemoryCache _memoryCache;
     private readonly string _cacheDirectory;
-    private const int CacheExpirySeconds = 86400; // 1 day
+    private readonly TimeSpan _cacheExpiry;
 
-    public CacheService(ILogger<CacheService> logger, IMemoryCache memoryCache, IWebHostEnvironment env)
+    public CacheService(
+        ILogger<CacheService> logger,
+        IMemoryCache memoryCache,
+        IWebHostEnvironment env,
+        IOptions<CacheOptions> cacheOptions)
     {
         _logger = logger;
         _memoryCache = memoryCache;
         _cacheDirectory = Path.Combine(env.ContentRootPath, "Data", "cache");
+        var ttlSeconds = Math.Max(60, cacheOptions.Value.DefaultTtlSeconds);
+        _cacheExpiry = TimeSpan.FromSeconds(ttlSeconds);
         
         // Ensure cache directory exists
         if (!Directory.Exists(_cacheDirectory))
@@ -26,6 +35,8 @@ public class CacheService
             Directory.CreateDirectory(_cacheDirectory);
             _logger.LogInformation("Created cache directory: {CacheDirectory}", _cacheDirectory);
         }
+
+        _logger.LogInformation("Cache expiry configured to {CacheExpiryMinutes} minutes", _cacheExpiry.TotalMinutes);
     }
 
     /// <summary>
@@ -52,7 +63,7 @@ public class CacheService
             if (data != null)
             {
                 // Store in memory cache for next request
-                _memoryCache.Set(cacheKey, data, TimeSpan.FromSeconds(CacheExpirySeconds));
+                _memoryCache.Set(cacheKey, data, _cacheExpiry);
             }
             
             return data;
@@ -64,18 +75,17 @@ public class CacheService
 
     /// <summary>
     /// Save data to cache (both file and memory).
-    /// Automatically adds timestamp for expiry tracking.
+    /// Uses a deterministic filename per key to avoid generating duplicate files.
     /// </summary>
     public async Task SetAsync<T>(string category, string key, T data) where T : class
     {
         var cacheKey = GetMemoryCacheKey(category, key);
         
         // Store in memory
-        _memoryCache.Set(cacheKey, data, TimeSpan.FromSeconds(CacheExpirySeconds));
+        _memoryCache.Set(cacheKey, data, _cacheExpiry);
         
         // Store in file system
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var fileName = $"{key}_{timestamp}.json";
+        var fileName = BuildCacheFileName(key);
         var directoryPath = Path.Combine(_cacheDirectory, category);
         var filePath = Path.Combine(directoryPath, fileName);
 
@@ -90,9 +100,6 @@ public class CacheService
             await File.WriteAllTextAsync(filePath, json);
             
             _logger.LogDebug("Cache saved: {FilePath}", filePath);
-
-            // Clean up old files for this key
-            await CleanupOldFilesAsync(category, key);
         }
         catch (Exception ex)
         {
@@ -112,17 +119,32 @@ public class CacheService
         if (!Directory.Exists(directoryPath))
             return;
 
-        var files = Directory.GetFiles(directoryPath, $"{key}_*.json");
-        foreach (var file in files)
+        var deterministicPath = Path.Combine(directoryPath, BuildCacheFileName(key));
+        if (File.Exists(deterministicPath))
+        {
+            try
+            {
+                File.Delete(deterministicPath);
+                _logger.LogDebug("Deleted cache file: {FilePath}", deterministicPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to delete cache file: {FilePath}", deterministicPath);
+            }
+        }
+
+        // Legacy cleanup for timestamp-based cache files.
+        var legacyFiles = Directory.GetFiles(directoryPath, $"{key}_*.json");
+        foreach (var file in legacyFiles)
         {
             try
             {
                 File.Delete(file);
-                _logger.LogDebug("Deleted cache file: {FilePath}", file);
+                _logger.LogDebug("Deleted legacy cache file: {FilePath}", file);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to delete cache file: {FilePath}", file);
+                _logger.LogError(ex, "Failed to delete legacy cache file: {FilePath}", file);
             }
         }
     }
@@ -135,8 +157,8 @@ public class CacheService
         try
         {
             var fileInfo = new FileInfo(filePath);
-            var ageSeconds = (DateTimeOffset.UtcNow - new DateTimeOffset(fileInfo.LastWriteTimeUtc)).TotalSeconds;
-            return ageSeconds < CacheExpirySeconds;
+            var age = DateTimeOffset.UtcNow - new DateTimeOffset(fileInfo.LastWriteTimeUtc);
+            return age < _cacheExpiry;
         }
         catch
         {
@@ -145,14 +167,20 @@ public class CacheService
     }
 
     /// <summary>
-    /// Find the most recent cache file for a key.
-    /// Format: {key}_{timestamp}.json
+    /// Resolve cache file for a key.
+    /// Prefers deterministic file name and falls back to legacy timestamp files.
     /// </summary>
     private string? GetLatestCacheFile(string category, string key)
     {
         var directoryPath = Path.Combine(_cacheDirectory, category);
         if (!Directory.Exists(directoryPath))
             return null;
+
+        var deterministicPath = Path.Combine(directoryPath, BuildCacheFileName(key));
+        if (File.Exists(deterministicPath))
+        {
+            return deterministicPath;
+        }
 
         var files = Directory.GetFiles(directoryPath, $"{key}_*.json");
         if (files.Length == 0)
@@ -167,39 +195,6 @@ public class CacheService
         }
 
         return latestFile;
-    }
-
-    /// <summary>
-    /// Delete old cache files for a given key.
-    /// Keeps only the most recent file.
-    /// </summary>
-    private async Task CleanupOldFilesAsync(string category, string key)
-    {
-        var directoryPath = Path.Combine(_cacheDirectory, category);
-        if (!Directory.Exists(directoryPath))
-            return;
-
-        var files = Directory.GetFiles(directoryPath, $"{key}_*.json");
-        if (files.Length <= 1)
-            return;
-
-        // Sort by modification time, keep only the latest
-        Array.Sort(files, (a, b) => 
-            File.GetLastWriteTimeUtc(b).CompareTo(File.GetLastWriteTimeUtc(a))
-        );
-
-        for (int i = 1; i < files.Length; i++)
-        {
-            try
-            {
-                File.Delete(files[i]);
-                _logger.LogDebug("Cleaned up old cache: {FilePath}", files[i]);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to clean old cache: {FilePath}", files[i]);
-            }
-        }
     }
 
     /// <summary>
@@ -242,6 +237,29 @@ public class CacheService
     }
 
     private string GetMemoryCacheKey(string category, string key) => $"cache:{category}:{key}";
+
+    private static string BuildCacheFileName(string key)
+    {
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(key));
+        var hash = Convert.ToHexString(hashBytes).ToLowerInvariant()[..12];
+
+        var sanitizedChars = key
+            .Select(ch => char.IsLetterOrDigit(ch) || ch == '-' || ch == '_' ? ch : '-')
+            .ToArray();
+        var sanitized = new string(sanitizedChars).Trim('-');
+
+        if (sanitized.Length > 60)
+        {
+            sanitized = sanitized[..60];
+        }
+
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            sanitized = "cache";
+        }
+
+        return $"{sanitized}_{hash}.json";
+    }
 
     private async Task<T?> ReadCacheFileAsync<T>(string filePath) where T : class
     {

@@ -9,10 +9,13 @@ public class SpecRankingData
     public required string BossSlug { get; set; }
     public required string Difficulty { get; set; }
     public required string Metric { get; set; }
+    public int Page { get; set; } = 1;
+    public bool HasMorePages { get; set; }
+    public int TotalCount { get; set; }
     public List<RankingReport> Reports { get; set; } = new();
     public DateTime Updated { get; set; }
     public bool IsDirty { get; set; }
-    public int Percentile { get; set; }
+    public double? Percentile { get; set; }
 }
 
 /// <summary>
@@ -32,7 +35,7 @@ public class RankingReport
 {
     public required string ReportId { get; set; }
     public required string Title { get; set; }
-    public int Percentile { get; set; }
+    public double? Percentile { get; set; }
     public int Duration { get; set; } // milliseconds
     public string DurationDisplay => RankingHelpers.FormatDuration(Duration);
     public DateTime StartTime { get; set; }
@@ -61,7 +64,7 @@ public class RankingFight
     public int Duration { get; set; } // milliseconds
     public bool IsKill { get; set; }
     public DateTime StartTime { get; set; }
-    public int Percentile { get; set; }
+    public double? Percentile { get; set; }
 }
 
 /// <summary>
@@ -95,6 +98,7 @@ public class RankingPlayer
 {
     public int PlayerId { get; set; }
     public required string Name { get; set; }
+    public string? GuildName { get; set; }
     public int ClassId { get; set; }
     public int SpecId { get; set; }
     public required string SpecSlug { get; set; }

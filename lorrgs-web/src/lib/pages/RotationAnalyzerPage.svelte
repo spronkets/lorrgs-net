@@ -1,56 +1,56 @@
 <script lang="ts">
-  import * as API from '../api'
+  import * as API from '../api';
 
-  let reportCode = ''
-  let lookup = null
-  let selectedFightId = ''
-  let selectedSourceId = ''
-  let parsePercentile = ''
-  let itemLevel = ''
+  let reportCode = '';
+  let lookup = null;
+  let selectedFightId = '';
+  let selectedSourceId = '';
+  let parsePercentile = '';
+  let itemLevel = '';
 
-  let loadingLookup = false
-  let loadingAnalysis = false
-  let error = ''
-  let analysis = null
+  let loadingLookup = false;
+  let loadingAnalysis = false;
+  let error = '';
+  let analysis = null;
 
   async function runLookup() {
     if (!reportCode.trim()) {
-      error = 'Enter a Warcraft Logs report code first.'
-      return
+      error = 'Enter a Warcraft Logs report code first.';
+      return;
     }
 
-    loadingLookup = true
-    error = ''
-    analysis = null
+    loadingLookup = true;
+    error = '';
+    analysis = null;
 
     try {
-      lookup = await API.lookupReport(reportCode.trim())
-      const fights = lookup?.reportData?.report?.fights || []
-      const players = lookup?.reportData?.report?.masterData?.actors || []
+      lookup = await API.lookupReport(reportCode.trim());
+      const fights = lookup?.reportData?.report?.fights || [];
+      const players = lookup?.reportData?.report?.masterData?.actors || [];
 
-      selectedFightId = fights.length ? String(fights[0].id) : ''
-      selectedSourceId = players.length ? String(players[0].id) : ''
+      selectedFightId = fights.length ? String(fights[0].id) : '';
+      selectedSourceId = players.length ? String(players[0].id) : '';
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to lookup report'
-      lookup = null
+      error = err instanceof Error ? err.message : 'Failed to lookup report';
+      lookup = null;
     } finally {
-      loadingLookup = false
+      loadingLookup = false;
     }
   }
 
   async function runAnalysis() {
     if (!reportCode.trim()) {
-      error = 'Enter a Warcraft Logs report code first.'
-      return
+      error = 'Enter a Warcraft Logs report code first.';
+      return;
     }
 
     if (!selectedSourceId) {
-      error = 'Select a player to analyze.'
-      return
+      error = 'Select a player to analyze.';
+      return;
     }
 
-    loadingAnalysis = true
-    error = ''
+    loadingAnalysis = true;
+    error = '';
 
     try {
       analysis = await API.analyzeRotation({
@@ -60,17 +60,17 @@
         parsePercentile: parsePercentile ? Number(parsePercentile) : null,
         itemLevel: itemLevel ? Number(itemLevel) : null,
         eventLimit: 5000
-      })
+      });
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to analyze rotation'
-      analysis = null
+      error = err instanceof Error ? err.message : 'Failed to analyze rotation';
+      analysis = null;
     } finally {
-      loadingAnalysis = false
+      loadingAnalysis = false;
     }
   }
 
-  $: fights = lookup?.reportData?.report?.fights || []
-  $: players = lookup?.reportData?.report?.masterData?.actors || []
+  $: fights = lookup?.reportData?.report?.fights || [];
+  $: players = lookup?.reportData?.report?.masterData?.actors || [];
 </script>
 
 <div class="rotation-page">

@@ -25,7 +25,7 @@ public class WorldDataController(
     public async Task<IActionResult> GetRoles()
     {
         _logger.LogInformation("Fetching all roles");
-        
+
         var cached = await _cacheService.GetAsync<List<WowRole>>("world-data", "roles");
         if (cached != null)
         {
