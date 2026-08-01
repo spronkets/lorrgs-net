@@ -112,11 +112,12 @@
   }
 
   .rankings-header {
-    background: #1a1a1a;
-    border: 1px solid #333;
+    background: #ffffff;
+    border: 1px solid #c2d8e7;
     border-radius: 0.5rem;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
+    box-shadow: 0 8px 20px rgba(19, 49, 78, 0.08);
   }
 
   .rankings-info h3 {
@@ -126,7 +127,7 @@
 
   .rankings-info p {
     margin: 0;
-    color: #999;
+    color: #547694;
     font-size: 0.9rem;
   }
 
@@ -138,14 +139,15 @@
   }
 
   .updated {
-    color: #666;
+    color: #6989a5;
     font-size: 0.8rem;
   }
 
   .table-container {
     overflow-x: auto;
-    border: 1px solid #333;
+    border: 1px solid #c2d8e7;
     border-radius: 0.5rem;
+    background: #ffffff;
   }
 
   .rankings-table {
@@ -155,42 +157,42 @@
   }
 
   .rankings-table thead {
-    background: #1a1a1a;
-    border-bottom: 1px solid #333;
+    background: #edf5fd;
+    border-bottom: 1px solid #c2d8e7;
   }
 
   .rankings-table th {
     padding: 0.75rem;
     text-align: left;
     font-weight: 600;
-    color: #ccc;
+    color: #2a4b69;
   }
 
   .rankings-table th button {
     background: transparent;
     border: none;
-    color: #ccc;
+    color: #2a4b69;
     cursor: pointer;
     font-weight: 600;
     padding: 0;
   }
 
   .rankings-table th button:hover {
-    color: #fff;
+    color: #16344d;
     text-decoration: underline;
   }
 
   .rankings-table th button.active {
-    color: #fff;
+    color: #16344d;
   }
 
   .rankings-table tbody tr {
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid #d9e7f3;
     transition: background 0.2s;
   }
 
   .rankings-table tbody tr:hover {
-    background: #1a1a1a;
+    background: #f3f9ff;
   }
 
   .rankings-table tbody tr.killed {
@@ -202,7 +204,7 @@
   }
 
   .rank {
-    color: #999;
+    color: #5f7f9b;
     font-weight: 600;
     width: 40px;
   }
@@ -219,7 +221,7 @@
 
   .percentile {
     font-weight: 600;
-    color: #fff;
+    color: #16344d;
   }
 
   .performance {
@@ -254,5 +256,63 @@
   .badge.wipe {
     background: rgba(244, 67, 54, 0.3);
     color: #f44336;
+  }
+
+  :global(.theme-dark) .rankings-header {
+    background: #13263a;
+    border-color: #355472;
+    box-shadow: 0 8px 20px rgba(2, 10, 18, 0.35);
+  }
+
+  :global(.theme-dark) .rankings-info h3 {
+    color: #e6f2ff;
+  }
+
+  :global(.theme-dark) .rankings-info p {
+    color: #9ec0da;
+  }
+
+  :global(.theme-dark) .updated {
+    color: #82a9c8;
+  }
+
+  :global(.theme-dark) .table-container {
+    border-color: #355472;
+    background: #13263a;
+  }
+
+  :global(.theme-dark) .rankings-table thead {
+    background: #102032;
+    border-bottom-color: #355472;
+  }
+
+  :global(.theme-dark) .rankings-table th,
+  :global(.theme-dark) .rankings-table th button {
+    color: #c9e4f8;
+  }
+
+  :global(.theme-dark) .rankings-table th button:hover,
+  :global(.theme-dark) .rankings-table th button.active {
+    color: #ecf7ff;
+  }
+
+  :global(.theme-dark) .rankings-table tbody tr {
+    border-bottom-color: #27415d;
+  }
+
+  :global(.theme-dark) .rankings-table tbody tr:hover {
+    background: #18324b;
+  }
+
+  :global(.theme-dark) .rank {
+    color: #8db5d6;
+  }
+
+  :global(.theme-dark) .report a {
+    color: #8ec9ff;
+  }
+
+  :global(.theme-dark) .percentile {
+    color: #e6f2ff;
   }
 </style>

@@ -1,0 +1,154 @@
+@mixin apply-selection-tokens {
+    --space-1: 0.32rem;
+    --space-2: 0.5rem;
+    --space-3: 0.62rem;
+    --space-4: 0.75rem;
+    --space-5: 0.8rem;
+    --space-6: 0.95rem;
+    --space-7: 1rem;
+    --space-8: 1.1rem;
+    --space-9: 1.25rem;
+    --space-10: 1.2rem;
+    --space-11: 2rem;
+    --space-12: 2.5rem;
+    --selector-block-gap: 4rem;
+
+    --radius-sm: 0.45rem;
+    --radius-md: 0.58rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 0.8rem;
+
+    --control-font-size: 0.95rem;
+    --label-font-size: 0.9rem;
+    --meta-font-size: 0.82rem;
+
+    --transition-fast: 0.15s;
+    --transition-standard: 0.15s;
+
+    --icon-size: 36px;
+    --class-icon-size: 16px;
+
+    --select-chevron-size: 0.72rem;
+    --select-chevron-offset: 0.72rem;
+    --select-padding-y: 0.52rem;
+    --select-padding-x: 0.62rem;
+    --select-padding-right: 2.1rem;
+
+    --hero-title: #13243a;
+    --hero-subtitle: #4f718f;
+
+    --summary-bg: linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(245, 250, 255, 0.98));
+    --summary-border: #c8dae9;
+    --summary-shadow: 0 8px 20px rgba(19, 49, 78, 0.07);
+    --summary-label: #355c79;
+    --summary-value: #0f2f49;
+    --summary-hint: #4f6f8d;
+
+    --panel-bg: linear-gradient(180deg, #f3f8fd 0%, #e9f2fb 100%);
+    --panel-border: #c3d5e5;
+    --panel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 22px rgba(22, 56, 90, 0.09);
+    --section-heading: #1f4564;
+
+    --edition-card-bg: linear-gradient(180deg, #f3f8fd, #edf5fc);
+    --edition-card-border: #bfd3e3;
+    --edition-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 2px 10px rgba(24, 49, 74, 0.08);
+    --edition-card-hover-bg: linear-gradient(180deg, #f8fbff, #f1f7fd);
+    --edition-card-hover-border: #a8c2d9;
+    --edition-card-hover-ring: 0 0 0 1px rgba(128, 161, 190, 0.22);
+    --edition-card-active-border: #2a7e8e;
+    --edition-card-active-ring: 0 0 0 2px rgba(42, 126, 142, 0.2);
+    --edition-image-backdrop: transparent;
+    --edition-image-backdrop-hover: transparent;
+    --edition-logo-filter: contrast(1.17) saturate(1.1) brightness(1.02);
+    --edition-logo-hover-filter: contrast(1.17) saturate(1.1) brightness(1.02);
+    --edition-logo-boost-opacity: 0.62;
+    --edition-logo-boost-clip: inset(56% 8% 5% 8%);
+    --edition-logo-boost-filter: contrast(1.42) brightness(0.78) saturate(0.93);
+    --edition-logo-boost-hover-filter: contrast(1.42) brightness(0.78) saturate(0.93);
+
+    --select-bg: #ffffff;
+    --select-border: #9fbcd1;
+    --select-text: #14314c;
+    --select-chevron-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%234c6f8f' d='M6 8 .8 1.7A1 1 0 0 1 2.2.3L6 4.2 9.8.3a1 1 0 1 1 1.4 1.4z'/%3E%3C/svg%3E");
+    --select-hover-bg: #ffffff;
+    --select-hover-border: #648cad;
+    --select-hover-ring: 0 0 0 1px rgba(100, 140, 173, 0.26);
+    --select-focus-border: #2d7f95;
+    --select-focus-ring: 0 0 0 2px rgba(45, 127, 149, 0.2);
+
+    --disabled-bg: #edf1f5;
+    --disabled-bg-alt: #e4eaf0;
+    --disabled-border: #aab8c7;
+    --disabled-text: #7f8fa0;
+    --disabled-icon-bg: #ebeff2;
+    --disabled-icon-ring: inset 0 0 0 1px rgba(116, 128, 141, 0.1);
+    --disabled-chevron-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%237a8694' d='M6 8 .8 1.7A1 1 0 0 1 2.2.3L6 4.2 9.8.3a1 1 0 1 1 1.4 1.4z'/%3E%3C/svg%3E");
+
+    --role-border: #bfd1df;
+
+    --spec-bg: linear-gradient(160deg, #ffffff, #f2f8fd);
+    --spec-hover-bg: #ffffff;
+    --spec-icon-border: #9fb9cc;
+    --class-icon-border: #ffffff;
+    --class-icon-bg: #ffffff;
+
+  :global(.theme-dark) & {
+    --hero-title: #e6f2ff;
+    --hero-subtitle: #97b8d4;
+
+    --summary-bg: linear-gradient(160deg, rgba(19, 35, 53, 0.94), rgba(14, 28, 44, 0.94));
+    --summary-border: #355472;
+    --summary-shadow: 0 8px 22px rgba(2, 10, 18, 0.35);
+    --summary-label: #8eb8da;
+    --summary-value: #e7f4ff;
+    --summary-hint: #a0bfd9;
+
+    --panel-bg: linear-gradient(180deg, #13263a 0%, #102032 100%);
+    --panel-border: #355472;
+    --panel-shadow: inset 0 1px 0 rgba(147, 193, 226, 0.09), 0 12px 26px rgba(2, 10, 18, 0.38);
+    --section-heading: #8eb8da;
+
+    --edition-card-bg: linear-gradient(160deg, #13283d, #102235);
+    --edition-card-border: #3f6383;
+    --edition-card-shadow: inset 0 1px 0 rgba(159, 197, 225, 0.08), 0 2px 8px rgba(1, 8, 14, 0.45);
+    --edition-card-hover-bg: #18324c;
+    --edition-card-hover-border: #5d89ad;
+    --edition-card-hover-ring: 0 0 0 1px rgba(93, 137, 173, 0.3);
+    --edition-card-active-border: #8bddd6;
+    --edition-card-active-ring: 0 0 0 2px rgba(139, 221, 214, 0.22);
+    --edition-image-backdrop: var(--select-bg);
+    --edition-image-backdrop-hover: var(--select-hover-bg);
+    --edition-logo-filter: none;
+    --edition-logo-hover-filter: none;
+    --edition-logo-boost-opacity: 0;
+    --edition-logo-boost-clip: inset(56% 8% 5% 8%);
+    --edition-logo-boost-filter: none;
+    --edition-logo-boost-hover-filter: none;
+
+    --select-bg: #13283d;
+    --select-border: #3f6383;
+    --select-text: #d5e8f8;
+    --select-chevron-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2394b5d1' d='M6 8 .8 1.7A1 1 0 0 1 2.2.3L6 4.2 9.8.3a1 1 0 1 1 1.4 1.4z'/%3E%3C/svg%3E");
+    --select-hover-bg: #18324c;
+    --select-hover-border: #5d89ad;
+    --select-hover-ring: none;
+    --select-focus-border: #8bddd6;
+    --select-focus-ring: 0 0 0 2px rgba(139, 221, 214, 0.22);
+
+    --disabled-bg: #21262d;
+    --disabled-bg-alt: #1c2229;
+    --disabled-border: #5d6671;
+    --disabled-text: #5d6671;
+    --disabled-icon-bg: #21262d;
+    --disabled-icon-ring: inset 0 0 0 1px rgba(150, 160, 172, 0.12);
+    --disabled-chevron-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236f7885' d='M6 8 .8 1.7A1 1 0 0 1 2.2.3L6 4.2 9.8.3a1 1 0 1 1 1.4 1.4z'/%3E%3C/svg%3E");
+
+    --role-border: #355472;
+
+    --spec-bg: linear-gradient(160deg, #162a3f, #122338);
+    --spec-hover-bg: #1a324b;
+    --spec-icon-border: #4f7493;
+    --class-icon-border: #162a3f;
+    --class-icon-bg: #162a3f;
+  }
+}

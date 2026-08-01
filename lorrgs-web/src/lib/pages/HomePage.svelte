@@ -1,5 +1,10 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import { getVersionIconUrl } from '../selectionIcons'
+  import EditionSelector from '../components/EditionSelector.svelte'
+  import RaidBossSelectors from '../components/RaidBossSelectors.svelte'
+  import { getBlizzardClassColor } from '../classColors'
+  import { getClassIconUrl, getSpecIconUrl } from '../wowAssets'
   import {
     getAvailableSpecsForVersion,
     getRaidBossOptions,
@@ -17,6 +22,7 @@
   let selectedVersion = ''
   let selectedRaid = ''
   let selectedBoss = ''
+  let hasHydratedQuery = false
 
   const versionOrder = ['Anniversary', 'Mists of Pandaria', 'Era', 'Retail']
   const versions = versionOrder
@@ -43,29 +49,18 @@
     selectedBoss = ''
   }
 
-  function onRaidChange() {
-    selectedBoss = ''
-  }
-
   function selectVersion(version) {
     if (selectedVersion === version) return
     selectedVersion = version
     onVersionChange()
   }
 
-  function handleRaidChange(event) {
-    const normalized = event.currentTarget.value
-    if (selectedRaid === normalized) return
-    selectedRaid = normalized
-    onRaidChange()
-  }
-
-  function handleBossChange(event) {
-    selectedBoss = event.currentTarget.value
-  }
-
   // Group specs by roleId, then map to role objects
   $: versionSpecs = getAvailableSpecsForVersion(worldData.specs || [], selectedVersion)
+  $: classesById = new Map((worldData.classes || []).map((cls) => [Number(cls.id), cls]))
+  $: activeSpecs = versionSpecs.length
+  $: activeBossCount = bosses.filter((boss) => boss.mapped).length
+  $: raidCount = raids.length
   $: specsByRole = (worldData.roles || [])
     .map((role) => ({
       role,
@@ -77,63 +72,126 @@
     if (!selectedBoss) return
     onSelectSpec(spec.fullNameSlug, selectedBoss)
   }
+
+  function getSpecClass(spec) {
+    return classesById.get(Number(spec.classId)) || null
+  }
+
+  function getSpecClassSlug(spec) {
+    const matchedClass = getSpecClass(spec)
+    return matchedClass?.nameSlug || 'other'
+  }
+
+  function getSpecClassColor(spec) {
+    const matchedClass = getSpecClass(spec)
+    return getBlizzardClassColor(matchedClass?.nameSlug, matchedClass?.color || '#7BA4BF')
+  }
+
+  function loadSelectionsFromQuery() {
+    const params = new URLSearchParams(window.location.search)
+    const queryEdition = params.get('edition')
+    const queryRaid = params.get('raid')
+    const queryBoss = params.get('boss')
+
+    if (queryEdition && versions.includes(queryEdition)) {
+      selectedVersion = queryEdition
+    }
+
+    if (queryRaid) {
+      selectedRaid = queryRaid
+    }
+
+    if (queryBoss) {
+      selectedBoss = queryBoss
+    }
+  }
+
+  function syncSelectionsToQuery() {
+    const url = new URL(window.location.href)
+
+    if (selectedVersion) {
+      url.searchParams.set('edition', selectedVersion)
+    } else {
+      url.searchParams.delete('edition')
+    }
+
+    // Cleanup legacy param to avoid duplicate semantics.
+    url.searchParams.delete('version')
+
+    if (selectedRaid) {
+      url.searchParams.set('raid', selectedRaid)
+    } else {
+      url.searchParams.delete('raid')
+    }
+
+    if (selectedBoss) {
+      url.searchParams.set('boss', selectedBoss)
+    } else {
+      url.searchParams.delete('boss')
+    }
+
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`
+    window.history.replaceState({}, '', nextUrl)
+  }
+
+  onMount(() => {
+    loadSelectionsFromQuery()
+    hasHydratedQuery = true
+  })
+
+  $: if (typeof window !== 'undefined' && hasHydratedQuery) {
+    void selectedVersion
+    void selectedRaid
+    void selectedBoss
+    syncSelectionsToQuery()
+  }
 </script>
 
 <div class="home-page">
-  <div class="hero">
-    <h2>WoW Rankings Timeline</h2>
-    <p>Visualize cooldown usage across top parses for every spec and boss.</p>
+  <div class="summary-grid">
+    <article class="summary-card">
+      <p class="label">Active Raids</p>
+      <p class="value">{raidCount}</p>
+      <p class="hint">Across {selectedVersion || 'selected timeline'} catalog</p>
+    </article>
+    <article class="summary-card">
+      <p class="label">Supported Bosses</p>
+      <p class="value">{activeBossCount}</p>
+      <p class="hint">Ready for ranking pulls</p>
+    </article>
+    <article class="summary-card">
+      <p class="label">Playable Specs</p>
+      <p class="value">{activeSpecs}</p>
+      <p class="hint">Edition-filtered specialization list</p>
+    </article>
   </div>
 
-  <div class="boss-selector">
-    <div class="selector-block">
-      <h3>Choose Version</h3>
-      <div class="icon-strip">
-        {#each versions as version (version)}
-          <button
-            class="icon-card"
-            class:version-card={true}
-            class:active={selectedVersion === version}
-            on:click={() => selectVersion(version)}
-            title={version}
-          >
-            <img src={getVersionIconUrl(version)} alt={version} class="selector-icon banner" />
-            <span>{version}</span>
-          </button>
-        {/each}
-      </div>
-    </div>
+  <div class="selector-section selector-block">
+    <h3>Edition</h3>
+    <EditionSelector
+      {versions}
+      {selectedVersion}
+      {getVersionIconUrl}
+      on:select={(event) => selectVersion(event.detail.version)}
+    />
+  </div>
 
-    <div class="selector-block">
-      <h3>Choose Raid</h3>
-      <select value={selectedRaid} on:change={handleRaidChange}>
-        <option value="">— choose a raid —</option>
-        {#each raidPhaseGroups as group (group.key)}
-          <optgroup label={group.label}>
-            {#each group.raids as raid (raid.slug)}
-              <option value={raid.slug}>{raid.name}</option>
-            {/each}
-          </optgroup>
-        {/each}
-      </select>
-    </div>
-
-    <label>
-      <span>Select Boss:</span>
-      <select value={selectedBoss} on:change={handleBossChange}>
-        <option value="">— choose a boss —</option>
-        {#each bosses as boss (boss.slug)}
-          <option value={boss.slug} disabled={!boss.mapped}>
-            {boss.name}{boss.mapped ? '' : ' (unsupported)'}
-          </option>
-        {/each}
-      </select>
-    </label>
+  <div class="selector-section selector-controls">
+    <RaidBossSelectors
+      {raidPhaseGroups}
+      {bosses}
+      bind:selectedRaid
+      bind:selectedBoss
+      raidLabel="Raid"
+      bossLabel="Boss"
+      raidPlaceholder="— choose a raid —"
+      bossPlaceholder="— choose a boss —"
+    />
   </div>
 
   {#each specsByRole as { role, specs } (role.id)}
     <div class="role-section">
-      <h3 class="role-header" style="color: {role.color}">
+      <h3 class="role-header">
         {role.name}
       </h3>
       <div class="spec-grid">
@@ -141,9 +199,24 @@
           <button
             class="spec-card"
             class:disabled={!selectedBoss}
+            style="--class-accent: {getSpecClassColor(spec)}"
             on:click={() => selectSpec(spec)}
             title={selectedBoss ? `View ${spec.fullName}` : 'Select a boss first'}
           >
+            <div class="spec-media">
+              <img
+                class="spec-icon"
+                src={getSpecIconUrl(getSpecClassSlug(spec), spec.nameSlug)}
+                alt={spec.fullName}
+                loading="lazy"
+              />
+              <img
+                class="class-icon"
+                src={getClassIconUrl(getSpecClassSlug(spec))}
+                alt={getSpecClass(spec)?.name || 'Class'}
+                loading="lazy"
+              />
+            </div>
             <span class="spec-name">{spec.fullName}</span>
           </button>
         {/each}
@@ -152,137 +225,92 @@
   {/each}
 </div>
 
-<style>
+<style lang="scss">
+  @use '../styles/selection-tokens' as selectionTokens;
+
   .home-page {
-    max-width: 1000px;
+    @include selectionTokens.apply-selection-tokens;
+
+    max-width: 1120px;
     margin: 0 auto;
   }
 
-  .hero {
-    text-align: center;
-    margin-bottom: 2rem;
-  }
-
-  .hero h2 {
-    font-size: 2rem;
-    margin: 0 0 0.5rem;
-  }
-
-  .hero p {
-    color: #aaa;
-    margin: 0;
-  }
-
-  .boss-selector {
+  .summary-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 1rem;
-    margin-bottom: 2.5rem;
-    padding: 1rem 1.25rem;
-    background: linear-gradient(180deg, #1e1410 0%, #150d0a 100%);
-    border-radius: 0.75rem;
-    border: 1px solid #4a3329;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 214, 170, 0.08),
-      0 10px 24px rgba(0, 0, 0, 0.25);
+    gap: var(--space-5);
+    margin-bottom: var(--selector-block-gap);
   }
 
-  .selector-block {
-    grid-column: 1 / -1;
+  .summary-card {
+    background: var(--summary-bg);
+    border: 1px solid var(--summary-border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-5) var(--space-6);
+    box-shadow: var(--summary-shadow);
+  }
+
+  .summary-card .label {
+    margin: 0;
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--summary-label);
+    font-weight: 700;
+  }
+
+  .summary-card .value {
+    margin: 0.15rem 0;
+    font-size: 1.65rem;
+    font-weight: 700;
+    color: var(--summary-value);
+  }
+
+  .summary-card .hint {
+    margin: 0;
+    font-size: 0.84rem;
+    color: var(--summary-hint);
+  }
+
+  .selector-section {
+    margin-bottom: var(--space-8);
+  }
+
+  .selector-controls {
+    margin-bottom: var(--selector-block-gap);
+  }
+
+  .selector-controls :global(.raid-boss-row) {
+    width: 100%;
   }
 
   .selector-block h3 {
-    margin: 0 0 0.65rem;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #d9b48d;
+    font-size: 1rem;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.08em;
+    margin: 0 0 var(--space-4);
+    padding-bottom: 0;
+    border-bottom: none;
+    color: inherit;
   }
 
-  .icon-strip {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-    gap: 0.55rem;
+  .selector-controls :global(label) {
+    color: inherit;
+    gap: var(--space-3);
   }
 
-  .icon-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.35rem;
-    background: #241913;
-    color: #f6e8d8;
-    border: 1px solid #5e4032;
-    border-radius: 0.55rem;
-    padding: 0.5rem;
-    cursor: pointer;
-    transition:
-      border-color 0.15s,
-      background 0.15s;
-  }
-
-  .icon-card:hover {
-    border-color: #9f6c54;
-    background: #2b1d16;
-  }
-
-  .icon-card.active {
-    border-color: #f1b37d;
-    box-shadow: 0 0 0 1px rgba(241, 179, 125, 0.35) inset;
-  }
-
-  .selector-icon {
-    width: 42px;
-    height: 42px;
-    object-fit: cover;
-    border-radius: 0.4rem;
-    border: 1px solid #6a4736;
-    background: #120d0a;
-  }
-
-  .icon-card span {
-    font-size: 0.78rem;
-    line-height: 1.2;
-    text-align: center;
-  }
-
-  .icon-card.version-card {
-    padding: 0.4rem;
-    align-items: stretch;
-  }
-
-  .selector-icon.banner {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 4 / 3;
-    border-radius: 0.45rem;
-  }
-
-  .icon-card.version-card span {
-    font-size: 0.76rem;
-    margin-top: 0.1rem;
-  }
-
-  .boss-selector label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+  .selector-controls :global(label > span) {
     font-size: 1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: inherit;
   }
 
-  .boss-selector select {
-    padding: 0.5rem 1rem;
-    background: #251913;
-    border: 1px solid #5e4032;
-    color: #f6e8d8;
-    border-radius: 0.5rem;
-    font-size: 1rem;
-    min-width: 240px;
-  }
 
   .role-section {
-    margin-bottom: 2rem;
+    margin-bottom: var(--space-11);
   }
 
   .role-header {
@@ -291,41 +319,128 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     margin: 0 0 0.75rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 1px solid #333;
+    padding-bottom: 0;
   }
 
   .spec-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: var(--space-3);
   }
 
   .spec-card {
-    padding: 0.45rem 0.9rem;
-    background: #1e1e2e;
-    border: 1px solid #333;
-    border-radius: 0.4rem;
-    color: #ddd;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: var(--select-padding-y) var(--select-padding-x);
+    background: var(--spec-bg);
+    border: 1px solid var(--class-accent, #c2d8e7);
+    border-radius: var(--radius-md);
+    color: color-mix(in srgb, var(--class-accent, #2a4b69) 78%, #1a2f44);
     cursor: pointer;
     font-size: 0.875rem;
     transition:
-      background 0.15s,
-      border-color 0.15s;
+      background var(--transition-fast),
+      border-color var(--transition-fast),
+      transform var(--transition-fast);
   }
 
   .spec-card:hover:not(.disabled) {
-    background: #2a2a4a;
-    border-color: #555;
-    color: #fff;
+    background: var(--spec-hover-bg);
+    border-color: var(--class-accent, #7ca6c2);
+    color: color-mix(in srgb, var(--class-accent, #16344d) 78%, #ffffff);
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--class-accent, #7ca6c2) 30%, transparent);
   }
 
   .spec-card.disabled {
-    opacity: 0.4;
-    cursor: default;
+    background: linear-gradient(160deg, var(--disabled-bg), var(--disabled-bg-alt));
+    border-color: var(--disabled-border);
+    color: var(--disabled-text);
+    cursor: not-allowed;
+    opacity: 1;
+    box-shadow: var(--disabled-icon-ring);
+  }
+
+  .spec-card.disabled .spec-icon {
+    border-color: var(--disabled-border);
+    filter: grayscale(0.64) saturate(0.28) brightness(0.95);
+  }
+
+  .spec-card.disabled .class-icon {
+    border-color: var(--disabled-icon-bg);
+    background: var(--disabled-icon-bg);
+    filter: grayscale(0.64) saturate(0.28) brightness(0.95);
+  }
+
+  .spec-card.disabled .spec-name {
+    color: var(--disabled-text);
+    font-weight: 500;
+  }
+
+  .spec-media {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+  }
+
+  .spec-icon {
+    width: var(--icon-size);
+    height: var(--icon-size);
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    border: 1px solid var(--spec-icon-border);
+  }
+
+  .class-icon {
+    position: absolute;
+    width: var(--class-icon-size);
+    height: var(--class-icon-size);
+    border-radius: 999px;
+    object-fit: cover;
+    right: -4px;
+    bottom: -4px;
+    border: 2px solid var(--class-icon-border);
+    background: var(--class-icon-bg);
   }
 
   .spec-name {
-    white-space: nowrap;
+    text-align: left;
+    line-height: 1.2;
+    font-weight: 600;
+    color: inherit;
+  }
+
+  @media (max-width: 700px) {
+    .spec-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+
+  }
+
+  :global(.theme-dark) .spec-card.disabled {
+    background: linear-gradient(160deg, var(--disabled-bg), var(--disabled-bg-alt));
+    border-color: var(--disabled-border);
+    color: var(--disabled-text);
+    cursor: not-allowed;
+    opacity: 1;
+    box-shadow: var(--disabled-icon-ring);
+  }
+
+  :global(.theme-dark) .spec-card.disabled .spec-icon {
+    border-color: var(--disabled-border);
+    filter: grayscale(0.68) saturate(0.28) brightness(0.85);
+  }
+
+  :global(.theme-dark) .spec-card.disabled .class-icon {
+    border-color: var(--disabled-icon-bg);
+    background: var(--disabled-icon-bg);
+    filter: grayscale(0.68) saturate(0.28) brightness(0.85);
+  }
+
+  :global(.theme-dark) .spec-card.disabled .spec-name {
+    color: var(--disabled-text);
+    font-weight: 500;
   }
 </style>

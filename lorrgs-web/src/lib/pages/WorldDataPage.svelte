@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getBlizzardClassColor } from '../classColors'
   import { getWowheadIconUrl } from '../wowheadIcons'
   import { getClassIconUrl, getRoleIconUrl, getSpecIconUrl } from '../wowAssets'
 
@@ -7,6 +8,10 @@
   let activeTab = 'classes'
 
   const tabs = ['classes', 'specs', 'roles', 'bosses', 'zones', 'spells', 'trinkets', 'seasons']
+
+  function classColor(classSlug: string, fallbackColor = '#7BA4BF'): string {
+    return getBlizzardClassColor(classSlug, fallbackColor)
+  }
 </script>
 
 <div class="world-data-page">
@@ -31,9 +36,12 @@
               alt={cls.name}
               on:error={(e) => (e.target.style.display = 'none')}
             />
-            <div class="class-badge" style="background-color: {cls.color}"></div>
+            <div
+              class="class-badge"
+              style="background-color: {classColor(cls.nameSlug, cls.color)}"
+            ></div>
             <div class="data-info">
-              <h4>{cls.name}</h4>
+              <h4 style="color: {classColor(cls.nameSlug, cls.color)}">{cls.name}</h4>
               <p class="slug">{cls.nameSlug}</p>
             </div>
           </div>
@@ -55,7 +63,13 @@
             <div class="spec-info">
               <h4>{spec.fullName}</h4>
               <p class="slug">{spec.fullNameSlug}</p>
-              <p class="meta">
+              <p
+                class="meta"
+                style="color: {classColor(
+                  worldData.classes?.find((c) => c.id === spec.classId)?.nameSlug,
+                  worldData.classes?.find((c) => c.id === spec.classId)?.color
+                )}"
+              >
                 {worldData.classes?.find((c) => c.id === spec.classId)?.name}
               </p>
             </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as API from '../api'
   import * as Cache from '../cache'
+  import { getBlizzardClassColor } from '../classColors'
   import { getWowheadIconUrl } from '../wowheadIcons'
 
   export let worldData = {}
@@ -11,6 +12,8 @@
   let error = ''
 
   $: boss = (worldData.bosses || []).find((b) => b.nameSlug === selectedBoss)
+  $: classesById = new Map((worldData.classes || []).map((cls) => [Number(cls.id), cls]))
+  $: specsBySlug = new Map((worldData.specs || []).map((spec) => [spec.fullNameSlug, spec]))
 
   async function loadComp() {
     if (!selectedBoss) return
@@ -35,10 +38,9 @@
   $: if (selectedBoss) loadComp()
 
   function specColor(specSlug) {
-    // Deterministic hue from spec slug
-    let hash = 0
-    for (const ch of specSlug || '') hash = (hash * 31 + ch.charCodeAt(0)) & 0xffffffff
-    return `hsl(${Math.abs(hash) % 360}, 60%, 55%)`
+    const spec = specsBySlug.get(specSlug)
+    const wowClass = spec ? classesById.get(Number(spec.classId)) : null
+    return getBlizzardClassColor(wowClass?.nameSlug, wowClass?.color || '#7BA4BF')
   }
 </script>
 

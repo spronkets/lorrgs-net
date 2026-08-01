@@ -1,7 +1,11 @@
 const WOW_ASSET_BASE = '/images/wow'
 
 function normalizeSlug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
 }
 
 export function getClassIconUrl(classSlug: string): string {
