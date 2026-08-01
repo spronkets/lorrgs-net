@@ -1,0 +1,120 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "API: restore",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["restore", "Lorrgs.Api/Lorrgs.Api.csproj"],
+      "group": "build"
+    },
+    {
+      "label": "API: build",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["build", "Lorrgs.Api/Lorrgs.Api.csproj"],
+      "group": "build",
+      "dependsOn": ["API: restore"],
+      "problemMatcher": ["$msCompile"]
+    },
+    {
+      "label": "API: run",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["run", "--project", "Lorrgs.Api/Lorrgs.Api.csproj"],
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": {
+        "owner": "custom",
+        "severity": "info",
+        "pattern": {
+          "regexp": "a^",
+          "message": 0
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Building...",
+          "endsPattern": "Application started"
+        }
+      }
+    },
+    {
+      "label": "Web: install",
+      "type": "shell",
+      "command": "npm",
+      "args": ["install"],
+      "options": {
+        "cwd": "${workspaceFolder}/lorrgs-web"
+      }
+    },
+    {
+      "label": "Web: free port 5173",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$p = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($p) { $p | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }; exit 0"
+      ]
+    },
+    {
+      "label": "Web: dev server",
+      "type": "shell",
+      "command": "cmd",
+      "args": [
+        "/d",
+        "/c",
+        "cd /d \"${workspaceFolder}\\lorrgs-web\" && npm run dev"
+      ],
+      "dependsOrder": "sequence",
+      "dependsOn": ["Web: free port 5173"],
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": {
+        "owner": "custom",
+        "severity": "info",
+        "pattern": {
+          "regexp": "a^",
+          "message": 0
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^> vite --host",
+          "endsPattern": "(Local:\\s+http://localhost:5173/|ready in .*ms)"
+        }
+      }
+    },
+    {
+      "label": "Dev: run full stack",
+      "dependsOrder": "parallel",
+      "dependsOn": ["Web: dev server"]
+    },
+    {
+      "label": "Docker: compose up",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "up", "--build"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true
+    },
+    {
+      "label": "Docker: compose down",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "down"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    }
+  ]
+}

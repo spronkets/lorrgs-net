@@ -1,0 +1,7 @@
+# Local development overrides
+appsettings.local.json
+.env
+
+# Build artifacts
+bin/
+obj/

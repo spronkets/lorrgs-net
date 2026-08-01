@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: ./Lorrgs.Api
+      dockerfile: Dockerfile
+    container_name: lorrgs-api
+    ports:
+      - "5247:8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Development
+      WarcraftLogs__BaseUrl: ${WARCRAFTLOGS_BASE_URL:-https://www.warcraftlogs.com/api/v2/client}
+      WarcraftLogs__AuthUrl: ${WARCRAFTLOGS_AUTH_URL:-https://www.warcraftlogs.com/oauth/token}
+      WarcraftLogs__ClientId: ${WARCRAFTLOGS_CLIENT_ID:-}
+      WarcraftLogs__ClientSecret: ${WARCRAFTLOGS_CLIENT_SECRET:-}
+
+  web:
+    build:
+      context: ./lorrgs-web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: /api
+    container_name: lorrgs-web
+    depends_on:
+      - api
+    ports:
+      - "5173:80"

@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run API (.NET)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "API: build",
+      "program": "${workspaceFolder}/Lorrgs.Api/bin/Debug/net10.0/Lorrgs.Api.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/Lorrgs.Api",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Now listening on:\\s+(https?://\\S+)",
+        "uriFormat": "%s/swagger"
+      },
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    {
+      "name": "Open Web App",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/lorrgs-web",
+      "preLaunchTask": "Web: dev server"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Run Full Stack",
+      "configurations": ["Run API (.NET)", "Open Web App"]
+    }
+  ]
+}
