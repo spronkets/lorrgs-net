@@ -75,7 +75,9 @@
 
 <div class="rotation-page">
   <h2>Rotation Analyzer</h2>
-  <p class="subtitle">Works with any Warcraft Logs report across Retail, Classic, Era, Anniversary, and more.</p>
+  <p class="subtitle">
+    Works with any Warcraft Logs report across Retail, Classic, Era, Anniversary, and more.
+  </p>
 
   <div class="panel">
     <label>
@@ -92,7 +94,7 @@
       <label>
         Fight
         <select bind:value={selectedFightId}>
-          {#each fights as fight}
+          {#each fights as fight (fight.id)}
             <option value={String(fight.id)}>{fight.name} (ID {fight.id})</option>
           {/each}
         </select>
@@ -101,7 +103,7 @@
       <label>
         Player
         <select bind:value={selectedSourceId}>
-          {#each players as player}
+          {#each players as player (player.id)}
             <option value={String(player.id)}>{player.name} [{player.subType || 'Unknown'}]</option>
           {/each}
         </select>
@@ -136,20 +138,26 @@
 
       <h4>Notes</h4>
       <ul>
-        {#each analysis.notes || [] as note}
+        {#each analysis.notes || [] as note, noteIdx (`${note}-${noteIdx}`)}
           <li>{note}</li>
         {/each}
       </ul>
 
       <h4>Top Ability Usage</h4>
       <div class="table">
-        <div class="row header"><span>Ability</span><span>Casts</span><span>Share</span><span>Median Interval</span></div>
-        {#each analysis.abilitySummary || [] as row}
+        <div class="row header">
+          <span>Ability</span><span>Casts</span><span>Share</span><span>Median Interval</span>
+        </div>
+        {#each analysis.abilitySummary || [] as row, rowIdx (`${row.ability}-${rowIdx}`)}
           <div class="row">
             <span>{row.ability}</span>
             <span>{row.castCount}</span>
             <span>{row.sharePercent}%</span>
-            <span>{row.medianIntervalSeconds ? `${row.medianIntervalSeconds.toFixed(1)}s` : 'N/A'}</span>
+            <span
+              >{row.medianIntervalSeconds
+                ? `${row.medianIntervalSeconds.toFixed(1)}s`
+                : 'N/A'}</span
+            >
           </div>
         {/each}
       </div>

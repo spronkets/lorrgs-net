@@ -1,10 +1,10 @@
 const WOWHEAD_ICON_CDN = 'https://wow.zamimg.com/images/wow/icons/large'
 
 const versionIconByName: Record<string, string> = {
-  'Anniversary': '/images/wow/editions/burning-crusade-classic.png',
+  Anniversary: '/images/wow/editions/burning-crusade-classic.png',
   'Mists of Pandaria': '/images/wow/editions/mists-of-pandaria-classic.png',
-  'Era': '/images/wow/editions/classic.png',
-  'Retail': '/images/wow/editions/midnight.png',
+  Era: '/images/wow/editions/classic.png',
+  Retail: '/images/wow/editions/midnight.png'
 }
 
 function normalizeIconName(iconName: string): string {

@@ -13,11 +13,8 @@
   <h2>World Data</h2>
 
   <div class="tabs">
-    {#each tabs as tab}
-      <button
-        class:active={activeTab === tab}
-        on:click={() => (activeTab = tab)}
-      >
+    {#each tabs as tab (tab)}
+      <button class:active={activeTab === tab} on:click={() => (activeTab = tab)}>
         {tab.charAt(0).toUpperCase() + tab.slice(1)}
       </button>
     {/each}
@@ -26,18 +23,15 @@
   <div class="tab-content">
     {#if activeTab === 'classes'}
       <div class="data-grid">
-        {#each worldData.classes || [] as cls}
+        {#each worldData.classes || [] as cls (cls.nameSlug)}
           <div class="data-item">
             <img
               class="entry-icon"
               src={getClassIconUrl(cls.nameSlug)}
               alt={cls.name}
-              on:error={(e) => e.target.style.display='none'}
+              on:error={(e) => (e.target.style.display = 'none')}
             />
-            <div
-              class="class-badge"
-              style="background-color: {cls.color}"
-            ></div>
+            <div class="class-badge" style="background-color: {cls.color}"></div>
             <div class="data-info">
               <h4>{cls.name}</h4>
               <p class="slug">{cls.nameSlug}</p>
@@ -47,13 +41,16 @@
       </div>
     {:else if activeTab === 'specs'}
       <div class="data-grid">
-        {#each worldData.specs || [] as spec}
+        {#each worldData.specs || [] as spec (spec.id)}
           <div class="data-item">
             <img
               class="entry-icon"
-              src={getSpecIconUrl(worldData.classes?.find((c) => c.id === spec.classId)?.nameSlug || 'other', spec.nameSlug)}
+              src={getSpecIconUrl(
+                worldData.classes?.find((c) => c.id === spec.classId)?.nameSlug || 'other',
+                spec.nameSlug
+              )}
               alt={spec.fullName}
-              on:error={(e) => e.target.style.display='none'}
+              on:error={(e) => (e.target.style.display = 'none')}
             />
             <div class="spec-info">
               <h4>{spec.fullName}</h4>
@@ -67,18 +64,15 @@
       </div>
     {:else if activeTab === 'roles'}
       <div class="data-grid">
-        {#each worldData.roles || [] as role}
+        {#each worldData.roles || [] as role (role.id)}
           <div class="data-item">
             <img
               class="entry-icon"
               src={getRoleIconUrl(role.nameSlug)}
               alt={role.name}
-              on:error={(e) => e.target.style.display='none'}
+              on:error={(e) => (e.target.style.display = 'none')}
             />
-            <div
-              class="role-badge"
-              style="background-color: {role.color}"
-            ></div>
+            <div class="role-badge" style="background-color: {role.color}"></div>
             <div class="data-info">
               <h4>{role.name}</h4>
               <p class="slug">{role.nameSlug}</p>
@@ -89,7 +83,7 @@
       </div>
     {:else if activeTab === 'bosses'}
       <div class="data-grid">
-        {#each worldData.bosses || [] as boss}
+        {#each worldData.bosses || [] as boss (boss.id)}
           <div class="data-item">
             <div class="boss-info">
               <h4>{boss.name}</h4>
@@ -101,7 +95,7 @@
       </div>
     {:else if activeTab === 'zones'}
       <div class="data-grid">
-        {#each worldData.zones || [] as zone}
+        {#each worldData.zones || [] as zone (zone.slug)}
           <div class="data-item">
             <div class="zone-info">
               <h4>{zone.name}</h4>
@@ -113,13 +107,13 @@
       </div>
     {:else if activeTab === 'spells'}
       <div class="data-grid">
-        {#each worldData.spells || [] as spell}
+        {#each worldData.spells || [] as spell (spell.id)}
           <div class="data-item">
             <img
               class="spell-icon"
               src={getWowheadIconUrl(spell.icon, 'spells')}
               alt={spell.name}
-              on:error={(e) => e.target.style.display='none'}
+              on:error={(e) => (e.target.style.display = 'none')}
             />
             <div class="data-info">
               <h4>{spell.name}</h4>
@@ -131,13 +125,13 @@
       </div>
     {:else if activeTab === 'trinkets'}
       <div class="data-grid">
-        {#each worldData.trinkets || [] as trinket}
+        {#each worldData.trinkets || [] as trinket (trinket.id)}
           <div class="data-item">
             <img
               class="spell-icon"
               src={getWowheadIconUrl(trinket.icon, 'trinkets')}
               alt={trinket.name}
-              on:error={(e) => e.target.style.display='none'}
+              on:error={(e) => (e.target.style.display = 'none')}
             />
             <div class="data-info">
               <h4>{trinket.name}</h4>
@@ -149,12 +143,16 @@
       </div>
     {:else if activeTab === 'seasons'}
       <div class="data-grid">
-        {#each worldData.seasons || [] as season}
+        {#each worldData.seasons || [] as season (season.slug)}
           <div class="data-item">
             <div class="data-info">
               <h4>{season.name}</h4>
               <p class="slug">{season.slug}</p>
-              <p class="meta">Started: {season.startDate ? new Date(season.startDate).toLocaleDateString() : 'N/A'}</p>
+              <p class="meta">
+                Started: {season.startDate
+                  ? new Date(season.startDate).toLocaleDateString()
+                  : 'N/A'}
+              </p>
             </div>
           </div>
         {/each}

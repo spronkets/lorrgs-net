@@ -38,19 +38,34 @@
       // Try loading from cache first
       const cacheKey = 'worldData-v3'
       let data = Cache.getWorldDataCache(cacheKey)
-      const raidCatalogResponse = await API.getRaidCatalog().catch(() => ({ editions: [], instances: {} }))
+      const raidCatalogResponse = await API.getRaidCatalog().catch(() => ({
+        editions: [],
+        instances: {}
+      }))
 
       const hasValidWorldData =
         data &&
-        Array.isArray(data.bosses) && data.bosses.length > 0 &&
-        Array.isArray(data.specs) && data.specs.length > 0
+        Array.isArray(data.bosses) &&
+        data.bosses.length > 0 &&
+        Array.isArray(data.specs) &&
+        data.specs.length > 0
 
       if (!hasValidWorldData) {
         data = null
       }
 
       if (!data) {
-        const [classes, specs, roles, bosses, zones, spells, trinkets, seasons, raidCatalogResponse] = await Promise.all([
+        const [
+          classes,
+          specs,
+          roles,
+          bosses,
+          zones,
+          spells,
+          trinkets,
+          seasons,
+          raidCatalogResponse
+        ] = await Promise.all([
           API.getClasses().catch(() => ({})),
           API.getSpecs().catch(() => ({ specs: [] })),
           API.getRoles().catch(() => ({ roles: [] })),
@@ -106,34 +121,22 @@
       <p>WarcraftLogs Rankings Dashboard</p>
     </div>
     <nav class="app-nav">
-      <button
-        class:active={currentPage === 'home'}
-        on:click={() => currentPage = 'home'}
-      >
+      <button class:active={currentPage === 'home'} on:click={() => (currentPage = 'home')}>
         Home
       </button>
-      <button 
-        class:active={currentPage === 'rankings'}
-        on:click={() => currentPage = 'rankings'}
-      >
+      <button class:active={currentPage === 'rankings'} on:click={() => (currentPage = 'rankings')}>
         Spec Rankings
       </button>
-      <button
-        class:active={currentPage === 'comp'}
-        on:click={() => currentPage = 'comp'}
-      >
+      <button class:active={currentPage === 'comp'} on:click={() => (currentPage = 'comp')}>
         Comp Rankings
       </button>
-      <button 
+      <button
         class:active={currentPage === 'worlddata'}
-        on:click={() => currentPage = 'worlddata'}
+        on:click={() => (currentPage = 'worlddata')}
       >
         World Data
       </button>
-      <button
-        class:active={currentPage === 'rotation'}
-        on:click={() => currentPage = 'rotation'}
-      >
+      <button class:active={currentPage === 'rotation'} on:click={() => (currentPage = 'rotation')}>
         Rotation Analyzer
       </button>
     </nav>
@@ -152,7 +155,12 @@
       {#if currentPage === 'home'}
         <HomePage {worldData} {raidCatalog} onSelectSpec={goToRankings} />
       {:else if currentPage === 'rankings'}
-        <RankingsPage {worldData} {raidCatalog} initialSpec={preselectedSpec} initialBoss={preselectedBoss} />
+        <RankingsPage
+          {worldData}
+          {raidCatalog}
+          initialSpec={preselectedSpec}
+          initialBoss={preselectedBoss}
+        />
       {:else if currentPage === 'comp'}
         <CompRankingsPage {worldData} />
       {:else if currentPage === 'worlddata'}
@@ -168,8 +176,8 @@
   :global(body) {
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-      sans-serif;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     background: #0f0f0f;
     color: #e0e0e0;
   }

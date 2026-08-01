@@ -10,8 +10,8 @@ export function getSortedReports(reports = [], sortBy = 'percentile', sortDesc =
   const normalized = [...(reports || [])]
 
   normalized.sort((a, b) => {
-    let aVal = 0
-    let bVal = 0
+    let aVal
+    let bVal
 
     switch (sortBy) {
       case 'percentile':
@@ -29,6 +29,9 @@ export function getSortedReports(reports = [], sortBy = 'percentile', sortDesc =
       default:
         return 0
     }
+
+    aVal ??= 0
+    bVal ??= 0
 
     if (aVal === bVal) {
       return 0

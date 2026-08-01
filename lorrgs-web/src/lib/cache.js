@@ -7,16 +7,16 @@ const TTL = {
 function getCached(prefix, key) {
   const cacheKey = `${prefix}:${key}`
   const cached = localStorage.getItem(cacheKey)
-  
+
   if (!cached) return null
-  
+
   try {
     const { data, expires } = JSON.parse(cached)
-    
+
     if (Date.now() < expires) {
       return data
     }
-    
+
     // Expired, remove it
     localStorage.removeItem(cacheKey)
     return null
@@ -29,7 +29,7 @@ function getCached(prefix, key) {
 
 function setCached(prefix, key, data, ttl) {
   const cacheKey = `${prefix}:${key}`
-  
+
   try {
     localStorage.setItem(
       cacheKey,
@@ -51,7 +51,7 @@ function clearCachePrefix(prefix) {
       keysToDelete.push(key)
     }
   }
-  keysToDelete.forEach(key => localStorage.removeItem(key))
+  keysToDelete.forEach((key) => localStorage.removeItem(key))
 }
 
 // World data caching (24 hour TTL)

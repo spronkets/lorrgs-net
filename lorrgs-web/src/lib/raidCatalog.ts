@@ -71,7 +71,10 @@ export function getEditionSlug(version: string): string {
   return versionToEditionSlug[version] || ''
 }
 
-export function getRaidsForVersion(catalog: RaidCatalog | null | undefined, version: string): RaidInstance[] {
+export function getRaidsForVersion(
+  catalog: RaidCatalog | null | undefined,
+  version: string
+): RaidInstance[] {
   const editionSlug = getEditionSlug(version)
   if (!editionSlug) {
     return []
@@ -80,9 +83,7 @@ export function getRaidsForVersion(catalog: RaidCatalog | null | undefined, vers
   return catalog?.instances?.[editionSlug] || []
 }
 
-export function getRaidBossOptions(
-  raid: RaidInstance | null | undefined,
-): RaidBossOption[] {
+export function getRaidBossOptions(raid: RaidInstance | null | undefined): RaidBossOption[] {
   if (!raid) {
     return []
   }
@@ -124,14 +125,19 @@ export function groupRaidsByPhase(raids: RaidInstance[] | null | undefined): Rai
   const isWorldBossRaid = (raid: RaidInstance): boolean => {
     const slug = (raid.slug || '').toLowerCase()
     const name = (raid.name || '').toLowerCase()
-    return knownWorldBossSlugs.has(slug) || slug.includes('world-boss') || slug.includes('worldboss') || name.includes('world boss')
+    return (
+      knownWorldBossSlugs.has(slug) ||
+      slug.includes('world-boss') ||
+      slug.includes('worldboss') ||
+      name.includes('world boss')
+    )
   }
 
   for (const raid of raids || []) {
     const phase = raid.phase || 0
     const worldBoss = isWorldBossRaid(raid)
 
-    const fallbackPhase = worldBoss ? null : (phase > 0 ? phase : 999)
+    const fallbackPhase = worldBoss ? null : phase > 0 ? phase : 999
     const key = worldBoss ? 'world-bosses' : `phase-${fallbackPhase}`
     const label = worldBoss ? 'World Bosses' : `Phase ${fallbackPhase}`
     const phaseValue = worldBoss ? null : fallbackPhase
@@ -151,7 +157,9 @@ export function groupRaidsByPhase(raids: RaidInstance[] | null | undefined): Rai
   }
 
   return Array.from(grouped.values())
-    .sort((left, right) => left.sortOrder - right.sortOrder || left.label.localeCompare(right.label))
+    .sort(
+      (left, right) => left.sortOrder - right.sortOrder || left.label.localeCompare(right.label)
+    )
     .map((group) => ({
       key: group.key,
       label: group.label,
@@ -164,7 +172,10 @@ export function getAllowedClassIds(version: string): number[] {
   return versionToClassIds[version] || []
 }
 
-export function getAvailableClassesForVersion(classes: WowClassLike[] | null | undefined, version: string): WowClassLike[] {
+export function getAvailableClassesForVersion(
+  classes: WowClassLike[] | null | undefined,
+  version: string
+): WowClassLike[] {
   const allowedClassIds = new Set(getAllowedClassIds(version))
   if (!allowedClassIds.size) {
     return classes || []
@@ -173,7 +184,10 @@ export function getAvailableClassesForVersion(classes: WowClassLike[] | null | u
   return (classes || []).filter((cls) => allowedClassIds.has(cls.id))
 }
 
-export function getAvailableSpecsForVersion(specs: WowSpecLike[] | null | undefined, version: string): WowSpecLike[] {
+export function getAvailableSpecsForVersion(
+  specs: WowSpecLike[] | null | undefined,
+  version: string
+): WowSpecLike[] {
   const allowedClassIds = new Set(getAllowedClassIds(version))
   if (!allowedClassIds.size) {
     return specs || []

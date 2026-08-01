@@ -105,7 +105,11 @@ export async function get(endpoint: string, options: ApiOptions = {}): Promise<u
   return response.json()
 }
 
-export async function send(endpoint: string, body: unknown, options: ApiOptions = {}): Promise<unknown> {
+export async function send(
+  endpoint: string,
+  body: unknown,
+  options: ApiOptions = {}
+): Promise<unknown> {
   const url = buildApiUrl(endpoint)
   const response = await fetch(url, {
     method: options.method || 'POST',
@@ -192,9 +196,18 @@ export async function getRaidCatalog() {
 }
 
 // Rankings endpoints
-export async function getSpecRankings(specSlug: string, bossSlug: string, difficulty = 'Mythic', metric = 'dps') {
-  const normalizedDifficulty = String(difficulty || 'mythic').trim().toLowerCase()
-  const normalizedMetric = String(metric || 'dps').trim().toLowerCase()
+export async function getSpecRankings(
+  specSlug: string,
+  bossSlug: string,
+  difficulty = 'Mythic',
+  metric = 'dps'
+) {
+  const normalizedDifficulty = String(difficulty || 'mythic')
+    .trim()
+    .toLowerCase()
+  const normalizedMetric = String(metric || 'dps')
+    .trim()
+    .toLowerCase()
   const params = new URLSearchParams({ difficulty: normalizedDifficulty, metric: normalizedMetric })
   return get(`/rankings/spec/${specSlug}/${bossSlug}?${params}`)
 }
@@ -203,7 +216,12 @@ export async function getSpecRankingsInfo(specSlug: string, bossSlug: string) {
   return get(`/rankings/spec/${specSlug}/${bossSlug}/info`)
 }
 
-export async function getCompRankings(bossSlug: string, limit = 25, roles: string[] = [], specs: string[] = []) {
+export async function getCompRankings(
+  bossSlug: string,
+  limit = 25,
+  roles: string[] = [],
+  specs: string[] = []
+) {
   const params = new URLSearchParams({ limit: String(limit) })
   if (roles.length) roles.forEach((r) => params.append('role', r))
   if (specs.length) specs.forEach((s) => params.append('spec', s))
@@ -217,7 +235,13 @@ export async function queueSpecRankingUpdate(
   metric: string,
   limit = 25
 ) {
-  const params = new URLSearchParams({ specSlug, bossSlug, difficulty, metric, limit: String(limit) })
+  const params = new URLSearchParams({
+    specSlug,
+    bossSlug,
+    difficulty,
+    metric,
+    limit: String(limit)
+  })
   return get(`/rankings/spec/queue?${params}`, { method: 'POST' })
 }
 
@@ -226,7 +250,12 @@ export async function queueCompRankingUpdate(bossSlug: string, limit = 25) {
   return get(`/rankings/comp/queue?${params}`, { method: 'POST' })
 }
 
-export async function markRankingDirty(specSlug: string, bossSlug: string, difficulty: string, metric: string) {
+export async function markRankingDirty(
+  specSlug: string,
+  bossSlug: string,
+  difficulty: string,
+  metric: string
+) {
   const params = new URLSearchParams({ specSlug, bossSlug, difficulty, metric })
   return get(`/rankings/spec/dirty?${params}`, { method: 'PATCH' })
 }

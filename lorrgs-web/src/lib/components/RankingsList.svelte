@@ -47,18 +47,12 @@
             </button>
           </th>
           <th>
-            <button
-              class:active={sortBy === 'dps'}
-              on:click={() => toggleSort('dps')}
-            >
+            <button class:active={sortBy === 'dps'} on:click={() => toggleSort('dps')}>
               Performance {sortBy === 'dps' ? (sortDesc ? '↓' : '↑') : ''}
             </button>
           </th>
           <th>
-            <button
-              class:active={sortBy === 'duration'}
-              on:click={() => toggleSort('duration')}
-            >
+            <button class:active={sortBy === 'duration'} on:click={() => toggleSort('duration')}>
               Duration {sortBy === 'duration' ? (sortDesc ? '↓' : '↑') : ''}
             </button>
           </th>
@@ -67,7 +61,7 @@
         </tr>
       </thead>
       <tbody>
-        {#each sortedReports as report, idx}
+        {#each sortedReports as report, idx (report.reportId ?? report.title ?? idx)}
           <tr class:killed={report.fights?.[0]?.isKill}>
             <td class="rank">{idx + 1}</td>
             <td class="report">
@@ -79,7 +73,9 @@
                 {report.title || 'Untitled report'}
               </a>
             </td>
-            <td class="percentile">{report.percentile ? `${report.percentile.toFixed(1)}%` : 'N/A'}</td>
+            <td class="percentile"
+              >{report.percentile ? `${report.percentile.toFixed(1)}%` : 'N/A'}</td
+            >
             <td class="performance">
               {report.players?.[0]?.performance || 'N/A'}
             </td>

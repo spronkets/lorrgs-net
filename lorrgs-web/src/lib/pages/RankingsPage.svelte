@@ -3,7 +3,12 @@
   import * as API from '../api'
   import * as Cache from '../cache'
   import { getVersionIconUrl } from '../selectionIcons'
-  import { getAvailableSpecsForVersion, getRaidBossOptions, getRaidsForVersion, groupRaidsByPhase } from '../raidCatalog'
+  import {
+    getAvailableSpecsForVersion,
+    getRaidBossOptions,
+    getRaidsForVersion,
+    groupRaidsByPhase
+  } from '../raidCatalog'
   import RankingsList from '../components/RankingsList.svelte'
 
   export let worldData = {}
@@ -29,7 +34,8 @@
   $: raids = getRaidsForVersion(raidCatalog, selectedVersion)
   $: raidPhaseGroups = groupRaidsByPhase(raids)
   $: if (!selectedVersion && versions.length) {
-    selectedVersion = versions.find((version) => getRaidsForVersion(raidCatalog, version).length > 0) || versions[0]
+    selectedVersion =
+      versions.find((version) => getRaidsForVersion(raidCatalog, version).length > 0) || versions[0]
   }
   $: selectedRaidOption = raids.find((raid) => raid.slug === selectedRaid)
   $: bosses = getRaidBossOptions(selectedRaidOption)
@@ -150,7 +156,7 @@
     <div class="selector-block">
       <h3>Choose Version</h3>
       <div class="icon-strip">
-        {#each versions as version}
+        {#each versions as version (version)}
           <button
             class="icon-card"
             class:version-card={true}
@@ -169,9 +175,9 @@
       <h3>Choose Raid</h3>
       <select value={selectedRaid} on:change={handleRaidChange}>
         <option value="">Select a raid...</option>
-        {#each raidPhaseGroups as group}
+        {#each raidPhaseGroups as group (group.key)}
           <optgroup label={group.label}>
-            {#each group.raids as raid}
+            {#each group.raids as raid (raid.slug)}
               <option value={raid.slug}>{raid.name}</option>
             {/each}
           </optgroup>
@@ -186,7 +192,7 @@
         <span>Boss:</span>
         <select value={selectedBoss} on:change={handleBossChange}>
           <option value="">Select a boss...</option>
-          {#each bosses as boss}
+          {#each bosses as boss (boss.slug)}
             <option value={boss.slug} disabled={!boss.mapped}>
               {boss.name}{boss.mapped ? '' : ' (unsupported)'}
             </option>
@@ -200,7 +206,7 @@
         <span>Spec:</span>
         <select bind:value={selectedSpec}>
           <option value="">Select a spec...</option>
-          {#each availableSpecs as spec}
+          {#each availableSpecs as spec (spec.fullNameSlug)}
             <option value={spec.fullNameSlug}>{spec.fullName}</option>
           {/each}
         </select>
@@ -211,7 +217,7 @@
       <label>
         <span>Difficulty:</span>
         <select bind:value={selectedDifficulty}>
-          {#each difficulties as difficulty}
+          {#each difficulties as difficulty (difficulty)}
             <option value={difficulty}>{difficulty}</option>
           {/each}
         </select>
@@ -222,7 +228,7 @@
       <label>
         <span>Metric:</span>
         <select bind:value={selectedMetric}>
-          {#each metrics as metric}
+          {#each metrics as metric (metric)}
             <option value={metric}>{metric.toUpperCase()}</option>
           {/each}
         </select>
@@ -305,7 +311,9 @@
     border-radius: 0.55rem;
     padding: 0.5rem;
     cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
   }
 
   .icon-card:hover {
@@ -359,7 +367,9 @@
     background: linear-gradient(180deg, #1e1410 0%, #150d0a 100%);
     border-radius: 0.85rem;
     border: 1px solid #4a3329;
-    box-shadow: inset 0 1px 0 rgba(255, 214, 170, 0.08), 0 10px 24px rgba(0, 0, 0, 0.25);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 214, 170, 0.08),
+      0 10px 24px rgba(0, 0, 0, 0.25);
   }
 
   .control-group label {
@@ -411,11 +421,8 @@
     border: 1px solid #8b3a3a;
     color: #ff9999;
     padding: 1rem;
-  
-  
-  
+
     border-radius: 0.5rem;
     border: 1px solid #333;
   }
-
 </style>
