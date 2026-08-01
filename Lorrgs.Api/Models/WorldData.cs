@@ -69,7 +69,7 @@ public class Season
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
-    public int[] RaidIds { get; set; } = Array.Empty<int>();
+    public int[] RaidIds { get; set; } = [];
     public DateTime StartDate { get; set; }
     public DateTime? EndDate { get; set; }
 }
@@ -83,7 +83,7 @@ public class RaidZone
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
     public string Icon { get; set; } = "";
-    public int[] BossIds { get; set; } = Array.Empty<int>();
+    public int[] BossIds { get; set; } = [];
 }
 
 /// <summary>

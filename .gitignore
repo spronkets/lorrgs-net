@@ -5,3 +5,4 @@ appsettings.local.json
 # Build artifacts
 bin/
 obj/
+.artifacts/

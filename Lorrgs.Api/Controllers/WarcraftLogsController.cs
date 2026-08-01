@@ -76,7 +76,7 @@ public class WarcraftLogsController(
             reportId,
             title = "Example WarcraftLogs report",
             fightLength = "12m 34s",
-            owner = "Lorrgs"
+            owner = "LorrgsNET"
         });
     }
 

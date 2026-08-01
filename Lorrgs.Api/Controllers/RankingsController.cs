@@ -259,7 +259,7 @@ public class RankingsController(
     {
         _logger.LogInformation("Fetching comp ranking: {BossSlug} (limit={Limit})", bossSlug, limit);
 
-        var filterKey = $"{string.Join(",", roles ?? Array.Empty<string>())}_{string.Join(",", specs ?? Array.Empty<string>())}";
+        var filterKey = $"{string.Join(",", roles ?? [])}_{string.Join(",", specs ?? [])}";
         var cacheKey = $"{bossSlug}_{limit}_{filterKey}".TrimEnd('_');
 
         // Try cache

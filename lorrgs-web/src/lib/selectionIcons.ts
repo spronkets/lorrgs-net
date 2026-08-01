@@ -4,6 +4,7 @@ const versionIconByName: Record<string, string> = {
   Anniversary: '/images/wow/editions/burning-crusade-classic.png',
   'Mists of Pandaria': '/images/wow/editions/mists-of-pandaria-classic.png',
   Era: '/images/wow/editions/classic.png',
+  Midnight: '/images/wow/editions/midnight.png',
   Retail: '/images/wow/editions/midnight.png'
 }
 

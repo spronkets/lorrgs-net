@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import * as API from '../api'
 
   let reportCode = ''

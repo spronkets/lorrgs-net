@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { getVersionIconUrl } from '../selectionIcons'
   import {
     getAvailableSpecsForVersion,
@@ -8,7 +8,10 @@
   } from '../raidCatalog'
 
   export let worldData = {}
-  export let raidCatalog = { editions: [], instances: {} }
+  export let raidCatalog = {
+    editions: [],
+    instances: {}
+  }
   export let onSelectSpec = () => {}
 
   let selectedVersion = ''

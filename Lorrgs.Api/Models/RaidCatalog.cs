@@ -16,9 +16,6 @@ public class RaidInstance
     public string Name { get; set; } = "";
     public string Edition { get; set; } = "";
     public int Phase { get; set; }
-    public int Slots { get; set; }
-    public bool NormalAndHeroic { get; set; }
-    public string[] BossOrder { get; set; } = [];
     public List<RaidBossOption> Bosses { get; set; } = [];
     public bool Public { get; set; }
 }

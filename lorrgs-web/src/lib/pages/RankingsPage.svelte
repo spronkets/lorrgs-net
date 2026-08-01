@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte'
   import * as API from '../api'
   import * as Cache from '../cache'
@@ -12,7 +12,10 @@
   import RankingsList from '../components/RankingsList.svelte'
 
   export let worldData = {}
-  export let raidCatalog = { editions: [], instances: {} }
+  export let raidCatalog = {
+    editions: [],
+    instances: {}
+  }
   export let initialSpec = ''
   export let initialBoss = ''
 

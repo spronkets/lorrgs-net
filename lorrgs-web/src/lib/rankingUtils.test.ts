@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDisplayPercentile, getSortedReports } from './rankingUtils.js'
+import { getDisplayPercentile, getSortedReports } from './rankingUtils'
 
 describe('ranking utilities', () => {
   it('formats percentile values with a safe fallback', () => {

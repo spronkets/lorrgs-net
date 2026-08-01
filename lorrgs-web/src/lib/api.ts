@@ -191,8 +191,20 @@ export async function getTrinket(id: string | number) {
   return get(`/worlddata/trinkets/${id}`)
 }
 
-export async function getRaidCatalog() {
-  return get('/raid-catalog')
+type RaidCatalog = {
+  editions: unknown[]
+  instances: Record<string, unknown>
+}
+
+export async function getRaidCatalog(): Promise<RaidCatalog> {
+  try {
+    const payload = await get('/raid-catalog')
+    return (
+      payload && typeof payload === 'object' ? payload : { editions: [], instances: {} }
+    ) as RaidCatalog
+  } catch {
+    return { editions: [], instances: {} }
+  }
 }
 
 // Rankings endpoints

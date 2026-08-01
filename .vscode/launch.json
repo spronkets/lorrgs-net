@@ -5,7 +5,7 @@
       "name": "Run API (.NET)",
       "type": "coreclr",
       "request": "launch",
-      "preLaunchTask": "API: build",
+      "preLaunchTask": "API: prepare launch",
       "program": "${workspaceFolder}/Lorrgs.Api/bin/Debug/net10.0/Lorrgs.Api.dll",
       "args": [],
       "cwd": "${workspaceFolder}/Lorrgs.Api",
@@ -21,18 +21,25 @@
       }
     },
     {
-      "name": "Open Web App",
+      "name": "Run Web App (Svelte)",
       "type": "pwa-chrome",
       "request": "launch",
       "url": "http://localhost:5173",
       "webRoot": "${workspaceFolder}/lorrgs-web",
-      "preLaunchTask": "Web: dev server"
+      "preLaunchTask": "Web: start dev"
+    },
+    {
+      "name": "Attach to API (.NET)",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "${command:pickProcess}",
+      "justMyCode": true
     }
   ],
   "compounds": [
     {
-      "name": "Run Full Stack",
-      "configurations": ["Run API (.NET)", "Open Web App"]
+      "name": "Run All",
+      "configurations": ["Run API (.NET)", "Run Web App (Svelte)"]
     }
   ]
 }

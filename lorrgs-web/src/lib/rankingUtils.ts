@@ -1,4 +1,14 @@
-export function getDisplayPercentile(value) {
+export type RankingPlayer = {
+  performance?: number | null
+}
+
+export type RankingReport = {
+  percentile?: number | null
+  players?: RankingPlayer[]
+  duration?: number | null
+}
+
+export function getDisplayPercentile(value: unknown): string {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return `${value.toFixed(1)}%`
   }
@@ -6,12 +16,16 @@ export function getDisplayPercentile(value) {
   return 'N/A'
 }
 
-export function getSortedReports(reports = [], sortBy = 'percentile', sortDesc = true) {
+export function getSortedReports<T extends RankingReport>(
+  reports: T[] = [],
+  sortBy: 'percentile' | 'dps' | 'duration' = 'percentile',
+  sortDesc = true
+): T[] {
   const normalized = [...(reports || [])]
 
   normalized.sort((a, b) => {
-    let aVal
-    let bVal
+    let aVal: number
+    let bVal: number
 
     switch (sortBy) {
       case 'percentile':

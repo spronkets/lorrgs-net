@@ -1,23 +1,26 @@
-// localStorage cache with TTL support
-const TTL = {
-  WORLD_DATA: 24 * 60 * 60 * 1000, // 24 hours
-  RANKINGS: 5 * 60 * 1000 // 5 minutes
+type CacheEntry<T> = {
+  data: T
+  expires: number
 }
 
-function getCached(prefix, key) {
+const TTL = {
+  WORLD_DATA: 24 * 60 * 60 * 1000,
+  RANKINGS: 5 * 60 * 1000
+} as const
+
+function getCached<T>(prefix: string, key: string): T | null {
   const cacheKey = `${prefix}:${key}`
   const cached = localStorage.getItem(cacheKey)
 
   if (!cached) return null
 
   try {
-    const { data, expires } = JSON.parse(cached)
+    const { data, expires } = JSON.parse(cached) as CacheEntry<T>
 
     if (Date.now() < expires) {
       return data
     }
 
-    // Expired, remove it
     localStorage.removeItem(cacheKey)
     return null
   } catch (err) {
@@ -27,7 +30,7 @@ function getCached(prefix, key) {
   }
 }
 
-function setCached(prefix, key, data, ttl) {
+function setCached<T>(prefix: string, key: string, data: T, ttl: number): void {
   const cacheKey = `${prefix}:${key}`
 
   try {
@@ -43,8 +46,8 @@ function setCached(prefix, key, data, ttl) {
   }
 }
 
-function clearCachePrefix(prefix) {
-  const keysToDelete = []
+function clearCachePrefix(prefix: string): void {
+  const keysToDelete: string[] = []
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i)
     if (key?.startsWith(prefix + ':')) {
@@ -54,29 +57,27 @@ function clearCachePrefix(prefix) {
   keysToDelete.forEach((key) => localStorage.removeItem(key))
 }
 
-// World data caching (24 hour TTL)
-export function cacheWorldData(key, data) {
+export function cacheWorldData<T>(key: string, data: T): void {
   setCached('worldData', key, data, TTL.WORLD_DATA)
 }
 
-export function getWorldDataCache(key) {
-  return getCached('worldData', key)
+export function getWorldDataCache<T>(key: string): T | null {
+  return getCached<T>('worldData', key)
 }
 
-// Rankings caching (5 minute TTL)
-export function cacheRankings(key, data) {
+export function cacheRankings<T>(key: string, data: T): void {
   setCached('rankings', key, data, TTL.RANKINGS)
 }
 
-export function getRankingsCache(key) {
-  return getCached('rankings', key)
+export function getRankingsCache<T>(key: string): T | null {
+  return getCached<T>('rankings', key)
 }
 
-export function clearRankingsCache() {
+export function clearRankingsCache(): void {
   clearCachePrefix('rankings')
 }
 
-export function clearAllCache() {
+export function clearAllCache(): void {
   clearCachePrefix('worldData')
   clearCachePrefix('rankings')
 }

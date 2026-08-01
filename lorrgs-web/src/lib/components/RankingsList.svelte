@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { getDisplayPercentile, getSortedReports } from '../rankingUtils'
 
   export let rankings = {}

@@ -1,4 +1,4 @@
-# Lorrgs (.NET + Svelte)
+# LorrgsNET (.NET + Svelte)
 
 This repository is a .NET + Svelte implementation inspired by the original Python project:
 
@@ -88,10 +88,16 @@ Because upstream data sources evolve, exact availability depends on Warcraft Log
 
 From VS Code Command Palette -> `Tasks: Run Task`:
 
-1. `Web: install` (first time only)
-2. `API: build` (or `API: restore` then `API: build`)
-3. `API: run`
-4. `Web: dev server`
+Web tasks:
+
+1. `Web: install` (run once initially, and whenever `package-lock.json` changes)
+2. `Web: dev server`
+3. `Web: test`
+
+API tasks:
+
+1. `API: build` (or `API: restore` then `API: build`)
+2. `API: run`
 
 Or run `Dev: run full stack` after dependencies are installed.
 

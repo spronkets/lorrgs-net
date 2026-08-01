@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte'
   import * as API from './lib/api'
   import * as Cache from './lib/cache'
@@ -38,7 +38,7 @@
       // Try loading from cache first
       const cacheKey = 'worldData-v3'
       let data = Cache.getWorldDataCache(cacheKey)
-      const raidCatalogResponse = await API.getRaidCatalog().catch(() => ({
+      const initialRaidCatalog = await API.getRaidCatalog().catch(() => ({
         editions: [],
         instances: {}
       }))
@@ -55,27 +55,18 @@
       }
 
       if (!data) {
-        const [
-          classes,
-          specs,
-          roles,
-          bosses,
-          zones,
-          spells,
-          trinkets,
-          seasons,
-          raidCatalogResponse
-        ] = await Promise.all([
-          API.getClasses().catch(() => ({})),
-          API.getSpecs().catch(() => ({ specs: [] })),
-          API.getRoles().catch(() => ({ roles: [] })),
-          API.getBosses().catch(() => ({ bosses: [] })),
-          API.getZones().catch(() => ({ zones: [] })),
-          API.getSpells().catch(() => ({ spells: [] })),
-          API.getTrinkets().catch(() => ({ trinkets: [] })),
-          API.getSeasons().catch(() => ({ seasons: [] })),
-          Promise.resolve(raidCatalogResponse)
-        ])
+        const [classes, specs, roles, bosses, zones, spells, trinkets, seasons] = await Promise.all(
+          [
+            API.getClasses().catch(() => ({})),
+            API.getSpecs().catch(() => ({ specs: [] })),
+            API.getRoles().catch(() => ({ roles: [] })),
+            API.getBosses().catch(() => ({ bosses: [] })),
+            API.getZones().catch(() => ({ zones: [] })),
+            API.getSpells().catch(() => ({ spells: [] })),
+            API.getTrinkets().catch(() => ({ trinkets: [] })),
+            API.getSeasons().catch(() => ({ seasons: [] }))
+          ]
+        )
 
         data = {
           classes: API.normalizeApiCollection(classes, 'classes'),
@@ -91,7 +82,7 @@
       }
 
       worldData = data
-      raidCatalog = raidCatalogResponse
+      raidCatalog = initialRaidCatalog
       error = ''
     } catch (err) {
       error = err instanceof Error ? err.message : 'Unknown error'
@@ -117,7 +108,7 @@
 <div class="app">
   <header class="app-header">
     <div class="header-content">
-      <h1>Lorrgs</h1>
+      <h1>LorrgsNET</h1>
       <p>WarcraftLogs Rankings Dashboard</p>
     </div>
     <nav class="app-nav">

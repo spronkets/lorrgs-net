@@ -12,9 +12,6 @@ export type RaidInstance = {
   name: string
   edition: string
   phase: number
-  slots: number
-  normalAndHeroic: boolean
-  bossOrder: string[]
   bosses?: RaidBossOption[]
   public: boolean
 }
@@ -56,14 +53,16 @@ export type WowSpecLike = {
 const versionToEditionSlug: Record<string, string> = {
   Anniversary: 'tbc',
   Era: 'classic',
-  Retail: 'wotlk',
+  Retail: 'midnight',
+  Midnight: 'midnight',
   'Mists of Pandaria': 'mop'
 }
 
 const versionToClassIds: Record<string, number[]> = {
   Anniversary: [1, 2, 3, 4, 5, 7, 8, 9, 11],
   Era: [1, 2, 3, 4, 5, 7, 8, 9, 11],
-  Retail: [1, 2, 3, 4, 5, 6, 7, 8, 9, 11],
+  Retail: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+  Midnight: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
   'Mists of Pandaria': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 }
 
@@ -88,15 +87,7 @@ export function getRaidBossOptions(raid: RaidInstance | null | undefined): RaidB
     return []
   }
 
-  if (Array.isArray(raid.bosses) && raid.bosses.length) {
-    return raid.bosses
-  }
-
-  return (raid.bossOrder || []).map((name) => ({
-    name,
-    slug: '',
-    mapped: false
-  }))
+  return Array.isArray(raid.bosses) ? raid.bosses : []
 }
 
 export function groupRaidsByPhase(raids: RaidInstance[] | null | undefined): RaidPhaseGroup[] {

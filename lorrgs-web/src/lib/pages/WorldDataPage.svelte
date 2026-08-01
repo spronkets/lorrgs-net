@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { getWowheadIconUrl } from '../wowheadIcons'
   import { getClassIconUrl, getRoleIconUrl, getSpecIconUrl } from '../wowAssets'
 
