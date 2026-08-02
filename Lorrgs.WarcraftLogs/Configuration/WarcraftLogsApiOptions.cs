@@ -12,6 +12,8 @@ public sealed class WarcraftLogsApiOptions
 
     public string ClientSecret { get; set; } = string.Empty;
 
+    public int GraphQlCacheTtlSeconds { get; set; } = 86400;
+
     public Dictionary<string, WarcraftLogsEndpointOptions> EditionEndpoints { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
 

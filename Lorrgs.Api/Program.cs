@@ -1,6 +1,5 @@
 using System.Diagnostics;
-using Lorrgs.WarcraftLogs;
-using Lorrgs.WarcraftLogs.Configuration;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using WclClient = Lorrgs.WarcraftLogs.WarcraftLogsClient;
 using WclOptions = Lorrgs.WarcraftLogs.Configuration.WarcraftLogsApiOptions;
@@ -12,6 +11,10 @@ builder.Configuration
 
 builder.Services.AddOptions<WclOptions>()
     .Bind(builder.Configuration.GetSection(WclOptions.SectionName))
+    .Configure<IOptions<CacheOptions>>((wcl, cache) =>
+    {
+        wcl.GraphQlCacheTtlSeconds = Math.Max(60, cache.Value.DefaultTtlSeconds);
+    })
     .ValidateOnStart();
 
 builder.Services.AddOptions<RaidCatalogOptions>()

@@ -58,6 +58,12 @@ export type RankingPlayer = {
   playerId: number;
   name: string;
   guildName?: string | null;
+  factionId?: number | null;
+  faction?: string | null;
+  guildFaction?: number | null;
+  serverRegion?: string | null;
+  serverName?: string | null;
+  serverSlug?: string | null;
   classId: number;
   specId: number;
   specSlug: string;

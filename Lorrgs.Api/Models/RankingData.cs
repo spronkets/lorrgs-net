@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Lorrgs.Api.Models;
 
 /// <summary>
@@ -99,6 +101,18 @@ public class RankingPlayer
     public int PlayerId { get; set; }
     public required string Name { get; set; }
     public string? GuildName { get; set; }
+    public int? FactionId { get; set; }
+    public string? ServerRegion { get; set; }
+    public string? ServerName { get; set; }
+
+    // Internal alias: existing mapping code currently resolves slugs.
+    [JsonIgnore]
+    public string? ServerSlug
+    {
+        get => ServerName;
+        set => ServerName = value;
+    }
+
     public int ClassId { get; set; }
     public int SpecId { get; set; }
     public required string SpecSlug { get; set; }

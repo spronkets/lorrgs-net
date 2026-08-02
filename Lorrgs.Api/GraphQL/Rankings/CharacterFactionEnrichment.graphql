@@ -1,0 +1,5 @@
+query CharacterFactionEnrichment {
+  characterData {
+    __CHARACTERS_BLOCK__
+  }
+}

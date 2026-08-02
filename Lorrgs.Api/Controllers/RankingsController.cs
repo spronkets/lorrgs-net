@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Lorrgs.Api.Models;
 using Lorrgs.Api.Services;
-using Lorrgs.WarcraftLogs;
 using Lorrgs.WarcraftLogs.Contracts;
 using System.Text;
 using System.Text.Json;
+using System.Net;
 using Microsoft.Extensions.Options;
 using WclClient = Lorrgs.WarcraftLogs.WarcraftLogsClient;
 
@@ -19,7 +19,6 @@ namespace Lorrgs.Api.Controllers;
 [Route("api/[controller]")]
 public class RankingsController(
     ILogger<RankingsController> logger,
-    CacheService cacheService,
     WclClient warcraftLogsClient,
     IOptions<RaidCatalogOptions> raidCatalogOptions) : ControllerBase
 {
@@ -59,7 +58,6 @@ public class RankingsController(
     };
 
     private readonly ILogger<RankingsController> _logger = logger;
-    private readonly CacheService _cacheService = cacheService;
     private readonly WclClient _warcraftLogsClient = warcraftLogsClient;
     private readonly RaidCatalogOptions _raidCatalogOptions = raidCatalogOptions.Value;
     private readonly WorldDataService _worldDataService = WorldDataService.Instance;
@@ -70,8 +68,8 @@ public class RankingsController(
     private static readonly string ReportRankingsEnrichmentQueryTemplate =
         GraphQlResourceLoader.Load("Rankings.ReportRankingsEnrichment.graphql");
 
-    private static readonly string ReportTitlesQueryTemplate =
-        GraphQlResourceLoader.Load("Rankings.ReportTitles.graphql");
+    private static readonly string CharacterFactionEnrichmentQueryTemplate =
+        GraphQlResourceLoader.Load("Rankings.CharacterFactionEnrichment.graphql");
 
     /// <summary>
     /// Get full ranking data for a spec on a specific boss.
@@ -143,28 +141,6 @@ public class RankingsController(
             return BadRequest(new { error = optionsError });
         }
 
-        var cacheKey = BuildSpecRankingCacheKey(queryContext, difficultyValue.Value, normalizedMetric, edition, requestOptions);
-
-        if (!refresh)
-        {
-            var cached = await _cacheService.GetAsync<SpecRankingData>("rankings", cacheKey);
-            if (cached != null)
-            {
-                if (ShouldRefetchCachedRanking(cached))
-                {
-                    _logger.LogInformation(
-                        "Cached spec ranking appears stale (missing guild names). Refetching: {SpecSlug}/{BossSlug}",
-                        specSlug,
-                        bossSlug);
-                }
-                else
-                {
-                    _logger.LogDebug("Returning cached spec ranking");
-                    return Ok(cached);
-                }
-            }
-        }
-
         try
         {
             // Fetch from WarcraftLogs API
@@ -174,17 +150,23 @@ public class RankingsController(
                 difficultyLabel,
                 normalizedMetric,
                 edition,
-                requestOptions);
+                requestOptions,
+                refresh);
 
             if (ranking == null)
             {
                 return NotFound(new { error = "Ranking not found" });
             }
 
-            // Cache persists for 1 day by default.
-            await CacheRanking(cacheKey, ranking);
-
             return Ok(ranking);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            _logger.LogWarning(ex, "WarcraftLogs rate limit hit while fetching spec ranking");
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                error = "Warcraft Logs rate limit reached. Please retry shortly."
+            });
         }
         catch (Exception ex)
         {
@@ -262,20 +244,6 @@ public class RankingsController(
             return BadRequest(new { error = optionsError });
         }
 
-        var cacheKey = $"{BuildSpecRankingCacheKey(queryContext, difficultyValue.Value, normalizedMetric, edition, requestOptions)}_info";
-
-        if (!refresh)
-        {
-            var cached = await _cacheService.GetAsync<SpecRankingData>("rankings", cacheKey);
-            if (cached != null)
-            {
-                _logger.LogDebug("Returning cached spec ranking info");
-                // Clear reports from cached data before returning (info only, no reports)
-                cached.Reports?.Clear();
-                return Ok(cached);
-            }
-        }
-
         try
         {
             var ranking = await FetchSpecRankingFromWCL(
@@ -284,18 +252,26 @@ public class RankingsController(
                 difficultyLabel,
                 normalizedMetric,
                 edition,
-                requestOptions);
+                requestOptions,
+                refresh);
 
             if (ranking == null)
             {
                 return NotFound(new { error = "Ranking not found" });
             }
 
-            // Clear reports before caching (info only)
+            // Return info-only payload without report details.
             ranking.Reports?.Clear();
-            await CacheRanking(cacheKey, ranking);
 
             return Ok(ranking);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            _logger.LogWarning(ex, "WarcraftLogs rate limit hit while fetching spec ranking info");
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                error = "Warcraft Logs rate limit reached. Please retry shortly."
+            });
         }
         catch (Exception ex)
         {
@@ -319,19 +295,6 @@ public class RankingsController(
     {
         _logger.LogInformation("Fetching comp ranking: {BossSlug} (limit={Limit})", bossSlug, limit);
 
-        var filterKey = $"{string.Join(",", roles ?? [])}_{string.Join(",", specs ?? [])}";
-        var cacheKey = $"{bossSlug}_{limit}_{filterKey}".TrimEnd('_');
-
-        if (!refresh)
-        {
-            var cached = await _cacheService.GetAsync<CompRankingData>("rankings", cacheKey);
-            if (cached != null)
-            {
-                _logger.LogDebug("Returning cached comp ranking");
-                return Ok(cached);
-            }
-        }
-
         try
         {
             var ranking = await FetchCompRankingFromWCL(bossSlug, limit, roles, specs);
@@ -340,9 +303,6 @@ public class RankingsController(
             {
                 return NotFound(new { error = "Comp ranking not found" });
             }
-
-            // Cache persists for 1 day by default.
-            await CacheRanking(cacheKey, ranking);
 
             return Ok(ranking);
         }
@@ -467,14 +427,11 @@ public class RankingsController(
             return BadRequest(new { error = optionsError });
         }
 
-        // Invalidate cache for this ranking
-        var cacheKey = BuildSpecRankingCacheKey(queryContext, difficultyValue.Value, normalizedMetric, edition, requestOptions);
-        await _cacheService.InvalidateAsync("rankings", cacheKey);
-        await _cacheService.InvalidateAsync("rankings", $"{cacheKey}_info");
-
         return Ok(new
         {
-            message = dirty ? "Ranking marked dirty" : "Ranking marked clean",
+            message = dirty
+                ? "Ranking refresh acknowledged. API response caching is disabled; use refresh=true to bypass WarcraftLogs response cache."
+                : "Ranking marked clean",
             specSlug,
             bossSlug,
             difficulty = difficultyLabel,
@@ -496,7 +453,8 @@ public class RankingsController(
         string difficultyLabel,
         string metric,
         string? edition,
-        RankingRequestOptions requestOptions)
+        RankingRequestOptions requestOptions,
+        bool bypassWclCache)
     {
         _logger.LogDebug(
             "Querying WarcraftLogs API for spec ranking: {SpecSlug}/{BossSlug} zone={ZoneId} encounter={EncounterId} class={ClassName} spec={SpecName}",
@@ -521,7 +479,9 @@ public class RankingsController(
                 Reports = new List<RankingReport>()
             };
 
-            var activeOptions = requestOptions;
+            // Faction enrichment requires realm/region data from character rankings.
+            // Always request combatant info so we can reliably resolve player faction.
+            var activeOptions = requestOptions with { IncludeCombatantInfo = true };
             var activeDifficulty = (int?)difficultyValue;
 
             var queryResult = await QueryCharacterRankingsAsync(
@@ -529,7 +489,8 @@ public class RankingsController(
                 metric,
                 activeDifficulty,
                 activeOptions,
-                edition);
+                edition,
+                bypassWclCache);
 
             if (queryResult.CharacterRankings == null)
             {
@@ -550,7 +511,8 @@ public class RankingsController(
                     metric,
                     activeDifficulty,
                     sizeFallbackOptions,
-                    edition);
+                    edition,
+                    bypassWclCache);
 
                 if (retryWithoutSize.CharacterRankings != null)
                 {
@@ -577,7 +539,8 @@ public class RankingsController(
                     metric,
                     activeDifficulty,
                     sizeFallbackOptions,
-                    edition);
+                    edition,
+                    bypassWclCache);
 
                 if (retryWithoutSize.CharacterRankings != null)
                 {
@@ -599,7 +562,8 @@ public class RankingsController(
                     metric,
                     null,
                     activeOptions,
-                    edition);
+                    edition,
+                    bypassWclCache);
 
                 if (retryWithoutDifficulty.CharacterRankings != null)
                 {
@@ -648,7 +612,12 @@ public class RankingsController(
                 {
                     PlayerId = 0,
                     Name = rankingElem.Name ?? string.Empty,
-                    GuildName = string.IsNullOrWhiteSpace(rankingElem.GuildName) ? null : rankingElem.GuildName,
+                    GuildName = string.IsNullOrWhiteSpace(rankingElem.Guild?.Name) ? null : rankingElem.Guild.Name,
+                    FactionId = rankingElem.Guild?.Faction,
+                    ServerRegion = ResolveServerRegion(rankingElem.ServerRegion, rankingElem.RegionName, rankingElem.RegionAlias)
+                        ?? NormalizeServerRegion(activeOptions.ServerRegion),
+                    ServerSlug = ResolveServerSlug(rankingElem.ServerSlug, rankingElem.ServerName, rankingElem.RealmName, rankingElem.ServerAlias)
+                        ?? NormalizeServerSlug(activeOptions.ServerSlug),
                     ClassId = queryContext.ClassId,
                     SpecId = queryContext.SpecId,
                     SpecSlug = queryContext.SpecSlug,
@@ -676,16 +645,21 @@ public class RankingsController(
                             Percentile = rankingElem.Percentile
                         }
                     },
-                    Players = BuildRankingPlayers(rankingElem, primaryPlayer)
+                    Players = BuildRankingPlayers(rankingElem, primaryPlayer, activeOptions)
                 };
 
                 ranking.Reports.Add(report);
             }
 
-            await PopulatePlayerPercentilesAsync(ranking.Reports, queryContext, metric, edition);
-            await PopulateReportTitlesAsync(ranking.Reports, edition);
+            await PopulatePlayerPercentilesAsync(ranking.Reports, queryContext, metric, edition, bypassWclCache);
+            await EnrichPlayerFactionsAsync(ranking.Reports, edition, bypassWclCache);
 
             return ranking;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            _logger.LogWarning(ex, "WarcraftLogs rate limit hit while fetching spec ranking from API");
+            throw;
         }
         catch (Exception ex)
         {
@@ -699,7 +673,8 @@ public class RankingsController(
         string metric,
         int? difficulty,
         RankingRequestOptions requestOptions,
-        string? edition)
+        string? edition,
+        bool bypassWclCache)
     {
         var variables = new
         {
@@ -724,7 +699,8 @@ public class RankingsController(
         var specRankingsResponse = await _warcraftLogsClient.QueryGraphQLAsync<WclSpecRankingsResponse>(
             SpecRankingsQuery,
             variables,
-            edition);
+            edition,
+            bypassWclCache);
 
         var encounters = specRankingsResponse.WorldData?.Zone?.Encounters;
         if (encounters == null)
@@ -755,7 +731,8 @@ public class RankingsController(
         List<RankingReport> reports,
         RankingQueryContext queryContext,
         string metric,
-        string? edition)
+        string? edition,
+        bool bypassWclCache)
     {
         if (reports.Count == 0)
         {
@@ -792,7 +769,7 @@ public class RankingsController(
                 var report = chunk[i];
                 var alias = $"r{i}";
                 aliasToReport[alias] = report;
-                reportsBlock.AppendLine($"    {alias}: report(code: \"{report.ReportId}\") {{ code rankings(playerMetric: $playerMetric) }}");
+                reportsBlock.AppendLine($"    {alias}: report(code: \"{report.ReportId}\") {{ code title rankings(playerMetric: $playerMetric) }}");
             }
 
             var queryText = ReportRankingsEnrichmentQueryTemplate.Replace(
@@ -805,7 +782,8 @@ public class RankingsController(
                 response = await _warcraftLogsClient.QueryGraphQLAsync(
                     queryText,
                     new { playerMetric = metricForReportRanking },
-                    edition);
+                    edition,
+                    bypassWclCache);
             }
             catch (Exception ex)
             {
@@ -828,6 +806,12 @@ public class RankingsController(
                 if (!reportElement.TryGetProperty("rankings", out var rankingsElement))
                 {
                     continue;
+                }
+
+                var enrichedTitle = TryGetString(reportElement, "title");
+                if (!string.IsNullOrWhiteSpace(enrichedTitle))
+                {
+                    entry.Value.Title = enrichedTitle;
                 }
 
                 var percentile = TryResolvePlayerRankPercent(rankingsElement, entry.Value, queryContext);
@@ -979,27 +963,6 @@ public class RankingsController(
         return false;
     }
 
-    private static bool ShouldRefetchCachedRanking(SpecRankingData cached)
-    {
-        if (cached.Reports == null || cached.Reports.Count == 0)
-        {
-            return false;
-        }
-
-        var hasAnyPlayers = cached.Reports.Any(r => r.Players != null && r.Players.Count > 0);
-        if (!hasAnyPlayers)
-        {
-            return false;
-        }
-
-        var hasAnyGuildNames = cached.Reports
-            .Where(r => r.Players != null)
-            .SelectMany(r => r.Players)
-            .Any(p => !string.IsNullOrWhiteSpace(p.GuildName));
-
-        return !hasAnyGuildNames;
-    }
-
     private static string? ResolveReportRankingMetric(string metric)
     {
         var normalized = string.IsNullOrWhiteSpace(metric)
@@ -1018,7 +981,10 @@ public class RankingsController(
         };
     }
 
-    private List<RankingPlayer> BuildRankingPlayers(WclCharacterRankingEntry rankingElem, RankingPlayer primaryPlayer)
+    private List<RankingPlayer> BuildRankingPlayers(
+        WclCharacterRankingEntry rankingElem,
+        RankingPlayer primaryPlayer,
+        RankingRequestOptions requestOptions)
     {
         var players = new List<RankingPlayer> { primaryPlayer };
 
@@ -1054,6 +1020,13 @@ public class RankingsController(
             {
                 PlayerId = 0,
                 Name = name,
+                GuildName = string.IsNullOrWhiteSpace(character.GuildName) ? null : character.GuildName,
+                ServerRegion = ResolveServerRegion(character.ServerRegion, character.RegionName, character.RegionAlias)
+                    ?? primaryPlayer.ServerRegion
+                    ?? NormalizeServerRegion(requestOptions.ServerRegion),
+                ServerSlug = ResolveServerSlug(character.ServerSlug, character.ServerName, character.RealmName, character.ServerAlias)
+                    ?? primaryPlayer.ServerSlug
+                    ?? NormalizeServerSlug(requestOptions.ServerSlug),
                 ClassId = mappedClass?.Id ?? 0,
                 SpecId = mappedSpec?.Id ?? 0,
                 SpecSlug = mappedSpec?.FullNameSlug ?? "unknown",
@@ -1062,6 +1035,147 @@ public class RankingsController(
         }
 
         return players;
+    }
+
+    private async Task EnrichPlayerFactionsAsync(List<RankingReport> reports, string? edition, bool bypassWclCache)
+    {
+        if (reports.Count == 0)
+        {
+            return;
+        }
+
+        var players = reports
+            .Where(static report => report.Players != null)
+            .SelectMany(static report => report.Players)
+            .Where(static player => !string.IsNullOrWhiteSpace(player.Name))
+            .ToList();
+
+        if (players.Count == 0)
+        {
+            return;
+        }
+
+        var lookupIndex = new Dictionary<string, List<RankingPlayer>>(StringComparer.OrdinalIgnoreCase);
+        var lookupRequestsByKey = new Dictionary<string, CharacterLookupRequest>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var player in players)
+        {
+            if (player.FactionId.HasValue && !string.IsNullOrWhiteSpace(player.GuildName))
+            {
+                continue;
+            }
+
+            var name = player.Name.Trim();
+            var serverSlug = NormalizeServerSlug(player.ServerSlug);
+            var serverRegion = NormalizeServerRegion(player.ServerRegion);
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(serverSlug) || string.IsNullOrWhiteSpace(serverRegion))
+            {
+                continue;
+            }
+
+            var key = BuildCharacterLookupKey(name, serverSlug, serverRegion);
+            if (!lookupIndex.TryGetValue(key, out var existing))
+            {
+                existing = new List<RankingPlayer>();
+                lookupIndex[key] = existing;
+            }
+
+            if (!lookupRequestsByKey.ContainsKey(key))
+            {
+                lookupRequestsByKey[key] = new CharacterLookupRequest(name, serverSlug, serverRegion, key);
+            }
+
+            existing.Add(player);
+            player.ServerSlug = serverSlug;
+            player.ServerRegion = serverRegion;
+        }
+
+        if (lookupIndex.Count == 0)
+        {
+            return;
+        }
+
+        var lookupRequests = lookupRequestsByKey.Values.ToList();
+
+        if (lookupRequests.Count == 0)
+        {
+            return;
+        }
+
+        const int chunkSize = 20;
+
+        for (var offset = 0; offset < lookupRequests.Count; offset += chunkSize)
+        {
+            var chunk = lookupRequests.Skip(offset).Take(chunkSize).ToList();
+            var aliasToKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var charactersBlock = new StringBuilder();
+
+            for (var i = 0; i < chunk.Count; i++)
+            {
+                var item = chunk[i];
+                var alias = $"c{i}";
+                aliasToKey[alias] = item.Key;
+                charactersBlock.AppendLine(
+                    $"    {alias}: character(name: \"{EscapeGraphQlString(item.Name)}\", serverSlug: \"{EscapeGraphQlString(item.ServerSlug)}\", serverRegion: \"{EscapeGraphQlString(item.ServerRegion)}\") {{ name faction guild {{ name faction }} }}");
+            }
+
+            var queryText = CharacterFactionEnrichmentQueryTemplate.Replace(
+                "__CHARACTERS_BLOCK__",
+                charactersBlock.ToString().TrimEnd());
+
+            JsonElement response;
+            try
+            {
+                response = await _warcraftLogsClient.QueryGraphQLAsync(queryText, null, edition, bypassWclCache);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to enrich ranking factions from WarcraftLogs characterData");
+                continue;
+            }
+
+            if (!response.TryGetProperty("characterData", out var characterData) || characterData.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            foreach (var alias in aliasToKey.Keys)
+            {
+                if (!characterData.TryGetProperty(alias, out var characterElement) || characterElement.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                var playerFactionId = ParseFactionId(TryGetString(characterElement, "faction"));
+                int? guildFactionId = null;
+                string? guildName = null;
+
+                if (characterElement.TryGetProperty("guild", out var guildElement) && guildElement.ValueKind == JsonValueKind.Object)
+                {
+                    guildFactionId = ParseFactionId(TryGetString(guildElement, "faction"));
+                    guildName = TryGetString(guildElement, "name");
+                }
+
+                var key = aliasToKey[alias];
+                if (!lookupIndex.TryGetValue(key, out var mappedPlayers))
+                {
+                    continue;
+                }
+
+                foreach (var player in mappedPlayers)
+                {
+                    if (!player.FactionId.HasValue)
+                    {
+                        player.FactionId = playerFactionId ?? guildFactionId;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(player.GuildName) && !string.IsNullOrWhiteSpace(guildName))
+                    {
+                        player.GuildName = guildName;
+                    }
+                }
+            }
+        }
     }
 
     private WowSpec? ResolveSpecByNames(int? classId, string? specName)
@@ -1090,89 +1204,122 @@ public class RankingsController(
         return new string(chars);
     }
 
-    private async Task PopulateReportTitlesAsync(List<RankingReport> reports, string? edition)
+    private static string? NormalizeServerRegion(string? value)
     {
-        if (reports.Count == 0)
+        if (string.IsNullOrWhiteSpace(value))
         {
-            return;
+            return null;
         }
 
-        var unresolvedCodes = reports
-            .Where(static r => !string.IsNullOrWhiteSpace(r.ReportId))
-            .Select(static r => r.ReportId)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        if (unresolvedCodes.Count == 0)
+        var normalized = value.Trim();
+        if (string.Equals(normalized, "NA", StringComparison.OrdinalIgnoreCase))
         {
-            return;
+            return "US";
         }
 
-        var titleByCode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        const int chunkSize = 20;
-
-        for (var offset = 0; offset < unresolvedCodes.Count; offset += chunkSize)
-        {
-            var chunk = unresolvedCodes.Skip(offset).Take(chunkSize).ToList();
-            var aliasToCode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var reportsBlock = new StringBuilder();
-
-            for (var i = 0; i < chunk.Count; i++)
-            {
-                var alias = $"r{i}";
-                aliasToCode[alias] = chunk[i];
-                reportsBlock.AppendLine($"    {alias}: report(code: \"{chunk[i]}\") {{ code title }}");
-            }
-
-            var queryText = ReportTitlesQueryTemplate.Replace(
-                "__REPORTS_BLOCK__",
-                reportsBlock.ToString().TrimEnd());
-
-            JsonElement response;
-            try
-            {
-                response = await _warcraftLogsClient.QueryGraphQLAsync(queryText, null, edition);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to enrich report titles for ranking response");
-                continue;
-            }
-
-            if (!response.TryGetProperty("reportData", out var reportData) || reportData.ValueKind != JsonValueKind.Object)
-            {
-                continue;
-            }
-
-            foreach (var alias in aliasToCode.Keys)
-            {
-                if (!reportData.TryGetProperty(alias, out var reportElement) || reportElement.ValueKind != JsonValueKind.Object)
-                {
-                    continue;
-                }
-
-                var code = TryGetString(reportElement, "code");
-                var title = TryGetString(reportElement, "title");
-                if (!string.IsNullOrWhiteSpace(code) && !string.IsNullOrWhiteSpace(title))
-                {
-                    titleByCode[code] = title;
-                }
-            }
-        }
-
-        if (titleByCode.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var report in reports)
-        {
-            if (!string.IsNullOrWhiteSpace(report.ReportId) && titleByCode.TryGetValue(report.ReportId, out var resolvedTitle))
-            {
-                report.Title = resolvedTitle;
-            }
-        }
+        return normalized.ToUpperInvariant();
     }
+
+    private static string? NormalizeServerSlug(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value.Trim().ToLowerInvariant();
+    }
+
+    private static string? ResolveServerRegion(string? serverRegion, string? regionName, string? regionAlias = null)
+    {
+        return NormalizeServerRegion(serverRegion)
+            ?? NormalizeServerRegion(regionName)
+            ?? NormalizeServerRegion(regionAlias);
+    }
+
+    private static string? ResolveServerSlug(string? serverSlug, string? serverName, string? realmName, string? serverAlias = null)
+    {
+        var direct = NormalizeServerSlug(serverSlug);
+        if (!string.IsNullOrWhiteSpace(direct))
+        {
+            return direct;
+        }
+
+        return SlugifyServerName(serverName)
+            ?? SlugifyServerName(realmName)
+            ?? SlugifyServerName(serverAlias);
+    }
+
+    private static string? SlugifyServerName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = value.Trim().Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(normalized.Length);
+
+        foreach (var character in normalized)
+        {
+            var category = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(character);
+            if (category == System.Globalization.UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(character))
+            {
+                builder.Append(char.ToLowerInvariant(character));
+                continue;
+            }
+
+            builder.Append('-');
+        }
+
+        var slug = builder.ToString();
+        while (slug.Contains("--", StringComparison.Ordinal))
+        {
+            slug = slug.Replace("--", "-", StringComparison.Ordinal);
+        }
+
+        slug = slug.Trim('-');
+        return slug.Length == 0 ? null : slug;
+    }
+
+    private static string BuildCharacterLookupKey(string name, string serverSlug, string serverRegion)
+    {
+        return $"{name.Trim().ToLowerInvariant()}|{serverSlug.Trim().ToLowerInvariant()}|{serverRegion.Trim().ToUpperInvariant()}";
+    }
+
+    private static string EscapeGraphQlString(string value)
+    {
+        return value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal);
+    }
+
+    private static int? ParseFactionId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        if (int.TryParse(trimmed, out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
+    }
+
+    private sealed record CharacterLookupRequest(
+        string Name,
+        string ServerSlug,
+        string ServerRegion,
+        string Key);
 
     /// <summary>
     /// Fetch comp ranking data from WarcraftLogs GraphQL API.
@@ -1211,15 +1358,6 @@ public class RankingsController(
             _logger.LogError(ex, "Error fetching comp ranking from WarcraftLogs API");
             return null;
         }
-    }
-
-    /// <summary>
-    /// Cache a ranking using the default cache TTL.
-    /// </summary>
-    private async Task CacheRanking<T>(string cacheKey, T data) where T : class
-    {
-        await _cacheService.SetAsync("rankings", cacheKey, data);
-        _logger.LogDebug("Cached ranking: {CacheKey}", cacheKey);
     }
 
     /// <summary>

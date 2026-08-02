@@ -423,6 +423,7 @@
         {rankings}
         specLabel={selectedSpecMeta?.fullName || ''}
         bossLabel={selectedBossMeta?.name || ''}
+        edition={selectedEditionSlug}
       />
     {:else if selectedBoss && selectedSpec && lastRankingsRequestKey}
       <div class="no-data">No rankings found for this selection</div>

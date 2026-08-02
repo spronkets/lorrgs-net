@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Lorrgs.Api.Models;
 using Lorrgs.Api.Services;
-using Lorrgs.WarcraftLogs;
 using WclClient = Lorrgs.WarcraftLogs.WarcraftLogsClient;
 
 namespace Lorrgs.Api.Controllers;

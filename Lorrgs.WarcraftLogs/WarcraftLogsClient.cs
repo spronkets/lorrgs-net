@@ -1,7 +1,9 @@
 using System.Text;
 using System.Text.Json;
+using System.Security.Cryptography;
 using Lorrgs.WarcraftLogs.Configuration;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -11,14 +13,17 @@ public class WarcraftLogsClient(
     ILogger<WarcraftLogsClient> logger,
     IOptions<WarcraftLogsApiOptions> options,
     HttpClient httpClient,
-    IMemoryCache cache)
+    IMemoryCache cache,
+    IHostEnvironment hostEnvironment)
 {
     private readonly ILogger<WarcraftLogsClient> _logger = logger;
     private readonly WarcraftLogsApiOptions _options = options.Value;
     private readonly HttpClient _httpClient = httpClient;
     private readonly IMemoryCache _cache = cache;
+    private readonly string _graphQlCacheDirectory = InitializeGraphQlCacheDirectory(hostEnvironment.ContentRootPath);
 
     private const string TokenCacheKeyPrefix = "wcl:oauth_token:";
+    private const string GraphQlCacheKeyPrefix = "wcl:gql:";
     private const int TokenRefreshBufferSeconds = 60;
 
     public async Task<string> GetClientTokenAsync(string authUrl)
@@ -86,9 +91,23 @@ public class WarcraftLogsClient(
     public async Task<JsonElement> QueryGraphQLAsync(
         string query,
         object? variables = null,
-        string? edition = null)
+        string? edition = null,
+        bool bypassCache = false)
     {
         var endpoint = _options.ResolveEndpoint(edition);
+        var graphQlCacheKey = BuildGraphQlCacheKey(endpoint.BaseUrl, query, variables);
+        var graphQlCacheDuration = TimeSpan.FromSeconds(Math.Max(60, _options.GraphQlCacheTtlSeconds));
+
+        if (!bypassCache)
+        {
+            var cachedDataJson = await TryReadGraphQlCacheAsync(graphQlCacheKey, graphQlCacheDuration);
+            if (!string.IsNullOrWhiteSpace(cachedDataJson))
+            {
+                using var cachedDoc = JsonDocument.Parse(cachedDataJson);
+                return cachedDoc.RootElement.Clone();
+            }
+        }
+
         var token = await GetClientTokenAsync(endpoint.AuthUrl);
 
         var request = new HttpRequestMessage(HttpMethod.Post, endpoint.BaseUrl);
@@ -123,7 +142,13 @@ public class WarcraftLogsClient(
 
         if (doc.RootElement.TryGetProperty("data", out var dataElement))
         {
-            return dataElement.Clone();
+            var dataClone = dataElement.Clone();
+            if (!bypassCache)
+            {
+                await WriteGraphQlCacheAsync(graphQlCacheKey, dataClone.GetRawText());
+            }
+
+            return dataClone;
         }
 
         throw new InvalidOperationException("No data property in WarcraftLogs response");
@@ -132,9 +157,10 @@ public class WarcraftLogsClient(
     public async Task<T> QueryGraphQLAsync<T>(
         string query,
         object? variables = null,
-        string? edition = null)
+        string? edition = null,
+        bool bypassCache = false)
     {
-        var data = await QueryGraphQLAsync(query, variables, edition);
+        var data = await QueryGraphQLAsync(query, variables, edition, bypassCache);
         var result = JsonSerializer.Deserialize<T>(data.GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
             PropertyNameCaseInsensitive = true
@@ -161,7 +187,23 @@ public class WarcraftLogsClient(
             _cache.Remove(BuildTokenCacheKey(authUrl));
         }
 
-        _logger.LogInformation("Cleared WarcraftLogs token cache");
+        try
+        {
+            if (Directory.Exists(_graphQlCacheDirectory))
+            {
+                var files = Directory.GetFiles(_graphQlCacheDirectory, "*.json");
+                foreach (var file in files)
+                {
+                    File.Delete(file);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to clear WarcraftLogs GraphQL file cache");
+        }
+
+        _logger.LogInformation("Cleared WarcraftLogs token cache and GraphQL response cache");
     }
 
     private static string BuildTokenCacheKey(string authUrl)
@@ -172,5 +214,66 @@ public class WarcraftLogsClient(
         }
 
         return $"{TokenCacheKeyPrefix}default";
+    }
+
+    private static string BuildGraphQlCacheKey(string endpointBaseUrl, string query, object? variables)
+    {
+        var variablesJson = variables == null ? "{}" : JsonSerializer.Serialize(variables);
+        var raw = $"{endpointBaseUrl}|{query}|{variablesJson}";
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant();
+        return $"{GraphQlCacheKeyPrefix}{hash}";
+    }
+
+    private static string InitializeGraphQlCacheDirectory(string contentRootPath)
+    {
+        var path = Path.Combine(contentRootPath, "Data", "cache", "wcl-graphql");
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private string BuildGraphQlCacheFilePath(string graphQlCacheKey)
+    {
+        var fileHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(graphQlCacheKey))).ToLowerInvariant();
+        return Path.Combine(_graphQlCacheDirectory, $"{fileHash}.json");
+    }
+
+    private async Task<string?> TryReadGraphQlCacheAsync(string graphQlCacheKey, TimeSpan maxAge)
+    {
+        var path = BuildGraphQlCacheFilePath(graphQlCacheKey);
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            var age = DateTimeOffset.UtcNow - new DateTimeOffset(File.GetLastWriteTimeUtc(path));
+            if (age > maxAge)
+            {
+                File.Delete(path);
+                return null;
+            }
+
+            return await File.ReadAllTextAsync(path);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read WarcraftLogs GraphQL cache file {Path}", path);
+            return null;
+        }
+    }
+
+    private async Task WriteGraphQlCacheAsync(string graphQlCacheKey, string payload)
+    {
+        var path = BuildGraphQlCacheFilePath(graphQlCacheKey);
+
+        try
+        {
+            await File.WriteAllTextAsync(path, payload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write WarcraftLogs GraphQL cache file {Path}", path);
+        }
     }
 }
