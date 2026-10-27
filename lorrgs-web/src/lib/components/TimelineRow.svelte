@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { timelineErrorSummary } from '../timelineError';
+  import TimelinePhases from './TimelinePhases.svelte';
   import type { RankingReport, ReportTimeline } from '../api';
   import type { InspectedSpell, TimelineMagnification } from '../timelineTypes';
   import {
@@ -40,6 +42,8 @@
     magnifier?: TimelineMagnification | null;
     onload: (_report: RankingReport) => void;
     oncopy: (_timeline: ReportTimeline) => void;
+    onreference?: (_report: RankingReport) => void;
+    isReference?: boolean;
   };
   let {
     report,
@@ -62,7 +66,9 @@
     inspected = $bindable(null),
     magnifier = $bindable(null),
     onload,
-    oncopy
+    oncopy,
+    onreference,
+    isReference = false
   }: Props = $props();
   const endTime = $derived(fightDuration(report, timeline));
   const endLabel = $derived(
@@ -130,6 +136,33 @@
         {#if reportDate(report)}<span class="player-meta report-time">{reportDate(report)}</span
           >{/if}
         {#if getRotationAnalyzerLink(report)}
+          {#if onreference}
+            <button
+              type="button"
+              class="reference-target copy-note"
+              aria-label="Use as boss reference"
+              aria-pressed={isReference}
+              disabled={isReference}
+              title={isReference
+                ? 'Current boss reference'
+                : 'Use this fight as the boss reference.'}
+              onclick={() => onreference?.(report)}
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="7" />
+                <circle cx="12" cy="12" r="2" />
+                <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
+              </svg>
+            </button>
+          {/if}
           <a
             class="analyzer-link copy-note"
             href={getRotationAnalyzerLink(report)}
@@ -153,6 +186,10 @@
     </div>
   </div>
   <div class="track" style={`height: ${height}px`}>
+    <TimelinePhases
+      phases={report.fights?.[0]?.phases ?? report.bossTimeline?.phases ?? []}
+      {axisDuration}
+    />
     {#if !timeline && endTime > 0}
       <span
         class="known-duration"
@@ -178,7 +215,7 @@
       >
     {/if}
     {#if timeline}
-      {#if zoom !== TIMELINE_ZOOM_LEVELS.at(-1) && magnifier?.timeline.reportCode === timeline.reportCode && magnifier.timeline.fightId === timeline.fightId && magnifier.timeline.sourceId === timeline.sourceId}
+      {#if !separateSpells && zoom !== TIMELINE_ZOOM_LEVELS.at(-1) && magnifier?.timeline.reportCode === timeline.reportCode && magnifier.timeline.fightId === timeline.fightId && magnifier.timeline.sourceId === timeline.sourceId}
         <span
           class="magnified-section"
           style={`left: ${(magnifier.start / axisDuration) * 100}%; width: ${(magnifier.span / axisDuration) * 100}%; --spell-color: ${inspected?.color}`}
@@ -188,7 +225,7 @@
       {#each gaps as gap (gap.start)}
         <span
           class="cast-interval"
-          style={`left: ${(gap.start / axisDuration) * 100}%; width: ${((gap.end - gap.start) / axisDuration) * 100}%; top: ${baseHeight - 16}px; --spell-color: ${inspected?.color}`}
+          style={`left: ${(gap.start / axisDuration) * 100}%; width: ${((gap.end - gap.start) / axisDuration) * 100}%; top: ${separateSpells ? baseHeight - 16 : 36}px; --spell-color: ${inspected?.color}`}
           role="img"
           aria-label={`${timeline.playerName} · ${inspected?.name} · ${gap.label} between casts at ${timelineTime(gap.start)} and ${timelineTime(gap.end)}`}
           ><span>{gap.label}</span></span
@@ -209,9 +246,9 @@
           class:power-window={powerWindow}
           class:spell-dimmed={inspected !== null && inspected.id !== event.spellId}
           class:spell-highlighted={inspected?.id === event.spellId}
-          style={`--spell-color: ${appearance.color}; left: ${(event.timestamp / axisDuration) * 100}%; top: ${separateSpells ? lane * 26 + 4 : event.kind === 'buff' ? 39 : 8}px; width: ${event.kind === 'buff' ? `max(2px, ${((event.duration ?? 0) / axisDuration) * 100}%)` : event.kind === 'death' ? '2px' : '22px'}`}
+          style={`--spell-color: ${appearance.color}; left: ${(event.timestamp / axisDuration) * 100}%; top: ${separateSpells ? lane * 26 + 15 : event.kind === 'buff' ? 43 : event.kind === 'death' ? 28 : 19}px; width: ${event.kind === 'buff' ? `max(2px, ${((event.duration ?? 0) / axisDuration) * 100}%)` : event.kind === 'death' ? '2px' : '22px'}`}
           onmouseenter={(mouse) => {
-            if (zoom !== TIMELINE_ZOOM_LEVELS.at(-1)) {
+            if (!separateSpells && zoom !== TIMELINE_ZOOM_LEVELS.at(-1)) {
               const trackWidth = mouse.currentTarget.parentElement!.getBoundingClientRect().width;
               const previewWidth = Math.min(360, window.innerWidth - 16) - 18;
               const span = Math.min(
@@ -275,7 +312,7 @@
       <span class="track-message loading-message" role="status">Loading report events…</span>
     {:else if error}
       <div class="track-message error-message">
-        <span>{error}</span>
+        <span>{timelineErrorSummary(error)}</span>
         <button type="button" disabled={batchLoading} onclick={() => onload(report)}>Retry</button>
       </div>
     {:else if canLoadTimeline(report)}
@@ -300,7 +337,7 @@
         style={`left: calc(${(endTime / axisDuration) * 100}% + 4px)`}
         type="button"
         aria-label="Copy note"
-        title="Copy this player's selected spell casts and elapsed timestamps as a plain-text note."
+        title="Preview and copy this player's selected casts as an MRT or NSRT raid note."
         onclick={() => oncopy(timeline)}
       >
         <svg
@@ -321,6 +358,13 @@
 </div>
 
 <style>
+  .reference-target[aria-pressed='true'] {
+    color: var(--panel);
+    border-color: var(--accent);
+    background: var(--accent);
+    opacity: 1;
+    cursor: default;
+  }
   .event.spell-highlighted,
   .event:focus-visible {
     outline: 2px solid var(--text);
@@ -515,6 +559,8 @@
   }
   .event {
     position: absolute;
+    transform: translateY(-50%);
+    z-index: 1;
     display: block;
     padding: 0;
     border: 0;
@@ -571,7 +617,6 @@
   .death {
     background: #e35d5d;
     height: 52px;
-    top: 2px !important;
     z-index: 2;
   }
   .death-label {
@@ -589,6 +634,7 @@
     top: 8px;
     margin: 0;
     font-size: 12px;
+    z-index: 1;
   }
   .loading-message,
   .unloaded-controls {
@@ -616,13 +662,13 @@
     pointer-events: none;
   }
   .error-message {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     color: #ce4141;
     max-width: 580px;
     white-space: normal;
     margin-top: 5px;
-  }
-  .error-message button {
-    margin-left: 8px;
   }
   .incomplete {
     position: absolute;

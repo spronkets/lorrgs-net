@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import Toast from './Toast.svelte';
+  import CopyNoteDialog from './CopyNoteDialog.svelte';
   import SpellSelection from './SpellSelection.svelte';
   import TimelineMagnifier from './TimelineMagnifier.svelte';
   import TimelineRow from './TimelineRow.svelte';
+  import BossTimelineRow from './BossTimelineRow.svelte';
   import { TimelineLoader } from '../timelineLoader.svelte';
   import type { InspectedSpell, TimelineMagnification } from '../timelineTypes';
   import type { RankingReport, ReportTimeline } from '../api';
@@ -12,19 +14,34 @@
     canLoadTimeline,
     fightDuration,
     timelineKey,
-    timelineNote,
     timelineTime
   } from '../timelineUtils';
   type Props = {
     reports?: { report: RankingReport; rank: number }[];
     edition?: string;
     classId?: number;
+    bossSlug?: string;
+    bossIconName?: string;
+    difficulty?: string;
+    specSlug?: string;
   };
-  let { reports = [], edition = '', classId = 0 }: Props = $props();
+  let {
+    reports = [],
+    edition = '',
+    classId = 0,
+    bossSlug = '',
+    bossIconName,
+    difficulty = 'mythic',
+    specSlug = ''
+  }: Props = $props();
   const loader = new TimelineLoader(() => edition);
   let hidden = $state<Set<number>>(new Set());
   let scrollContainer: HTMLDivElement;
   let previousFirstKey = '';
+  let referenceKey = $state('');
+  const referenceReport = $derived(
+    reports.find(({ report }) => timelineKey(report) === referenceKey)?.report ?? reports[0]?.report
+  );
   let zoom = $state<number>(TIMELINE_ZOOM_LEVELS[0]);
   let showIcons = $state(true);
   let showCasts = $state(true);
@@ -35,9 +52,10 @@
     null
   );
   let inspected = $state<InspectedSpell | null>(null);
+  let noteSelection = $state<{ timeline: ReportTimeline; report: RankingReport } | null>(null);
   let magnifier = $state<TimelineMagnification | null>(null);
   $effect(() => {
-    if (zoom === TIMELINE_ZOOM_LEVELS.at(-1)) magnifier = null;
+    if (separateSpells || zoom === TIMELINE_ZOOM_LEVELS.at(-1)) magnifier = null;
   });
   const timelines = $derived([...loader.loaded.values()]);
   const selectedClassId = $derived(classId || reports[0]?.report.players?.[0]?.classId || 0);
@@ -74,21 +92,6 @@
       if (scrollContainer) scrollContainer.scrollTop = 0;
     }
   });
-  async function copyNote(timeline: ReportTimeline) {
-    try {
-      await navigator.clipboard.writeText(timelineNote(timeline, hidden));
-      clipboardNotification = {
-        message: `Copied selected casts for ${timeline.playerName}.`,
-        variant: 'success'
-      };
-    } catch (error) {
-      clipboardNotification = {
-        message: 'Unable to copy note. Check clipboard permissions.',
-        variant: 'error'
-      };
-      console.error('Unable to copy timeline note', error);
-    }
-  }
   onMount(() => {
     loader.start();
     return () => loader.dispose();
@@ -96,6 +99,25 @@
 </script>
 
 <section class="workspace" aria-label="Cooldown comparison timelines">
+  {#if noteSelection}
+    <CopyNoteDialog
+      {...noteSelection}
+      {hidden}
+      {difficulty}
+      {specSlug}
+      bossName={noteSelection.report.fights?.find(
+        (fight) => fight.fightId === noteSelection.timeline.fightId
+      )?.name ?? ''}
+      onclose={() => (noteSelection = null)}
+      oncopied={(name) => {
+        clipboardNotification = {
+          message: `Copied selected casts for ${name}.`,
+          variant: 'success'
+        };
+        noteSelection = null;
+      }}
+    />
+  {/if}
   <div class="timeline-controls">
     <fieldset>
       <legend>Timeline</legend>
@@ -194,20 +216,6 @@
       />
     {/key}
   {/if}
-  <div class="spell-inspector" aria-live="polite" aria-atomic="true">
-    {#if inspected}
-      <span class="color-key" style={`background: ${inspected.color}`}></span>
-      <strong>{inspected.name}</strong>
-      <span>{inspected.detail}</span>
-    {:else}
-      <span class="legend-item"><i class="color-key power-key"></i>Power windows</span>
-      <span class="legend-item"><i class="color-key ability-key"></i>Player abilities</span>
-      <span class="legend-item"><i class="color-key received-key"></i>Received effects</span>
-      <span
-        >Hover or focus a spell to highlight it across players. Tab to inspect individual events.</span
-      >
-    {/if}
-  </div>
   <TimelineMagnifier
     {magnifier}
     {inspected}
@@ -217,51 +225,82 @@
     {showBuffs}
     {showDeaths}
   />
-  <div
-    class="timeline-scroll"
-    bind:this={scrollContainer}
-    role="region"
-    aria-label="Aligned player timelines"
-  >
-    <div class="timeline-grid" style={`width: calc(${zoom}% - ${248 * (zoom / 100 - 1)}px)`}>
-      <div class="axis-row">
-        <div class="identity axis-label">Player / elapsed time</div>
-        <div class="axis">
-          {#each labelTicks as tick (tick)}
-            <span
-              class:end-label={tick === axisDuration}
-              style={`left: ${(tick / axisDuration) * 100}%`}>{timelineTime(tick)}</span
-            >
-          {/each}
-        </div>
-      </div>
-      {#each reports as { report, rank } (timelineKey(report))}
-        <TimelineRow
-          {report}
-          {rank}
-          {edition}
-          timeline={loader.loaded.get(timelineKey(report))}
-          {axisDuration}
-          {ticks}
-          {hidden}
-          {castSpellIds}
-          {zoom}
-          {showIcons}
-          {showCasts}
-          {showBuffs}
-          {showDeaths}
-          {separateSpells}
-          loading={loader.loadingKey === timelineKey(report)}
-          batchLoading={loader.batchLoading}
-          error={loader.errors.get(timelineKey(report))}
-          bind:inspected
-          bind:magnifier
-          onload={(report) => loader.loadOne(report)}
-          oncopy={copyNote}
-        />
+  <div class="timeline-panel">
+    <div class="spell-inspector" aria-live="polite" aria-atomic="true">
+      {#if inspected}
+        <span class="color-key" style={`background: ${inspected.color}`}></span>
+        <strong>{inspected.name}</strong>
+        <span>{inspected.detail}</span>
       {:else}
-        <p>No loaded reports match these filters.</p>
-      {/each}
+        <span class="legend-item"><i class="color-key power-key"></i>Power windows</span>
+        <span class="legend-item"><i class="color-key ability-key"></i>Player abilities</span>
+        <span class="legend-item"><i class="color-key received-key"></i>Received effects</span>
+        <span
+          >Hover or focus a spell to highlight it across players. Tab to inspect individual events.</span
+        >
+      {/if}
+    </div>
+    <div
+      class="timeline-scroll"
+      bind:this={scrollContainer}
+      role="region"
+      aria-label="Aligned player timelines"
+    >
+      <div class="timeline-grid" style={`width: calc(${zoom}% - ${248 * (zoom / 100 - 1)}px)`}>
+        <div class="axis-row">
+          <div class="identity axis-label">Player / elapsed time</div>
+          <div class="axis">
+            {#each labelTicks as tick (tick)}
+              <span
+                class:end-label={tick === axisDuration}
+                style={`left: ${(tick / axisDuration) * 100}%`}>{timelineTime(tick)}</span
+              >
+            {/each}
+          </div>
+        </div>
+        {#if referenceReport && canLoadTimeline(referenceReport)}
+          <BossTimelineRow
+            {bossSlug}
+            {bossIconName}
+            report={referenceReport}
+            {edition}
+            {axisDuration}
+            {ticks}
+            {showIcons}
+            {showCasts}
+          />
+        {/if}
+        {#each reports as { report, rank } (timelineKey(report))}
+          <TimelineRow
+            {report}
+            isReference={referenceReport !== undefined &&
+              timelineKey(report) === timelineKey(referenceReport)}
+            onreference={(selected) => (referenceKey = timelineKey(selected))}
+            {rank}
+            {edition}
+            timeline={loader.loaded.get(timelineKey(report))}
+            {axisDuration}
+            {ticks}
+            {hidden}
+            {castSpellIds}
+            {zoom}
+            {showIcons}
+            {showCasts}
+            {showBuffs}
+            {showDeaths}
+            {separateSpells}
+            loading={loader.loadingKey === timelineKey(report)}
+            batchLoading={loader.batchLoading}
+            error={loader.errors.get(timelineKey(report))}
+            bind:inspected
+            bind:magnifier
+            onload={(report) => loader.loadOne(report)}
+            oncopy={(timeline) => (noteSelection = { timeline, report })}
+          />
+        {:else}
+          <p>No loaded reports match these filters.</p>
+        {/each}
+      </div>
     </div>
   </div>
 </section>
@@ -274,9 +313,16 @@
     --muted: #536477;
     --accent: #a32662;
     color: var(--text);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
   }
   .option-toggle {
     position: relative;
+  }
+  .timeline-panel {
+    min-width: 0;
   }
   .option-toggle input {
     position: absolute;
@@ -359,7 +405,6 @@
   }
   .timeline-controls {
     align-items: end;
-    margin-bottom: 8px;
   }
   .load-progress {
     font-size: 11px;

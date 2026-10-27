@@ -11,6 +11,7 @@ public class SpecRankingData
     public required string BossSlug { get; set; }
     public required string Difficulty { get; set; }
     public required string Metric { get; set; }
+    public string? BossIconUrl { get; set; }
     public int Page { get; set; } = 1;
     public bool HasMorePages { get; set; }
     public int TotalCount { get; set; }
@@ -46,6 +47,9 @@ public class RankingReport
     /// <summary>A complete timeline available in the API's unexpired file cache.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ReportTimeline? Timeline { get; set; }
+    /// <summary>A complete encounter reference available in the API's unexpired file cache.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BossTimeline? BossTimeline { get; set; }
 }
 
 /// <summary>
@@ -64,6 +68,8 @@ public class CompRankingReport
 /// </summary>
 public class RankingFight
 {
+    public int EncounterId { get; set; }
+    public IReadOnlyList<TimelinePhase>? Phases { get; set; }
     public int FightId { get; set; }
     public required string Name { get; set; }
     public int Duration { get; set; } // milliseconds

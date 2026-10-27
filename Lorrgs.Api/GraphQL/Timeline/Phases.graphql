@@ -1,0 +1,5 @@
+query RankingPhases(__VARIABLES__) {
+  reportData {
+    __REPORTS__
+  }
+}

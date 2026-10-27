@@ -1,0 +1,10 @@
+query TimelineMasterData($code: String!) {
+  reportData {
+    report(code: $code) {
+      masterData {
+        actors(type: "Player") { id name }
+        abilities { gameID name icon }
+      }
+    }
+  }
+}

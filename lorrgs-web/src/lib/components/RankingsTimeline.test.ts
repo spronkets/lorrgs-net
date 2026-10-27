@@ -1,19 +1,94 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getReportTimeline, type ReportTimeline } from '../api';
-import { rows, response } from '../testing/timelineFixtures';
+import { getBossTimeline, getReportTimeline, type ReportTimeline } from '../api';
+import { bossResponse, rows, response } from '../testing/timelineFixtures';
 import RankingsTimeline from './RankingsTimeline.svelte';
 import { TIMELINE_ZOOM_LEVELS } from '../timelineUtils';
 
-vi.mock('../api', () => ({ getReportTimeline: vi.fn() }));
+vi.mock('../api', () => ({ getReportTimeline: vi.fn(), getBossTimeline: vi.fn() }));
 const fetchTimeline = vi.mocked(getReportTimeline);
 beforeEach(() => {
   fetchTimeline.mockReset();
+  vi.mocked(getBossTimeline).mockReset();
+  vi.mocked(getBossTimeline).mockImplementation(async (report) => bossResponse(report));
   fetchTimeline.mockImplementation(async (report) => response(report));
 });
 afterEach(() => vi.restoreAllMocks());
 
 describe('ranking cooldown comparison', () => {
+  it('selects a target before Analyze and reuses bundled reference data across sorting', async () => {
+    const reports = rows.map(({ report, rank }) => ({
+      rank,
+      report: { ...report, timeline: response(report), bossTimeline: bossResponse(report) }
+    }));
+    const { container, rerender } = render(RankingsTimeline, { reports, edition: 'anniversary' });
+    await screen.findByRole('button', { name: '0:30 · Boss Strike' });
+    const targets = screen.getAllByRole('button', { name: 'Use as boss reference' });
+    expect(targets[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(targets[0]).toBeDisabled();
+    expect(targets[0]).toHaveAttribute('title', 'Current boss reference');
+    expect(screen.queryByText(/^Reference:/)).not.toBeInTheDocument();
+    expect(targets[1].nextElementSibling).toHaveAttribute('aria-label', 'Open report analyzer');
+    await fireEvent.click(targets[1]);
+    await waitFor(() =>
+      expect(container.querySelector('.boss-row a')).toHaveAttribute(
+        'href',
+        expect.stringContaining('Report1')
+      )
+    );
+    expect(targets[1]).toHaveAttribute('aria-pressed', 'true');
+    expect(targets[0]).toHaveAttribute('aria-pressed', 'false');
+    expect(targets[0]).toBeEnabled();
+    expect(targets[1]).toBeDisabled();
+    await rerender({ reports: [...reports].reverse(), edition: 'anniversary' });
+    expect(container.querySelector('.boss-row a')).toHaveAttribute(
+      'href',
+      expect.stringContaining('Report1')
+    );
+    expect(container.querySelector('.player-row .rank')?.textContent).toBe('5.');
+    await rerender({ reports: reports.slice(2), edition: 'anniversary' });
+    await waitFor(() =>
+      expect(container.querySelector('.boss-row a')).toHaveAttribute(
+        'href',
+        expect.stringContaining('Report2')
+      )
+    );
+    expect(getBossTimeline).not.toHaveBeenCalled();
+    expect(fetchTimeline).not.toHaveBeenCalled();
+  });
+
+  it('places the legend directly above the table outside its scrollable grid', () => {
+    const { container } = render(RankingsTimeline);
+    const legend = screen.getByText('Power windows').closest('.spell-inspector');
+    expect(container.querySelector('.timeline-panel')?.firstElementChild).toBe(legend);
+    expect(legend?.nextElementSibling).toBe(container.querySelector('.timeline-scroll'));
+    expect(container.querySelector('.timeline-scroll')?.contains(legend)).toBe(false);
+  });
+
+  it('uses the first filtered/sorted report for the boss reference without changing player ranks', async () => {
+    const reports = rows.map(({ report, rank }) => ({
+      rank,
+      report: { ...report, timeline: response(report), bossTimeline: bossResponse(report) }
+    }));
+    const { container, rerender } = render(RankingsTimeline, { reports, edition: 'anniversary' });
+    await screen.findByRole('button', { name: '0:30 · Boss Strike' });
+    expect(container.querySelector('.boss-row')?.nextElementSibling).toHaveClass('player-row');
+    expect(container.querySelectorAll('.boss-row [aria-label="Phase 2 at 1:00"]')).toHaveLength(1);
+    expect(container.querySelectorAll('.player-row [aria-label="Phase 2 at 1:00"]')).toHaveLength(
+      5
+    );
+    await rerender({ reports: [...reports].reverse(), edition: 'anniversary' });
+    await waitFor(() =>
+      expect(container.querySelector('.boss-row a')).toHaveAttribute(
+        'href',
+        expect.stringContaining('Report4')
+      )
+    );
+    expect(container.querySelector('.player-row .rank')?.textContent).toBe('5.');
+    expect(getBossTimeline).not.toHaveBeenCalled();
+    expect(fetchTimeline).not.toHaveBeenCalled();
+  });
+
   it('closes the magnifier at maximum zoom and restores it below the maximum', async () => {
     const maximum = TIMELINE_ZOOM_LEVELS.at(-1);
     const previous = TIMELINE_ZOOM_LEVELS[TIMELINE_ZOOM_LEVELS.length - 2];
@@ -37,6 +112,33 @@ describe('ranking cooldown comparison', () => {
     await fireEvent.mouseLeave(spell);
     await fireEvent.mouseEnter(spell);
     expect(screen.getByRole('tooltip')).toHaveTextContent(`${previous * 2}%`);
+    expect(fetchTimeline).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the magnifier while spells are separated and restores it when combined', async () => {
+    const { container } = render(RankingsTimeline, {
+      reports: rows.slice(0, 1),
+      edition: 'anniversary'
+    });
+    const spell = await screen.findByRole('button', { name: /0:10 · Avenging Wrath · DPS/ });
+    const separate = screen.getByRole('checkbox', { name: 'Separate spells' });
+    await fireEvent.mouseEnter(spell);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    expect(container.querySelector('.magnified-section')).not.toBeNull();
+    await fireEvent.click(separate);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(container.querySelector('.magnified-section')).toBeNull();
+    await fireEvent.mouseLeave(spell);
+    await fireEvent.mouseEnter(spell);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(container.querySelector('.magnified-section')).toBeNull();
+    expect(spell).toHaveClass('spell-highlighted');
+    await fireEvent.click(separate);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    await fireEvent.mouseLeave(spell);
+    await fireEvent.mouseEnter(spell);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    expect(container.querySelector('.magnified-section')).not.toBeNull();
     expect(fetchTimeline).toHaveBeenCalledTimes(1);
   });
 
@@ -79,6 +181,9 @@ describe('ranking cooldown comparison', () => {
       edition: 'anniversary'
     });
     await fireEvent.click(await screen.findByRole('button', { name: 'Copy note' }));
+    expect(screen.getByRole('dialog', { name: 'Copy Note' })).toBeVisible();
+    expect(writeText).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy to clipboard' }));
     await waitFor(() =>
       expect(
         screen.getByText('Copied selected casts for Player0.').closest('[role="status"]')
@@ -86,6 +191,7 @@ describe('ranking cooldown comparison', () => {
     );
     expect(container.querySelector('p[role="status"]')).toBeNull();
     expect(writeText).toHaveBeenCalledTimes(1);
+    expect(fetchTimeline).toHaveBeenCalledTimes(1);
     await fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }));
     expect(screen.queryByText('Copied selected casts for Player0.')).not.toBeInTheDocument();
     if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);

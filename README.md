@@ -39,6 +39,29 @@ do not retain failures such as rate-limit responses. This does not change the
 
 Spec rankings now open a compact **aligned timeline workspace** by default.
 Spec Rankings uses the timeline directly, without a timeline/table view toggle.
+The first timeline row is the selected encounter's reference: real enemy casts
+and observed phase transitions from a report, not an estimated boss schedule.
+By default it uses the first filtered/sorted report. The target button beside each
+player's Analyze action selects that fight as the reference and highlights the
+active target. The selected target is disabled with a "Current boss reference"
+tooltip; no separate reference-player label is shown. The selection survives
+sorting; if filtered out, the first visible report is used.
+Reference changes cancel in-flight requests for the old one.
+Bundled boss timelines require no extra request; other references use the existing
+API file-cache loading path.
+The row shares the player time axis and zoom, and respects the cast/icon toggles.
+The boss portrait appears beside the encounter name in the heading and reference
+row. Each player row also shows green phase lines and labels at that report's own
+observed transitions, including before event loading. Phase metadata is fetched
+in batches of up to 20 reports and file-cached for 24 hours; this does not fetch
+boss event streams for every ranking or copy the reference fight's timings.
+Phase metadata is also included in existing percentile-enrichment queries and
+reused from cached boss metadata. Separate phase batches are skipped when their
+fights already have metadata; an empty observed phase list is treated as known data, not a
+reason to request it again. Phase lines remain behind casts, buffs and row controls.
+Missing phase data is not guessed. The API bundles cached boss timelines with
+rankings; otherwise only the current reference is fetched using the same 24-hour
+file cache. Boss and player event queries have independent cache keys.
 
 The timeline workspace composes focused Svelte 5 components: `SpellSelection`
 owns spell presets and selection, `TimelineRow` renders each player's metadata
@@ -77,10 +100,19 @@ seconds between consecutive visible casts per player within the existing row hei
 Hovering an event opens a section of the same timeline at the next doubling of
 the selected zoom, without resizing the rows or making additional requests.
 Zoom options and the magnifier limit share the `TIMELINE_ZOOM_LEVELS` definition.
-At the highest available zoom, the hover magnifier is disabled; spell highlighting
+At the highest available zoom or with Separate spells enabled, the hover magnifier is disabled; spell highlighting
 and measured cast intervals remain available.
-These are cast-to-cast intervals, not cooldown estimates. Copy note exports selected
-cast timestamps. Cooldown recovery windows and cast-time overlays are not
+These are cast-to-cast intervals, not cooldown estimates. Copy note opens a live
+preview with MRT (Method Raid Tools / Smart CD Reminder) and NSRT (Northern Sky
+Raid Tools) exports, optional player name/nickname or specialization targeting,
+and phase-relative timers when the selected player's fight has observed phases.
+Notes contain only selected cast events, with spell IDs and tenth-second timing;
+NSRT includes encounter ID, difficulty, and boss name. Missing encounter/spec
+metadata is reported rather than exporting an invalid note. Partial timelines are
+explicitly marked in the editor. Click the preview to select it for manual copying,
+or use Copy to clipboard; clipboard errors remain visible in the editor.
+No additional Warcraft Logs requests are made for note generation.
+Cooldown recovery windows and cast-time overlays are not
 inferred from cast counts or hardcoded modern spell values.
 Clipboard feedback uses the reusable `Toast.svelte` component, which owns its
 success/error announcements, close button, styling, and four-second dismissal
@@ -95,6 +127,9 @@ shared class damage abilities and power buffs; unknown abilities remain availabl
 under Everything. Rogue uses Combat in Classic editions and Outlaw in Retail.
 Everything uses a spellbook; Consumables uses a potion icon and selects observed
 potions, flasks, elixirs, healthstones, food buffs, and drums.
+Clicking any active preset clears all spells, including newly loaded spells;
+clicking it again reapplies that preset.
+Clear spells also clears the selection and keeps newly loaded spells hidden.
 Presets use upstream spell tags/variations, recognized ability names
 for older ranks, and observed power windows for Damage. Unknown effects remain
 available under Everything rather than being guessed into a role. Individual
@@ -244,6 +279,39 @@ WARCRAFTLOGS_CLIENT_SECRET=your_client_secret
 ## Edition Coverage
 
 The project supports multiple World of Warcraft editions/eras in rankings and raid catalog flows although this is still a work-in-progress.
+
+The boss selector displays portraits in both the selected value and the open list,
+with keyboard navigation, type-to-jump, Escape cancellation and outside-click dismissal.
+The selector, comparison heading and boss timeline share the same resolved image:
+the world-data icon takes priority, followed by verified Encounter Journal portraits
+from `bossPortraits.ts`. Ranking responses do not override this mapping, so images
+stay consistent before and after rankings load, including with older cached responses.
+If none exists, no image is
+shown. Raid selectors likewise omit images when metadata is
+missing, without reserving icon space. Portrait lookup does not query Warcraft Logs.
+Ranking boss images also use Wowhead and are omitted when metadata is missing.
+The app does not use RPGLogs-hosted images.
+Boss artwork is rendered by the shared `BossIcon` component: a square bordered
+frame with a centered portrait fitted without cropping or zoom, reused in selectors, headings and ranking
+rows. Missing or failed images are omitted rather than replaced with placeholders.
+Callers supply a boss `slug` and optionally an `iconName` from world metadata;
+the component owns URL resolution and falls back to the slug's journal portrait.
+Transparent image padding is excluded when fitting and centering visible artwork.
+The frame and background use the portrait's detected dominant color, excluding
+transparent, near-black and near-white pixels. Detection samples the loaded image
+in a small canvas; no additional API request or image-analysis service is used.
+
+Cached player timelines with unavailable actor metadata are omitted from initial
+rankings rather than failing the ranking request. Timeline loading first reuses
+report-level master data when timeline metadata lacks actors or abilities. This
+recovery includes spell names and icons, not just actor identities.
+Cache-only loading never fetches missing master data; explicit loading can fetch it
+through the same 24-hour API file cache, shared across fights in a report.
+Timelines missing spell metadata are not bundled as complete timelines.
+If both sources lack actors, explicit
+timeline requests report unavailable player metadata as not found. Character enrichment uses the
+Warcraft Logs `guilds` collection; a guild name is only inferred when exactly one
+guild is returned.
 
 - Current UI version options: `Anniversary` (Burning Crusade Classic), `Mists of Pandaria`, `Era` (Classic), and `Retail` (Midnight).
 - Additional edition/raid mappings are available in the API catalog logic.

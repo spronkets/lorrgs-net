@@ -49,7 +49,9 @@
       .filter((group) => group.spells.length)
   );
   $effect(() => {
-    if (selectedPreset) {
+    if (preset === 'None') {
+      hidden = new SvelteSet(spells.map((spell) => spell.id));
+    } else if (selectedPreset) {
       const selected = selectedPreset;
       hidden = new SvelteSet(
         spells
@@ -87,20 +89,12 @@
         <button
           type="button"
           aria-pressed={preset === option.key}
-          onclick={() => (preset = option.key)}
+          onclick={() => (preset = preset === option.key ? 'None' : option.key)}
           ><img src={option.icon} alt="" />{option.label}</button
         >
       {/each}
     </div>
-    <button
-      type="button"
-      onclick={() => {
-        preset = null;
-        hidden = new SvelteSet(spells.map((spell) => spell.id));
-      }}
-    >
-      Clear spells
-    </button>
+    <button type="button" onclick={() => (preset = 'None')}>Clear spells</button>
   </div>
   <div class="spell-group-row">
     {#each spellGroups as group (group.label)}

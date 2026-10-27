@@ -160,6 +160,11 @@ public class RankingsController(
                 return NotFound(new { error = "Ranking not found" });
             }
 
+            await timelineService.PopulateFightPhasesAsync(ranking.Reports, edition ?? "retail", cancellationToken);
+            var bossIcon = _worldDataService.GetBoss(queryContext.BossSlug)?.Icon;
+            ranking.BossIconUrl = !string.IsNullOrWhiteSpace(bossIcon)
+                ? $"https://wow.zamimg.com/images/wow/icons/medium/{bossIcon}"
+                : null;
             foreach (var report in ranking.Reports)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -170,6 +175,8 @@ public class RankingsController(
                 report.Timeline = await timelineService.TryLoadCachedAsync(report.ReportId,
                     fight.FightId, player.PlayerId > 0 ? player.PlayerId : null, player.Name,
                     edition ?? "retail", cancellationToken);
+                report.BossTimeline = await timelineService.LoadBossAsync(report.ReportId, fight.FightId,
+                    edition ?? "retail", true, cancellationToken);
             }
             return Ok(ranking);
         }
@@ -798,7 +805,10 @@ public class RankingsController(
                 var report = chunk[i];
                 var alias = $"r{i}";
                 aliasToReport[alias] = report;
-                reportsBlock.AppendLine($"    {alias}: report(code: \"{report.ReportId}\") {{ code title rankings(playerMetric: $playerMetric) }}");
+                var fightIds = string.Join(", ", report.Fights.Select(fight => fight.FightId).Distinct().Order());
+                reportsBlock.AppendLine($"    {alias}: report(code: \"{report.ReportId}\") {{ code title " +
+                    $"fights(fightIDs: [{fightIds}]) {{ id encounterID startTime endTime phaseTransitions {{ id startTime }} }} " +
+                    "rankings(playerMetric: $playerMetric) }");
             }
 
             var queryText = ReportRankingsEnrichmentQueryTemplate.Replace(
@@ -840,6 +850,9 @@ public class RankingsController(
                 {
                     continue;
                 }
+
+                if (reportElement.TryGetProperty("fights", out var fightMetadata) && fightMetadata.ValueKind == JsonValueKind.Array)
+                    ReportTimelineService.ApplyFightMetadata(entry.Value, fightMetadata);
 
                 if (!reportElement.TryGetProperty("rankings", out var rankingsElement))
                 {
@@ -1154,7 +1167,7 @@ public class RankingsController(
                 var alias = $"c{i}";
                 aliasToKey[alias] = item.Key;
                 charactersBlock.AppendLine(
-                    $"    {alias}: character(name: \"{EscapeGraphQlString(item.Name)}\", serverSlug: \"{EscapeGraphQlString(item.ServerSlug)}\", serverRegion: \"{EscapeGraphQlString(item.ServerRegion)}\") {{ name faction {{ id }} guild {{ name faction {{ id }} }} }}");
+                    $"    {alias}: character(name: \"{EscapeGraphQlString(item.Name)}\", serverSlug: \"{EscapeGraphQlString(item.ServerSlug)}\", serverRegion: \"{EscapeGraphQlString(item.ServerRegion)}\") {{ name faction {{ id }} guilds {{ name faction {{ id }} }} }}");
             }
 
             var queryText = CharacterFactionEnrichmentQueryTemplate.Replace(
@@ -1204,8 +1217,11 @@ public class RankingsController(
                 int? guildFactionId = null;
                 string? guildName = null;
 
-                if (characterElement.TryGetProperty("guild", out var guildElement) && guildElement.ValueKind == JsonValueKind.Object)
+                if (characterElement.TryGetProperty("guilds", out var guilds) &&
+                    guilds.ValueKind == JsonValueKind.Array && guilds.GetArrayLength() == 1 &&
+                    guilds[0].ValueKind == JsonValueKind.Object)
                 {
+                    var guildElement = guilds[0];
                     guildFactionId = ReadFactionId(guildElement);
                     guildName = TryGetString(guildElement, "name");
                 }

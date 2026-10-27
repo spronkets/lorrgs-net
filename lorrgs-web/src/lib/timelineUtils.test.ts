@@ -6,7 +6,6 @@ import {
   isPowerWindow,
   spellAppearance,
   spellIconUrl,
-  timelineNote,
   timelineSpellGroups,
   timelineTime,
   visibleTimelineEvents
@@ -106,13 +105,6 @@ describe('aligned timeline utilities', () => {
     expect(visibleTimelineEvents(timeline, new Set(), false, true, false)).toEqual([
       timeline.events[1]
     ]);
-  });
-
-  it('exports selected casts with elapsed timestamps and explicitly labels incomplete samples', () => {
-    expect(timelineNote(timeline, new Set())).toBe('Alice (4:00)\n0:00 Avenging Wrath');
-    expect(timelineNote({ ...timeline, isComplete: false }, new Set([31884]))).toBe(
-      'Alice (4:00) — INCOMPLETE'
-    );
   });
 
   it('constructs icons only from valid filenames on the fixed icon host', () => {

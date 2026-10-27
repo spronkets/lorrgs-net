@@ -185,6 +185,7 @@ public class WorldDataService
     {
         return new List<RaidBoss>
         {
+            new RaidBoss { Id = 50609, Name = "Illidan Stormrage", NameSlug = "illidan-stormrage", Icon = "achievement_boss_illidan.jpg", RaidId = 1060 },
             // The War Within - Season 1 (Nerub'ar Palace, zone 38)
             new RaidBoss { Id = 2898, Name = "Eranog", NameSlug = "eranog", Icon = "inv_achievement_raidnerubar_eranog.jpg", RaidId = 38 },
             new RaidBoss { Id = 2893, Name = "Terros", NameSlug = "terros", Icon = "inv_achievement_raidnerubar_terros.jpg", RaidId = 38 },

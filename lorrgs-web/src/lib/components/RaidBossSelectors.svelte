@@ -1,13 +1,15 @@
 <script lang="ts">
+  import BossSelector from './BossSelector.svelte';
   export let raidPhaseGroups: Array<{
     key: string;
     label: string;
     raids: Array<{ slug: string; name: string }>;
   }> = [];
-  export let bosses: Array<{ slug: string; name: string; mapped?: boolean }> = [];
+  export let bosses: Array<{ slug: string; name: string; mapped?: boolean; iconName?: string }> = [];
 
   export let selectedRaid = '';
   export let selectedBoss = '';
+  export let raidIconUrl = '';
 
   export let raidLabel = 'Raid';
   export let bossLabel = 'Boss';
@@ -27,29 +29,36 @@
 <div class="raid-boss-row">
   <label>
     <span>{raidLabel}</span>
-    <select bind:value={selectedRaid} on:change={handleRaidChange}>
-      <option value="">{raidPlaceholder}</option>
-      {#each raidPhaseGroups as group (group.key)}
-        <optgroup label={group.label}>
-          {#each group.raids as raid (raid.slug)}
-            <option value={raid.slug}>{raid.name}</option>
-          {/each}
-        </optgroup>
-      {/each}
-    </select>
+    <div class="icon-select">
+      {#if raidIconUrl && selectedRaid}
+        <span class="selection-icon" aria-hidden="true">
+          <img src={raidIconUrl} alt="" />
+        </span>
+      {/if}
+      <select
+        class:has-icon={Boolean(raidIconUrl && selectedRaid)}
+        bind:value={selectedRaid}
+        on:change={handleRaidChange}
+      >
+        <option value="">{raidPlaceholder}</option>
+        {#each raidPhaseGroups as group (group.key)}
+          <optgroup label={group.label}>
+            {#each group.raids as raid (raid.slug)}
+              <option value={raid.slug}>{raid.name}</option>
+            {/each}
+          </optgroup>
+        {/each}
+      </select>
+    </div>
   </label>
 
-  <label>
-    <span>{bossLabel}</span>
-    <select bind:value={selectedBoss} disabled={!selectedRaid}>
-      <option value="">{bossPlaceholder}</option>
-      {#each bosses as boss, index (`${boss.slug}-${index}`)}
-        <option value={boss.slug}>
-          {boss.name}
-        </option>
-      {/each}
-    </select>
-  </label>
+  <BossSelector
+    {bosses}
+    bind:value={selectedBoss}
+    label={bossLabel}
+    placeholder={bossPlaceholder}
+    disabled={!selectedRaid}
+  />
 </div>
 
 <style lang="scss">
@@ -58,6 +67,29 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-5, 0.8rem);
     width: 100%;
+  }
+
+  .icon-select {
+    position: relative;
+    width: 100%;
+  }
+
+  .selection-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 26px;
+    height: 26px;
+    pointer-events: none;
+  }
+
+  .selection-icon img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 3px;
   }
 
   label {
@@ -97,6 +129,10 @@
       box-shadow var(--transition-fast, 0.15s),
       background-color var(--transition-fast, 0.15s),
       color var(--transition-fast, 0.15s);
+  }
+
+  select.has-icon {
+    padding-left: 46px;
   }
 
   select:hover:not(:disabled) {

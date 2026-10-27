@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as API from '../api';
   import { getBlizzardClassColor } from '../classColors';
-  import { getWowheadIconUrl } from '../wowheadIcons';
+  import BossIcon from '../components/BossIcon.svelte';
 
   export let worldData = {};
 
@@ -49,11 +49,11 @@
       {/each}
     </select>
     {#if boss?.icon}
-      <img
-        src={getWowheadIconUrl(boss.icon, 'bosses')}
+      <BossIcon
+        slug={selectedBoss}
+        iconName={boss.icon}
         alt={boss.name}
-        class="boss-icon"
-        on:error={(e) => (e.target.style.display = 'none')}
+        size={40}
       />
     {/if}
   </div>
@@ -138,12 +138,6 @@
     min-width: 220px;
   }
 
-  .boss-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 5px;
-    border: 1px solid #444;
-  }
 
   .status {
     padding: 2rem;

@@ -11,3 +11,12 @@ public sealed record ReportTimeline(
     string ReportCode, int FightId, int SourceId, string PlayerName,
     double Duration, bool IsComplete, IReadOnlyList<TimelineSpell> Spells,
     IReadOnlyList<TimelineEvent> Events);
+
+/// <summary>An observed encounter phase transition relative to fight start.</summary>
+public sealed record TimelinePhase(int Id, double Timestamp);
+
+/// <summary>Enemy casts and observed phases from one reference fight, not a universal boss schedule.</summary>
+public sealed record BossTimeline(
+    string ReportCode, int FightId, string Name, double Duration, bool IsComplete,
+    IReadOnlyList<TimelineSpell> Spells, IReadOnlyList<TimelineEvent> Events,
+    IReadOnlyList<TimelinePhase> Phases);

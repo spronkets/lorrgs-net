@@ -27,6 +27,43 @@ function props() {
 }
 
 describe('TimelineRow', () => {
+  it('keeps icons above the lower event bars and centers events within separate lanes', async () => {
+    const input = props();
+    const { container, rerender } = render(TimelineRow, {
+      ...input,
+      timeline: response(input.report)
+    });
+    const cast = container.querySelector<HTMLElement>('.event.cast')!;
+    const buff = container.querySelector<HTMLElement>('.event.buff')!;
+    expect(cast.style.top).toBe('19px');
+    expect(buff.style.top).toBe('43px');
+    await rerender({ ...input, timeline: response(input.report), separateSpells: true });
+    expect(cast.style.top).toMatch(/px$/);
+    expect(buff.style.top).toMatch(/px$/);
+    expect((parseFloat(cast.style.top) - 15) % 26).toBe(0);
+    expect((parseFloat(buff.style.top) - 15) % 26).toBe(0);
+  });
+
+  it('shows this fight’s phases even before event loading and updates with the row metadata', async () => {
+    const input = props();
+    const report = {
+      ...input.report,
+      fights: [{ ...input.report.fights![0], phases: [{ id: 2, timestamp: 45000 }] }]
+    };
+    const { rerender } = render(TimelineRow, { ...input, report });
+    expect(screen.getByRole('img', { name: 'Phase 2 at 0:45' })).toHaveStyle({ left: '15%' });
+    expect(screen.queryByRole('img', { name: 'Phase 2 at 1:00' })).not.toBeInTheDocument();
+    await rerender({
+      ...input,
+      report: {
+        ...report,
+        fights: [{ ...report.fights[0], phases: [{ id: 2, timestamp: 90000 }] }]
+      }
+    });
+    expect(screen.getByRole('img', { name: 'Phase 2 at 1:30' })).toHaveStyle({ left: '30%' });
+    expect(screen.queryByRole('img', { name: 'Phase 2 at 0:45' })).not.toBeInTheDocument();
+  });
+
   it('disables magnification at maximum zoom while preserving spell inspection', async () => {
     const input = props();
     const { container, rerender } = render(TimelineRow, {
@@ -119,8 +156,13 @@ describe('TimelineRow', () => {
     expect(screen.getByText('No events match the spell / timeline selection.')).toBeTruthy();
     await rerender({ ...input, timeline: { ...timeline, isComplete: false } });
     expect(screen.getByText('Partial timeline — event limit reached')).toBeTruthy();
-    await rerender({ ...input, timeline: undefined, error: 'Rate limited' });
-    expect(screen.getByText('Rate limited')).toBeTruthy();
+    await rerender({
+      ...input,
+      timeline: undefined,
+      error: 'API Error: 429 Too Many Requests - {"traceId":"private"}'
+    });
+    expect(screen.getByText('Too Many Requests')).toBeInTheDocument();
+    expect(screen.queryByText(/traceId/)).not.toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(input.onload).toHaveBeenCalledWith(input.report);
   });

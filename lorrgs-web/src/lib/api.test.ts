@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildApiUrl,
   getReportTimeline,
+  getBossTimeline,
   getSpecRankings,
   normalizeApiCollection,
   normalizeApiPayload
@@ -11,6 +12,17 @@ import { rows, response } from './testing/timelineFixtures';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('api utilities', () => {
+  it('requests the selected fight boss reference from the API without browser caching', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ phases: [], events: [] }) });
+    vi.stubGlobal('fetch', fetch);
+    await getBossTimeline(rows[0].report, 'anniversary');
+    await getBossTimeline(rows[0].report, 'anniversary');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toContain('fightId=1&edition=anniversary');
+    expect(fetch.mock.calls[0][0]).toContain('/timeline/boss?');
+  });
   it('uses the API for each timeline request rather than retaining responses in a browser cache', async () => {
     const report = rows[0].report;
     const timeline = response(report);

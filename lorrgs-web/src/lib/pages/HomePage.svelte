@@ -8,10 +8,11 @@
     type WowRole,
     type WowSpec
   } from '../api';
-  import { getVersionIconUrl } from '../selectionIcons';
+  import { getVersionIconUrl, getZoneIconUrl } from '../selectionIcons';
   import EditionSelector from '../components/EditionSelector.svelte';
   import RaidBossSelectors from '../components/RaidBossSelectors.svelte';
   import RankingsList from '../components/RankingsList.svelte';
+  import BossIcon from '../components/BossIcon.svelte';
   import { getBlizzardClassColor } from '../classColors';
   import { getClassIconUrl, getSpecIconUrl } from '../wowAssets';
   import {
@@ -56,6 +57,14 @@
   }
   $: selectedRaidOption = raids.find((raid) => raid.slug === selectedRaid);
   $: bosses = getRaidBossOptions(selectedRaidOption);
+  $: bossOptions = bosses.map((boss) => {
+    const metadata = worldData.bosses?.find((entry) => entry.nameSlug === boss.slug);
+    return {
+      ...boss,
+      iconName: metadata?.icon
+    };
+  });
+  $: selectedBossIconName = bossOptions.find((boss) => boss.slug === selectedBoss)?.iconName;
 
   $: if (selectedRaid && !raids.some((raid) => raid.slug === selectedRaid)) {
     selectedRaid = '';
@@ -87,6 +96,9 @@
   $: selectedClassMeta = selectedSpecMeta ? getSpecClass(selectedSpecMeta) : null;
   $: selectedBossMeta = bosses.find((boss) => boss.slug === selectedBoss);
   $: selectedWorldBoss = (worldData.bosses || []).find((boss) => boss.nameSlug === selectedBoss);
+  $: selectedWorldZone = (worldData.zones || []).find(
+    (zone) => zone.id === selectedRaidOption?.zoneId || zone.slug === selectedRaid
+  );
   $: selectedEditionSlug = getApiEditionSlug(selectedVersion);
   $: supportsDifficulty = selectedVersion === 'Retail' || selectedVersion === 'Mists of Pandaria';
   $: selectedMetric = selectedSpecMeta ? resolveMetricForSpec(selectedSpecMeta) : 'dps';
@@ -326,26 +338,30 @@
     <div class="selection-collapsed" style="--class-accent: {getSpecClassColor(selectedSpecMeta)}">
       <p class="label">Current Selection</p>
       <div class="selection-overview">
-        <div class="spec-media selection-spec-media">
-          <img
-            class="spec-icon"
-            src={getSpecIconUrl(getSpecClassSlug(selectedSpecMeta), selectedSpecMeta.nameSlug)}
-            alt={selectedSpecMeta.fullName}
-            loading="lazy"
-          />
-          <img
-            class="class-icon"
-            src={getClassIconUrl(getSpecClassSlug(selectedSpecMeta))}
-            alt={selectedClassMeta?.name || 'Class'}
-            loading="lazy"
-          />
-        </div>
         <div>
           <p class="value">
-            {selectedVersion} / {selectedRaidOption?.name || selectedRaid} / {selectedBossMeta?.name ||
-              selectedBoss}
+            {selectedVersion} / {selectedRaidOption?.name || selectedRaid}
           </p>
-          <p class="value spec-value">{selectedSpecMeta.fullName}</p>
+          <h2 class="selection-title">
+            <span class="spec-media selection-spec-media">
+              <img
+                class="spec-icon"
+                src={getSpecIconUrl(getSpecClassSlug(selectedSpecMeta), selectedSpecMeta.nameSlug)}
+                alt=""
+              />
+              <img
+                class="class-icon"
+                src={getClassIconUrl(getSpecClassSlug(selectedSpecMeta))}
+                alt={selectedClassMeta?.name || 'Class'}
+              />
+            </span>
+            <span class="spec-value">{selectedSpecMeta.fullName}</span>
+            <span class="versus">vs.</span>
+            <span class="selected-boss">
+              <BossIcon slug={selectedBoss} iconName={selectedBossIconName} size={38} />
+              {selectedBossMeta?.name || selectedBoss}
+            </span>
+          </h2>
         </div>
       </div>
       <button class="edit-selection" type="button" on:click={expandSelections}
@@ -366,7 +382,8 @@
     <div class="selector-section selector-controls">
       <RaidBossSelectors
         {raidPhaseGroups}
-        {bosses}
+        bosses={bossOptions}
+        raidIconUrl={selectedWorldZone?.icon ? getZoneIconUrl(selectedWorldZone.icon) : ''}
         bind:selectedRaid
         bind:selectedBoss
         raidLabel="Raid"
@@ -421,12 +438,7 @@
         <p><strong>Error:</strong> {rankingsError}</p>
       </div>
     {:else if rankings}
-      <RankingsList
-        {rankings}
-        specLabel={selectedSpecMeta?.fullName || ''}
-        bossLabel={selectedBossMeta?.name || ''}
-        edition={selectedEditionSlug}
-      />
+      <RankingsList {rankings} edition={selectedEditionSlug} bossIconName={selectedBossIconName} />
     {:else if selectedBoss && selectedSpec && lastRankingsRequestKey}
       <div class="no-data">No rankings found for this selection</div>
     {/if}
@@ -463,15 +475,16 @@
     margin: 0;
   }
   .comparison-open .selection-spec-media {
-    width: 34px;
-    height: 34px;
+    width: 40px;
+    height: 40px;
   }
   .comparison-open .selection-spec-media .spec-icon {
-    width: 32px;
-    height: 32px;
+    width: 38px;
+    height: 38px;
   }
   .comparison-open .selection-spec-media .class-icon {
-    display: none;
+    width: 20px;
+    height: 20px;
   }
   .comparison-open .edit-selection {
     margin: 0;
@@ -821,10 +834,33 @@
     font-weight: 600;
   }
 
-  .selection-collapsed .spec-value {
-    margin-top: 0.12rem;
+  .selection-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin: 0.5rem 0 0.25rem;
+    font-size: 1.4rem;
+    line-height: 1.3;
+    color: var(--summary-value);
+  }
+
+  .selection-title .spec-value {
     color: color-mix(in srgb, var(--class-accent, var(--summary-value)) 72%, #ffffff 28%);
   }
+
+  .versus {
+    color: var(--summary-label);
+    font-size: 1rem;
+    font-weight: 400;
+  }
+
+  .selected-boss {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
 
   .edit-selection {
     justify-self: start;

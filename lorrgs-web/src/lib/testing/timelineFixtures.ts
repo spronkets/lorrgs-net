@@ -1,4 +1,4 @@
-import type { RankingReport, ReportTimeline } from '../api';
+import type { BossTimeline, RankingReport, ReportTimeline } from '../api';
 
 export const rows = Array.from({ length: 5 }, (_, index) => ({
   rank: index + 1,
@@ -42,6 +42,22 @@ export function response(report: RankingReport): ReportTimeline {
     events: [
       { spellId: 31884, timestamp: 10000, duration: null, kind: 'cast' },
       { spellId: 31884, timestamp: 10000, duration: 20000, kind: 'buff' }
+    ]
+  };
+}
+
+export function bossResponse(report: RankingReport): BossTimeline {
+  return {
+    reportCode: report.reportId,
+    fightId: report.fights![0].fightId,
+    name: report.fights![0].name,
+    duration: 240000,
+    isComplete: true,
+    spells: [{ id: 123, name: 'Boss Strike', icon: 'spell_fire_fireball.jpg' }],
+    events: [{ spellId: 123, timestamp: 30000, duration: null, kind: 'cast' }],
+    phases: [
+      { id: 1, timestamp: 0 },
+      { id: 2, timestamp: 60000 }
     ]
   };
 }

@@ -11,9 +11,8 @@
   import RankingsTimeline from './RankingsTimeline.svelte';
 
   export let rankings: SpecRankingData | null = null;
-  export let specLabel = '';
-  export let bossLabel = '';
   export let edition = '';
+  export let bossIconName: string | undefined = undefined;
 
   let filters: RankingFilters = emptyFilters();
   let sort: RankingSort = 'rank';
@@ -33,35 +32,13 @@
       : 'N/A';
   }
 
-  function formatSlugLabel(value: string | null | undefined) {
-    return String(value || '')
-      .split('-')
-      .filter(Boolean)
-      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-      .join(' ');
-  }
-
   $: apiReports = Array.isArray(rankings?.reports) ? rankings.reports : ([] as RankingReport[]);
   $: filterError = getRankingFilterError(filters);
   $: visibleReports = selectRankingReports(apiReports, filters, sort);
   $: summary = summarizeRankingReports(visibleReports.map((entry) => entry.report));
-  $: resolvedSpecLabel = specLabel || formatSlugLabel(rankings?.specSlug);
-  $: resolvedBossLabel = bossLabel || formatSlugLabel(rankings?.bossSlug);
 </script>
 
 <div class="rankings-list">
-  <div class="rankings-header">
-    <div class="rankings-info">
-      <h3>{resolvedSpecLabel} <span>vs.</span> {resolvedBossLabel}</h3>
-      <p>{rankings?.difficulty} • Metric: {rankings?.metric}</p>
-      <p class="meta">
-        <span class="updated">
-          Updated: {rankings?.updated ? new Date(rankings.updated).toLocaleString() : 'N/A'}
-        </span>
-      </p>
-    </div>
-  </div>
-
   <section class="analytics" aria-label="Ranking analytics">
     <div class="analytics-filters">
       <fieldset class="filter-group">
@@ -125,6 +102,10 @@
     <RankingsTimeline
       reports={visibleReports}
       {edition}
+      bossSlug={rankings?.bossSlug ?? ''}
+      {bossIconName}
+      difficulty={rankings?.difficulty ?? ''}
+      specSlug={rankings?.specSlug ?? ''}
       classId={apiReports[0]?.players?.[0]?.classId ?? 0}
     />
   {/key}
@@ -172,9 +153,6 @@
   }
   .kill-time {
     width: 80px;
-  }
-  .rankings-info h3 span {
-    color: #82909c;
   }
   .analytics {
     padding: 0.6rem;
@@ -233,44 +211,6 @@
     }
   }
 
-  .rankings-header {
-    background: #ffffff;
-    border: 1px solid #c2d8e7;
-    border-radius: 0.5rem;
-    padding: 0.6rem 0.8rem;
-    margin-bottom: 0.5rem;
-    box-shadow: 0 8px 20px rgba(19, 49, 78, 0.08);
-  }
-
-  .rankings-info h3 {
-    margin: 0 0 0.5rem 0;
-    font-size: 1.3rem;
-  }
-
-  .rankings-info p {
-    margin: 0;
-    color: #547694;
-    font-size: 0.9rem;
-  }
-
-  .meta {
-    margin-top: 0.5rem !important;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-  }
-
-  .updated {
-    color: #6989a5;
-    font-size: 0.8rem;
-  }
-
-  :global(.theme-dark) .rankings-header {
-    background: #13263a;
-    border-color: #355472;
-    box-shadow: 0 8px 20px rgba(2, 10, 18, 0.35);
-  }
-
   :global(.theme-dark) .analytics {
     background: #13263a;
     border-color: #355472;
@@ -284,17 +224,5 @@
     border-color: #355472;
     color: #c9e4f8;
     color-scheme: dark;
-  }
-
-  :global(.theme-dark) .rankings-info h3 {
-    color: #e6f2ff;
-  }
-
-  :global(.theme-dark) .rankings-info p {
-    color: #9ec0da;
-  }
-
-  :global(.theme-dark) .updated {
-    color: #82a9c8;
   }
 </style>

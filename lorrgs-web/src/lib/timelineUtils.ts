@@ -132,18 +132,6 @@ export function eventLanes(events: TimelineEvent[]): { event: TimelineEvent; lan
   return events.map((event) => ({ event, lane: lanes.get(event.spellId)! }));
 }
 
-export function timelineNote(timeline: ReportTimeline, hidden: Set<number>): string {
-  const spells = new Map(timeline.spells.map((spell) => [spell.id, spell.name]));
-  return [
-    `${timeline.playerName} (${timelineTime(timeline.duration)})${timeline.isComplete ? '' : ' — INCOMPLETE'}`,
-    ...timeline.events
-      .filter((event) => event.kind === 'cast' && !hidden.has(event.spellId))
-      .map(
-        (event) => `${timelineTime(event.timestamp)} ${spells.get(event.spellId) ?? event.spellId}`
-      )
-  ].join('\n');
-}
-
 export function fightDuration(report: RankingReport, timeline?: ReportTimeline): number {
   return timeline?.duration || report.fights?.[0]?.duration || report.duration || 0;
 }

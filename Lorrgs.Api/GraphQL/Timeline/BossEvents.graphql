@@ -1,0 +1,16 @@
+query BossTimelineEvents(
+  $code: String!, $fightIds: [Int!], $startTime: Float!, $endTime: Float!
+) {
+  reportData {
+    report(code: $code) {
+      events(
+        fightIDs: $fightIds, startTime: $startTime, endTime: $endTime,
+        dataType: Casts, hostilityType: Enemies, limit: 10000,
+        useAbilityIDs: true, useActorIDs: true
+      ) {
+        data
+        nextPageTimestamp
+      }
+    }
+  }
+}

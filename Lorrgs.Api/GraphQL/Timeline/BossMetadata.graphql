@@ -1,0 +1,16 @@
+query BossTimelineMetadata($code: String!, $fightIds: [Int!]) {
+  reportData {
+    report(code: $code) {
+      fights(fightIDs: $fightIds) {
+        id
+        name
+        startTime
+        endTime
+        phaseTransitions { id startTime }
+      }
+      masterData {
+        abilities { gameID name icon }
+      }
+    }
+  }
+}

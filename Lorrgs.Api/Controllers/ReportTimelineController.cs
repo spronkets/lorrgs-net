@@ -19,9 +19,24 @@ public sealed class ReportTimelineController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status502BadGateway)]
     public async Task<IActionResult> Get(string reportCode, [FromQuery] int fightId,
         [FromQuery] int? sourceId, [FromQuery] string? playerName,
-        [FromQuery] string edition = "retail", CancellationToken cancellationToken = default)
+        [FromQuery] string edition = "retail", CancellationToken cancellationToken = default) =>
+        await Load(reportCode, fightId, sourceId, playerName, edition, false, cancellationToken);
+
+    /// <summary>Returns real enemy casts and observed phase transitions from a reference fight.</summary>
+    [HttpGet("boss")]
+    [ProducesResponseType<BossTimeline>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> GetBoss(string reportCode, [FromQuery] int fightId,
+        [FromQuery] string edition = "retail", CancellationToken cancellationToken = default) =>
+        await Load(reportCode, fightId, null, null, edition, true, cancellationToken);
+
+    private async Task<IActionResult> Load(string reportCode, int fightId, int? sourceId,
+        string? playerName, string edition, bool boss, CancellationToken cancellationToken)
     {
-        if (!IsValid(reportCode, fightId, sourceId, playerName, edition))
+        if (!IsValid(reportCode, fightId, sourceId, playerName, edition, boss))
         {
             logger.LogWarning("Invalid timeline request report={ReportCode} fight={FightId} edition={Edition}",
                 reportCode, fightId, edition);
@@ -29,6 +44,9 @@ public sealed class ReportTimelineController(
         }
         try
         {
+            if (boss)
+                return Ok(await service.LoadBossAsync(reportCode, fightId, edition, false, cancellationToken)
+                    ?? throw new InvalidOperationException("The boss timeline could not be loaded."));
             return Ok(await service.LoadAsync(reportCode, fightId, sourceId, playerName, edition, cancellationToken));
         }
         catch (KeyNotFoundException ex)
@@ -48,9 +66,9 @@ public sealed class ReportTimelineController(
         }
     }
 
-    private static bool IsValid(string reportCode, int fightId, int? sourceId, string? playerName, string edition) =>
+    private static bool IsValid(string reportCode, int fightId, int? sourceId, string? playerName, string edition, bool boss) =>
         !string.IsNullOrWhiteSpace(reportCode) && reportCode.Length <= 32 &&
         reportCode.All(char.IsAsciiLetterOrDigit) && fightId > 0 &&
-        (sourceId is > 0 || !string.IsNullOrWhiteSpace(playerName)) &&
+        (boss || sourceId is > 0 || !string.IsNullOrWhiteSpace(playerName)) &&
         new[] { "retail", "anniversary", "mistsofpandaria", "era" }.Contains(edition);
 }

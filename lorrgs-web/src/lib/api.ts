@@ -44,6 +44,8 @@ export type WorldDataSnapshot = {
   roles?: WowRole[];
   classes?: WowClass[];
   specs?: WowSpec[];
+  bosses?: { id: number; nameSlug: string; icon: string; raidId: number }[];
+  zones?: { id: number; slug: string; icon: string }[];
 };
 
 export type RankingCast = {
@@ -73,6 +75,8 @@ export type RankingPlayer = {
 };
 
 export type RankingFight = {
+  encounterId?: number;
+  phases?: { id: number; timestamp: number }[] | null;
   fightId: number;
   name: string;
   duration: number;
@@ -91,9 +95,11 @@ export type RankingReport = {
   fights?: RankingFight[];
   players?: RankingPlayer[];
   timeline?: ReportTimeline | null;
+  bossTimeline?: BossTimeline | null;
 };
 
 export type SpecRankingData = {
+  bossIconUrl?: string | null;
   specSlug: string;
   bossSlug: string;
   difficulty: string;
@@ -124,6 +130,31 @@ export type ReportTimeline = {
   spells: TimelineSpell[];
   events: TimelineEvent[];
 };
+export type BossTimeline = {
+  reportCode: string;
+  fightId: number;
+  name: string;
+  duration: number;
+  isComplete: boolean;
+  spells: TimelineSpell[];
+  events: TimelineEvent[];
+  phases: { id: number; timestamp: number }[];
+};
+
+export function getBossTimeline(
+  report: RankingReport,
+  edition: string,
+  signal?: AbortSignal
+): Promise<BossTimeline> {
+  const params = new URLSearchParams({
+    fightId: String(report.fights?.[0]?.fightId ?? 0),
+    edition
+  });
+  return get<BossTimeline>(
+    `/warcraftlogs/reports/${encodeURIComponent(report.reportId)}/timeline/boss?${params}`,
+    { signal }
+  );
+}
 
 function timelineEndpoint(report: RankingReport, edition: string): string {
   const player = report.players?.[0];

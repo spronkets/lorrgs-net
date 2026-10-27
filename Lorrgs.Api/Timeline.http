@@ -6,6 +6,9 @@ GET {{baseUrl}}/api/warcraftlogs/reports/REPLACE_REPORT/timeline?fightId=1&playe
 ### Known actor ID instead of a name
 GET {{baseUrl}}/api/warcraftlogs/reports/REPLACE_REPORT/timeline?fightId=1&sourceId=7&edition=retail
 
+### Real enemy casts and observed phase transitions for the reference fight
+GET {{baseUrl}}/api/warcraftlogs/reports/N8v2dBGMZX6wrfaA/timeline/boss?fightId=106&edition=anniversary
+
 ### Invalid identity is rejected without contacting Warcraft Logs (400)
 GET {{baseUrl}}/api/warcraftlogs/reports/invalid/timeline?fightId=0&edition=anniversary
 
