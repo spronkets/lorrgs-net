@@ -97,15 +97,16 @@
     : 'Normal';
   $: selectedZoneId = selectedRaidOption?.zoneId || selectedWorldBoss?.raidId || 0;
   $: selectedEncounterId = selectedBossMeta?.id || selectedWorldBoss?.id || 0;
-  $: selectedDifficultyId = selectedDifficulty === 'Mythic'
-    ? 5
-    : selectedDifficulty === 'Heroic'
-      ? 4
-      : selectedDifficulty === 'Normal'
-        ? 3
-        : selectedDifficulty === 'LFR'
-          ? 2
-          : 0;
+  $: selectedDifficultyId =
+    selectedDifficulty === 'Mythic'
+      ? 5
+      : selectedDifficulty === 'Heroic'
+        ? 4
+        : selectedDifficulty === 'Normal'
+          ? 3
+          : selectedDifficulty === 'LFR'
+            ? 2
+            : 0;
   $: specsByRole = (worldData.roles || [])
     .map((role) => ({
       role,
@@ -300,24 +301,26 @@
   }
 </script>
 
-<div class="home-page">
-  <div class="summary-grid">
-    <article class="summary-card">
-      <p class="label">Active Raids</p>
-      <p class="value">{raidCount}</p>
-      <p class="hint">Across {selectedVersion || 'selected timeline'} catalog</p>
-    </article>
-    <article class="summary-card">
-      <p class="label">Supported Bosses</p>
-      <p class="value">{activeBossCount}</p>
-      <p class="hint">Ready for ranking pulls</p>
-    </article>
-    <article class="summary-card">
-      <p class="label">Playable Specs</p>
-      <p class="value">{activeSpecs}</p>
-      <p class="hint">Edition-filtered specialization list</p>
-    </article>
-  </div>
+<div class="home-page" class:comparison-open={isSelectionCollapsed}>
+  {#if !isSelectionCollapsed}
+    <div class="summary-grid">
+      <article class="summary-card">
+        <p class="label">Active Raids</p>
+        <p class="value">{raidCount}</p>
+        <p class="hint">Across {selectedVersion || 'selected timeline'} catalog</p>
+      </article>
+      <article class="summary-card">
+        <p class="label">Supported Bosses</p>
+        <p class="value">{activeBossCount}</p>
+        <p class="hint">Ready for ranking pulls</p>
+      </article>
+      <article class="summary-card">
+        <p class="label">Playable Specs</p>
+        <p class="value">{activeSpecs}</p>
+        <p class="hint">Edition-filtered specialization list</p>
+      </article>
+    </div>
+  {/if}
 
   {#if isSelectionCollapsed && selectedSpecMeta && selectedBoss}
     <div class="selection-collapsed" style="--class-accent: {getSpecClassColor(selectedSpecMeta)}">
@@ -408,7 +411,6 @@
         </div>
       </div>
     {/each}
-
   {/if}
 
   {#if isSelectionCollapsed}
@@ -437,8 +439,44 @@
   .home-page {
     @include selectionTokens.apply-selection-tokens;
 
-    max-width: 1120px;
+    max-width: 1600px;
     margin: 0 auto;
+  }
+
+  .comparison-open .selection-collapsed {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+  }
+  .comparison-open .selection-collapsed > .label {
+    display: none;
+  }
+  .comparison-open .selection-collapsed .value {
+    font-size: 12px;
+    margin: 0;
+  }
+  .comparison-open .selection-collapsed .selection-overview {
+    flex: 1;
+    margin: 0;
+  }
+  .comparison-open .selection-spec-media {
+    width: 34px;
+    height: 34px;
+  }
+  .comparison-open .selection-spec-media .spec-icon {
+    width: 32px;
+    height: 32px;
+  }
+  .comparison-open .selection-spec-media .class-icon {
+    display: none;
+  }
+  .comparison-open .edit-selection {
+    margin: 0;
+    padding: 6px 10px;
+    font-size: 12px;
   }
 
   .summary-grid {
@@ -590,7 +628,11 @@
       color-mix(in srgb, var(--class-accent, var(--select-border)) 22%, var(--select-border));
     border-radius: var(--radius-md);
     background: var(--spec-bg);
-    color: color-mix(in srgb, var(--summary-value) 72%, var(--class-accent, var(--summary-value)) 28%);
+    color: color-mix(
+      in srgb,
+      var(--summary-value) 72%,
+      var(--class-accent, var(--summary-value)) 28%
+    );
     display: flex;
     align-items: center;
     gap: 0.65rem;
@@ -606,20 +648,31 @@
   }
 
   .spec-card:hover:not(.disabled) {
-    border-color: color-mix(in srgb, var(--class-accent, var(--select-hover-border)) 48%, var(--select-hover-border));
+    border-color: color-mix(
+      in srgb,
+      var(--class-accent, var(--select-hover-border)) 48%,
+      var(--select-hover-border)
+    );
     background: var(--spec-hover-bg);
     box-shadow: var(--spec-hover-ring);
     transform: translateY(-1px);
   }
 
   .spec-card.active {
-    border-color: color-mix(in srgb, var(--class-accent, var(--select-focus-border)) 72%, #ffffff 28%);
-    background: color-mix(in srgb, var(--class-accent, var(--select-hover-bg)) 12%, var(--spec-hover-bg));
+    border-color: color-mix(
+      in srgb,
+      var(--class-accent, var(--select-focus-border)) 72%,
+      #ffffff 28%
+    );
+    background: color-mix(
+      in srgb,
+      var(--class-accent, var(--select-hover-bg)) 12%,
+      var(--spec-hover-bg)
+    );
     box-shadow:
       0 0 0 1px color-mix(in srgb, var(--class-accent, var(--select-focus-border)) 42%, transparent),
       var(--select-focus-ring);
   }
-
 
   .spec-card.disabled {
     background: linear-gradient(160deg, var(--disabled-bg), var(--disabled-bg-alt));

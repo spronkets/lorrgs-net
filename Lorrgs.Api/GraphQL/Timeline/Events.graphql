@@ -1,0 +1,17 @@
+query TimelineEvents(
+  $code: String!, $fightIds: [Int!], $startTime: Float!, $endTime: Float!,
+  $filter: String!
+) {
+  reportData {
+    report(code: $code) {
+      events(
+        fightIDs: $fightIds, startTime: $startTime, endTime: $endTime,
+        dataType: All, filterExpression: $filter, limit: 10000, useAbilityIDs: true,
+        useActorIDs: true
+      ) {
+        data
+        nextPageTimestamp
+      }
+    }
+  }
+}

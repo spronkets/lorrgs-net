@@ -10,6 +10,14 @@ export default [
   js.configs.recommended,
   ...svelte.configs['flat/recommended'],
   {
+    files: ['**/*.svelte.ts'],
+    languageOptions: {
+      parser: tsParser,
+      globals: { ...globals.browser, $state: 'readonly' }
+    },
+    rules: { 'no-unused-vars': ['error', { args: 'none' }] }
+  },
+  {
     files: ['**/*.{js,mjs,cjs}'],
     languageOptions: {
       sourceType: 'module',

@@ -208,7 +208,19 @@ public class WorldDataService
             new RaidBoss { Id = 2522, Name = "The Primal Council", NameSlug = "primal-council", Icon = "inv_achievement_raiddragon_primialcouncil.jpg", RaidId = 26 },
             new RaidBoss { Id = 2524, Name = "Sennarth, the Cold Breath", NameSlug = "sennarth", Icon = "inv_achievement_raiddragon_sennarth.jpg", RaidId = 26 },
             new RaidBoss { Id = 2526, Name = "Dathea, Ascended", NameSlug = "dathea", Icon = "inv_achievement_raiddragon_dathea.jpg", RaidId = 26 },
-            new RaidBoss { Id = 2527, Name = "Raszageth the Storm-Eater", NameSlug = "raszageth", Icon = "inv_achievement_raiddragon_raszageth.jpg", RaidId = 26 }
+            new RaidBoss { Id = 2527, Name = "Raszageth the Storm-Eater", NameSlug = "raszageth", Icon = "inv_achievement_raiddragon_raszageth.jpg", RaidId = 26 },
+
+            // Midnight Season 2 uses WCL zone 53 for all three raid groups.
+            new RaidBoss { Id = 3470, Name = "Nek'zali the Soulcoiler", NameSlug = "nekzali-the-soulcoiler", Icon = "inv_121_raid_achievement_priestess.jpg", RaidId = 53 },
+            new RaidBoss { Id = 3445, Name = "Entombed Sentinels", NameSlug = "entombed-sentinels", Icon = "inv_121_raid_achievement_golems.jpg", RaidId = 53 },
+            new RaidBoss { Id = 3455, Name = "Vashnik the Malignant", NameSlug = "vashnik-the-malignant", Icon = "inv_121_raid_achievement_alchemist.jpg", RaidId = 53 },
+            new RaidBoss { Id = 3497, Name = "The Lost Explorers", NameSlug = "the-lost-explorers", Icon = "inv_121_raid_achievement_tortollans.jpg", RaidId = 53 },
+            new RaidBoss { Id = 3420, Name = "Sszorak", NameSlug = "sszorak", Icon = "inv_121_raid_achievement_brute.jpg", RaidId = 53 },
+            new RaidBoss { Id = 3421, Name = "The Twin Fangs", NameSlug = "the-twin-fangs", Icon = "inv_121_raid_achievement_twins.jpg", RaidId = 53 },
+            new RaidBoss { Id = 3429, Name = "The Coiled Altar", NameSlug = "the-coiled-altar", Icon = "inv_121_raid_achievement_zuljinmalacrass.jpg", RaidId = 53 },
+            new RaidBoss { Id = 3492, Name = "Ula'tek", NameSlug = "ulatek", Icon = "inv_121_raid_achievement_ulatek.jpg", RaidId = 53 },
+            new RaidBoss { Id = 3379, Name = "Nymrissa Wavecaller", NameSlug = "nymrissa-wavecaller", Icon = "achievement_boss_elitenagamale.jpg", RaidId = 53 },
+            new RaidBoss { Id = 3513, Name = "Kith'ix", NameSlug = "kithix", Icon = "8214194.jpg", RaidId = 53 }
         };
     }
 
@@ -221,8 +233,15 @@ public class WorldDataService
                 Id = 1,
                 Name = "The War Within - Season 1",
                 Slug = "tww-s1",
-                RaidIds = new int[] { /* TODO: populate from raid data */ },
                 StartDate = new DateTime(2024, 9, 10),
+                EndDate = null
+            },
+            new Season
+            {
+                Id = 2,
+                Name = "Midnight Season 2",
+                Slug = "midnight_s2",
+                RaidIds = [53],
                 EndDate = null
             }
         };
@@ -373,6 +392,14 @@ public class WorldDataService
                 Slug = "vault-of-the-incarnates",
                 Icon = "inv_achievement_raiddragon_raszageth",
                 BossIds = Bosses.Where(b => b.RaidId == 26).Select(b => b.Id).ToArray()
+            },
+            new RaidZone
+            {
+                Id = 53,
+                Name = "Midnight Season 2",
+                Slug = "midnight-season-2",
+                Icon = "8039569.jpg",
+                BossIds = Bosses.Where(b => b.RaidId == 53).Select(b => b.Id).ToArray()
             }
         };
     }

@@ -218,7 +218,7 @@ public class RotationAnalysisService(
     {
         var total = Math.Max(timeline.Count, 1);
         var grouped = timeline
-            .GroupBy(point => point.Ability)
+            .GroupBy(point => (point.Ability, point.SpellId))
             .Select(group =>
             {
                 var ordered = group.OrderBy(point => point.Timestamp).ToList();
@@ -242,7 +242,8 @@ public class RotationAnalysisService(
 
                 return new RotationAbilitySummary
                 {
-                    Ability = group.Key,
+                    Ability = group.Key.Ability,
+                    SpellId = group.Key.SpellId,
                     CastCount = group.Count(),
                     SharePercent = Math.Round((group.Count() * 100.0) / total, 2),
                     MedianIntervalSeconds = median
@@ -278,7 +279,10 @@ public class RotationAnalysisService(
 
         foreach (var item in eventsData.EnumerateArray())
         {
-            if (!item.TryGetProperty("abilityGameID", out _) || !item.TryGetProperty("timestamp", out var timestampElement))
+            if (!item.TryGetProperty("abilityGameID", out var abilityIdNode) ||
+                abilityIdNode.ValueKind != JsonValueKind.Number ||
+                !abilityIdNode.TryGetInt32(out var abilityId) ||
+                !item.TryGetProperty("timestamp", out var timestampElement))
             {
                 continue;
             }
@@ -290,13 +294,14 @@ public class RotationAnalysisService(
             }
             else
             {
-                ability = $"Spell:{item.GetProperty("abilityGameID").GetInt32()}";
+                ability = $"Spell:{abilityId}";
             }
 
             timeline.Add(new RotationEventPoint
             {
                 Timestamp = timestampElement.GetInt64(),
                 Ability = ability,
+                SpellId = abilityId,
                 EventType = item.TryGetProperty("type", out var typeNode) ? typeNode.GetString() : "cast"
             });
         }
@@ -369,7 +374,9 @@ public class RotationAnalysisService(
                 Name = fight.GetProperty("name").GetString() ?? "Unknown",
                 Start = fight.GetProperty("startTime").GetInt64(),
                 End = fight.GetProperty("endTime").GetInt64(),
-                Kill = fight.TryGetProperty("kill", out var killNode) && killNode.GetBoolean()
+                Kill = fight.TryGetProperty("kill", out var killNode) &&
+                    (killNode.ValueKind == JsonValueKind.True || killNode.ValueKind == JsonValueKind.False) &&
+                    killNode.GetBoolean()
             })
             .Where(fight => fight.End > fight.Start)
             .ToList();

@@ -70,7 +70,7 @@ public class Season
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
     public int[] RaidIds { get; set; } = [];
-    public DateTime StartDate { get; set; }
+    public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
 }
 

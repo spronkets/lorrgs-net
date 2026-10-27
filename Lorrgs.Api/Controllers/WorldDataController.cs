@@ -17,6 +17,7 @@ public class WorldDataController(
     private readonly ILogger<WorldDataController> _logger = logger;
     private readonly WorldDataService _worldDataService = WorldDataService.Instance;
     private readonly CacheService _cacheService = cacheService;
+    private const string CatalogCacheNamespace = "world-data-midnight-s2-v2";
 
     /// <summary>
     /// Get all WoW roles (Tank, Healer, Melee DPS, Ranged DPS)
@@ -184,14 +185,14 @@ public class WorldDataController(
     {
         _logger.LogInformation("Fetching all bosses");
 
-        var cached = await _cacheService.GetAsync<List<RaidBoss>>("world-data", "bosses");
+        var cached = await _cacheService.GetAsync<List<RaidBoss>>(CatalogCacheNamespace, "bosses");
         if (cached != null)
         {
             return Ok(new { bosses = cached });
         }
 
         var bosses = _worldDataService.Bosses.OrderBy(b => b.Name).ToList();
-        await _cacheService.SetAsync("world-data", "bosses", bosses);
+        await _cacheService.SetAsync(CatalogCacheNamespace, "bosses", bosses);
 
         return Ok(new { bosses });
     }
@@ -229,14 +230,14 @@ public class WorldDataController(
     {
         _logger.LogInformation("Fetching all zones");
 
-        var cached = await _cacheService.GetAsync<List<RaidZone>>("world-data", "zones");
+        var cached = await _cacheService.GetAsync<List<RaidZone>>(CatalogCacheNamespace, "zones");
         if (cached != null)
         {
             return Ok(new { zones = cached });
         }
 
         var zones = _worldDataService.Zones.OrderByDescending(z => z.Id).ToList();
-        await _cacheService.SetAsync("world-data", "zones", zones);
+        await _cacheService.SetAsync(CatalogCacheNamespace, "zones", zones);
 
         return Ok(new { zones });
     }
@@ -425,14 +426,14 @@ public class WorldDataController(
     {
         _logger.LogInformation("Fetching all seasons");
 
-        var cached = await _cacheService.GetAsync<List<Season>>("world-data", "seasons");
+        var cached = await _cacheService.GetAsync<List<Season>>(CatalogCacheNamespace, "seasons");
         if (cached != null)
         {
             return Ok(new { seasons = cached });
         }
 
         var seasons = _worldDataService.Seasons.OrderBy(s => s.StartDate).ToList();
-        await _cacheService.SetAsync("world-data", "seasons", seasons);
+        await _cacheService.SetAsync(CatalogCacheNamespace, "seasons", seasons);
 
         return Ok(new { seasons });
     }

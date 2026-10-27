@@ -1,0 +1,14 @@
+@baseUrl = http://localhost:5247
+
+### Replace the sample report code, fight and name with a visible ranking row.
+GET {{baseUrl}}/api/warcraftlogs/reports/REPLACE_REPORT/timeline?fightId=1&playerName=REPLACE_PLAYER&edition=anniversary
+
+### Known actor ID instead of a name
+GET {{baseUrl}}/api/warcraftlogs/reports/REPLACE_REPORT/timeline?fightId=1&sourceId=7&edition=retail
+
+### Invalid identity is rejected without contacting Warcraft Logs (400)
+GET {{baseUrl}}/api/warcraftlogs/reports/invalid/timeline?fightId=0&edition=anniversary
+
+### Initial rankings include each complete timeline already available in the API file cache.
+### Uncached timelines are omitted without requesting events from Warcraft Logs.
+GET {{baseUrl}}/api/rankings/spec/retribution-paladin/illidan-stormrage?edition=anniversary&difficulty=normal&metric=dps

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Lorrgs.Api.Models;
 using Lorrgs.Api.Services;
+using System.Net;
 using WclClient = Lorrgs.WarcraftLogs.WarcraftLogsClient;
 
 namespace Lorrgs.Api.Controllers;
@@ -74,6 +75,14 @@ public class WarcraftLogsController(
 
             return Ok(data);
         }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            _logger.LogWarning(ex, "WarcraftLogs rate limit hit while looking up report {ReportCode}", reportCode);
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                error = "Warcraft Logs rate limit reached. Please retry shortly."
+            });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to lookup report {ReportCode}", reportCode);
@@ -96,6 +105,14 @@ public class WarcraftLogsController(
         catch (InvalidOperationException ex)
         {
             return NotFound(new { error = ex.Message });
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            _logger.LogWarning(ex, "WarcraftLogs rate limit hit during rotation analysis for report {ReportCode}", request.ReportCode);
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                error = "Warcraft Logs rate limit reached. Please retry shortly."
+            });
         }
         catch (Exception ex)
         {

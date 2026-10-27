@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import * as API from '../api';
 
   let reportCode = '';
@@ -12,6 +13,162 @@
   let loadingAnalysis = false;
   let error = '';
   let analysis = null;
+  let resolvedSpellNames: Record<number, string> = {};
+
+  function parseSpellIdFromAbility(ability: unknown): number | null {
+    if (typeof ability !== 'string') {
+      return null;
+    }
+
+    const match = /^Spell:(\d+)$/.exec(ability.trim());
+    if (!match) {
+      return null;
+    }
+
+    const id = Number(match[1]);
+    return Number.isInteger(id) && id > 0 ? id : null;
+  }
+
+  function readSpellId(row: unknown): number | null {
+    if (row && typeof row === 'object') {
+      const spellIdValue = (row as { spellId?: unknown }).spellId;
+      if (typeof spellIdValue === 'number' && Number.isInteger(spellIdValue) && spellIdValue > 0) {
+        return spellIdValue;
+      }
+
+      const abilityValue = (row as { ability?: unknown }).ability;
+      return parseSpellIdFromAbility(abilityValue);
+    }
+
+    return null;
+  }
+
+  function formatAbilityLabel(ability: unknown): string {
+    if (typeof ability !== 'string') {
+      return 'Unknown';
+    }
+
+    const spellId = parseSpellIdFromAbility(ability);
+    if (!spellId) {
+      return ability;
+    }
+
+    const resolved = resolvedSpellNames[spellId];
+    return resolved ? `${resolved} (#${spellId})` : `Unknown Spell (#${spellId})`;
+  }
+
+  function formatAbilityRowLabel(row: unknown): string {
+    const spellId = readSpellId(row);
+    if (spellId) {
+      const resolved = resolvedSpellNames[spellId];
+      return resolved ? `${resolved} (#${spellId})` : `Unknown Spell (#${spellId})`;
+    }
+
+    const ability =
+      row && typeof row === 'object' && 'ability' in row
+        ? (row as { ability?: unknown }).ability
+        : 'Unknown';
+
+    return formatAbilityLabel(ability);
+  }
+
+  async function resolveSpellNamesFromAnalysis(): Promise<void> {
+    const rows = analysis?.abilitySummary;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      resolvedSpellNames = {};
+      return;
+    }
+
+    const spellIds = Array.from(
+      new Set(
+        rows.map((row) => readSpellId(row)).filter((id): id is number => typeof id === 'number')
+      )
+    );
+
+    if (spellIds.length === 0) {
+      resolvedSpellNames = {};
+      return;
+    }
+
+    const entries = await Promise.all(
+      spellIds.map(async (spellId) => {
+        try {
+          const spell = (await API.getSpell(spellId)) as { name?: string };
+          const name = typeof spell?.name === 'string' ? spell.name.trim() : '';
+          return [spellId, name || `Spell ${spellId}`] as const;
+        } catch {
+          return [spellId, `Spell ${spellId}`] as const;
+        }
+      })
+    );
+
+    resolvedSpellNames = Object.fromEntries(entries);
+  }
+
+  async function initializeFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const queryReportCode = String(params.get('reportCode') || '').trim();
+    const queryFightId = String(params.get('fightId') || '').trim();
+    const querySourceId = String(params.get('sourceId') || '').trim();
+    const queryPlayerName = String(params.get('playerName') || '').trim();
+    const queryPercentile = String(params.get('parsePercentile') || '').trim();
+    const queryItemLevel = String(params.get('itemLevel') || '').trim();
+    const shouldAutoAnalyze = String(params.get('autoAnalyze') || '').trim() === '1';
+
+    if (!queryReportCode) {
+      return;
+    }
+
+    reportCode = queryReportCode;
+
+    if (queryPercentile) {
+      parsePercentile = queryPercentile;
+    }
+
+    if (queryItemLevel) {
+      itemLevel = queryItemLevel;
+    }
+
+    await runLookup();
+
+    const hasFight = fights.some((fight) => String(fight.id) === queryFightId);
+    if (queryFightId && hasFight) {
+      selectedFightId = queryFightId;
+    }
+
+    const hasSource = players.some((player) => String(player.id) === querySourceId);
+    if (querySourceId && hasSource) {
+      selectedSourceId = querySourceId;
+    } else if (queryPlayerName) {
+      const matchingPlayers = players.filter(
+        (player) => player.name?.toLowerCase() === queryPlayerName.toLowerCase()
+      );
+      if (matchingPlayers.length === 1) {
+        selectedSourceId = String(matchingPlayers[0].id);
+      } else {
+        selectedSourceId = '';
+        error = `Could not uniquely resolve ${queryPlayerName} in this report. Select the player manually.`;
+        console.warn('Rotation player lookup did not resolve a unique actor', {
+          reportCode: queryReportCode,
+          playerName: queryPlayerName,
+          matchCount: matchingPlayers.length
+        });
+        return;
+      }
+    } else if (querySourceId && !hasSource) {
+      selectedSourceId = '';
+      error = 'The linked player was not found in this report. Select the player manually.';
+      console.warn('Rotation source ID was not found in report', {
+        reportCode: queryReportCode,
+        sourceId: querySourceId
+      });
+      return;
+    }
+
+    if (shouldAutoAnalyze && selectedSourceId) {
+      await runAnalysis();
+    }
+  }
 
   async function runLookup() {
     if (!reportCode.trim()) {
@@ -51,6 +208,7 @@
 
     loadingAnalysis = true;
     error = '';
+    resolvedSpellNames = {};
 
     try {
       analysis = await API.analyzeRotation({
@@ -61,9 +219,11 @@
         itemLevel: itemLevel ? Number(itemLevel) : null,
         eventLimit: 5000
       });
+      await resolveSpellNamesFromAnalysis();
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to analyze rotation';
       analysis = null;
+      resolvedSpellNames = {};
     } finally {
       loadingAnalysis = false;
     }
@@ -71,6 +231,10 @@
 
   $: fights = lookup?.reportData?.report?.fights || [];
   $: players = lookup?.reportData?.report?.masterData?.actors || [];
+
+  onMount(() => {
+    void initializeFromQuery();
+  });
 </script>
 
 <div class="rotation-page">
@@ -150,7 +314,7 @@
         </div>
         {#each analysis.abilitySummary || [] as row, rowIdx (`${row.ability}-${rowIdx}`)}
           <div class="row">
-            <span>{row.ability}</span>
+            <span>{formatAbilityRowLabel(row)}</span>
             <span>{row.castCount}</span>
             <span>{row.sharePercent}%</span>
             <span

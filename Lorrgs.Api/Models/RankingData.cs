@@ -43,6 +43,9 @@ public class RankingReport
     public DateTime StartTime { get; set; }
     public List<RankingFight> Fights { get; set; } = new();
     public List<RankingPlayer> Players { get; set; } = new();
+    /// <summary>A complete timeline available in the API's unexpired file cache.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ReportTimeline? Timeline { get; set; }
 }
 
 /// <summary>
@@ -165,4 +168,3 @@ public static class RankingHelpers
             return $"{remainingSeconds}s";
     }
 }
-

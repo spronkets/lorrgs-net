@@ -252,16 +252,16 @@
     background: var(--header-bg);
     border-bottom: 1px solid var(--header-line);
     backdrop-filter: blur(8px);
-    padding: 1.5rem 2rem 1.2rem;
+    padding: 0.6rem 1.25rem;
     position: sticky;
     top: 0;
     z-index: 10;
   }
 
   .header-content {
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
-    margin-bottom: 1rem;
+    margin-bottom: 0.4rem;
   }
 
   .brand-toggle {
@@ -269,7 +269,7 @@
     padding: 0;
     border: none;
     background: transparent;
-    font-size: clamp(1.7rem, 2.5vw, 2.35rem);
+    font-size: 1.25rem;
     font-weight: 700;
     color: var(--title-color);
     font-family: inherit;
@@ -298,9 +298,9 @@
   }
 
   .header-content p {
-    margin: 0.5rem 0 0 0;
+    margin: 0.15rem 0 0 0;
     color: var(--subtitle-color);
-    font-size: 0.95rem;
+    font-size: 0.75rem;
   }
 
   .header-content p a {
@@ -363,10 +363,10 @@
 
   .app-main {
     flex: 1;
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
     width: 100%;
-    padding: 1.5rem 2rem 2.5rem;
+    padding: 0.75rem 1.25rem 1.5rem;
   }
 
   .error-banner {

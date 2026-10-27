@@ -11,10 +11,6 @@ builder.Configuration
 
 builder.Services.AddOptions<WclOptions>()
     .Bind(builder.Configuration.GetSection(WclOptions.SectionName))
-    .Configure<IOptions<CacheOptions>>((wcl, cache) =>
-    {
-        wcl.GraphQlCacheTtlSeconds = Math.Max(60, cache.Value.DefaultTtlSeconds);
-    })
     .ValidateOnStart();
 
 builder.Services.AddOptions<RaidCatalogOptions>()
@@ -28,6 +24,7 @@ builder.Services.AddOptions<CacheOptions>()
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<Lorrgs.Api.Services.CacheService>();
 builder.Services.AddScoped<Lorrgs.Api.Services.RotationAnalysisService>();
+builder.Services.AddScoped<Lorrgs.Api.Services.IReportTimelineService, Lorrgs.Api.Services.ReportTimelineService>();
 builder.Services.AddHostedService<Lorrgs.Api.Services.CacheCleanupBackgroundService>();
 
 // HTTP client for WarcraftLogs API
@@ -56,6 +53,22 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        if (context.Response.StatusCode >= StatusCodes.Status400BadRequest)
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            context.Response.Headers.Remove("Expires");
+        }
+
+        return Task.CompletedTask;
+    });
+
+    await next(context);
+});
 
 if (app.Environment.IsDevelopment())
 {

@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
+using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Security.Cryptography;
 using Lorrgs.WarcraftLogs.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Hosting;
@@ -25,8 +27,10 @@ public class WarcraftLogsClient(
     private const string TokenCacheKeyPrefix = "wcl:oauth_token:";
     private const string GraphQlCacheKeyPrefix = "wcl:gql:";
     private const int TokenRefreshBufferSeconds = 60;
+    private const int GraphQlMaxAttempts = 3;
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> GraphQlCacheKeyLocks = new(StringComparer.Ordinal);
 
-    public async Task<string> GetClientTokenAsync(string authUrl)
+    public async Task<string> GetClientTokenAsync(string authUrl, CancellationToken cancellationToken = default)
     {
         var tokenCacheKey = BuildTokenCacheKey(authUrl);
 
@@ -37,10 +41,10 @@ public class WarcraftLogsClient(
         }
 
         _logger.LogInformation("Requesting new WarcraftLogs OAuth token");
-        return await RequestNewTokenAsync(authUrl, tokenCacheKey);
+        return await RequestNewTokenAsync(authUrl, tokenCacheKey, cancellationToken);
     }
 
-    private async Task<string> RequestNewTokenAsync(string authUrl, string tokenCacheKey)
+    private async Task<string> RequestNewTokenAsync(string authUrl, string tokenCacheKey, CancellationToken cancellationToken)
     {
         if (!_options.IsConfigured)
         {
@@ -59,10 +63,9 @@ public class WarcraftLogsClient(
             ])
         };
 
-        var response = await _httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
+        using var response = await SendGraphQlWithRetryAsync(request, cancellationToken);
 
-        var content = await response.Content.ReadAsStringAsync();
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
         using var doc = JsonDocument.Parse(content);
         var root = doc.RootElement;
 
@@ -92,23 +95,68 @@ public class WarcraftLogsClient(
         string query,
         object? variables = null,
         string? edition = null,
-        bool bypassCache = false)
+        bool bypassCache = false,
+        CancellationToken cancellationToken = default)
     {
         var endpoint = _options.ResolveEndpoint(edition);
+
         var graphQlCacheKey = BuildGraphQlCacheKey(endpoint.BaseUrl, query, variables);
         var graphQlCacheDuration = TimeSpan.FromSeconds(Math.Max(60, _options.GraphQlCacheTtlSeconds));
+        var cacheLock = GraphQlCacheKeyLocks.GetOrAdd(graphQlCacheKey, static _ => new SemaphoreSlim(1, 1));
+        await cacheLock.WaitAsync(cancellationToken);
 
-        if (!bypassCache)
+        try
         {
-            var cachedDataJson = await TryReadGraphQlCacheAsync(graphQlCacheKey, graphQlCacheDuration);
+            var cachedDataJson = bypassCache
+                ? null
+                : await TryReadGraphQlCacheAsync(graphQlCacheKey, graphQlCacheDuration);
             if (!string.IsNullOrWhiteSpace(cachedDataJson))
             {
                 using var cachedDoc = JsonDocument.Parse(cachedDataJson);
                 return cachedDoc.RootElement.Clone();
             }
-        }
 
-        var token = await GetClientTokenAsync(endpoint.AuthUrl);
+            cancellationToken.ThrowIfCancellationRequested();
+            var data = await ExecuteGraphQlRequestAsync(endpoint, query, variables, cancellationToken);
+            await WriteGraphQlCacheAsync(graphQlCacheKey, data.GetRawText());
+            return data;
+        }
+        finally
+        {
+            cacheLock.Release();
+        }
+    }
+
+    public async Task<JsonElement?> TryQueryGraphQLFromCacheAsync(
+        string query, object? variables = null, string? edition = null,
+        CancellationToken cancellationToken = default)
+    {
+        var endpoint = _options.ResolveEndpoint(edition);
+        var key = BuildGraphQlCacheKey(endpoint.BaseUrl, query, variables);
+        var cacheLock = GraphQlCacheKeyLocks.GetOrAdd(key, static _ => new SemaphoreSlim(1, 1));
+        await cacheLock.WaitAsync(cancellationToken);
+        try
+        {
+            var json = await TryReadGraphQlCacheAsync(key,
+                TimeSpan.FromSeconds(Math.Max(60, _options.GraphQlCacheTtlSeconds)));
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.Clone();
+        }
+        finally
+        {
+            cacheLock.Release();
+        }
+    }
+
+    private async Task<JsonElement> ExecuteGraphQlRequestAsync(
+        WarcraftLogsEndpointOptions endpoint,
+        string query,
+        object? variables,
+        CancellationToken cancellationToken)
+    {
+        var token = await GetClientTokenAsync(endpoint.AuthUrl, cancellationToken);
 
         var request = new HttpRequestMessage(HttpMethod.Post, endpoint.BaseUrl);
         request.Headers.Add("Authorization", $"Bearer {token}");
@@ -122,10 +170,9 @@ public class WarcraftLogsClient(
         var jsonContent = JsonSerializer.Serialize(payload);
         request.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
+        using var response = await SendGraphQlWithRetryAsync(request, cancellationToken);
 
-        var content = await response.Content.ReadAsStringAsync();
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
         using var doc = JsonDocument.Parse(content);
 
         if (doc.RootElement.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Array)
@@ -137,18 +184,12 @@ public class WarcraftLogsClient(
                 : "Unknown GraphQL error";
 
             _logger.LogError("GraphQL error from WarcraftLogs: {Error}", errorMessage);
-            throw new InvalidOperationException($"GraphQL error: {errorMessage}");
+            throw new WarcraftLogsGraphQlException($"GraphQL error: {errorMessage}");
         }
 
         if (doc.RootElement.TryGetProperty("data", out var dataElement))
         {
-            var dataClone = dataElement.Clone();
-            if (!bypassCache)
-            {
-                await WriteGraphQlCacheAsync(graphQlCacheKey, dataClone.GetRawText());
-            }
-
-            return dataClone;
+            return dataElement.Clone();
         }
 
         throw new InvalidOperationException("No data property in WarcraftLogs response");
@@ -275,5 +316,154 @@ public class WarcraftLogsClient(
         {
             _logger.LogWarning(ex, "Failed to write WarcraftLogs GraphQL cache file {Path}", path);
         }
+    }
+
+    private async Task<HttpResponseMessage> SendGraphQlWithRetryAsync(HttpRequestMessage request, CancellationToken cancellationToken = default)
+    {
+        var rateLimitCacheKey = $"wcl:rate-limit:{request.RequestUri!.GetLeftPart(UriPartial.Authority)}:{_options.ClientId}";
+        for (var attempt = 1; attempt <= GraphQlMaxAttempts; attempt++)
+        {
+            if (_cache.TryGetValue(rateLimitCacheKey, out DateTimeOffset retryAt) && retryAt > DateTimeOffset.UtcNow)
+            {
+                _logger.LogWarning("WarcraftLogs requests paused until {RetryAt} after an upstream rate limit", retryAt);
+                throw new HttpRequestException(
+                    "Warcraft Logs rate limit reached. Please retry after the cooldown.",
+                    null,
+                    HttpStatusCode.TooManyRequests);
+            }
+
+            using var clonedRequest = await CloneHttpRequestAsync(request);
+            var response = await _httpClient.SendAsync(clonedRequest, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return response;
+            }
+
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                var cooldown = ResolveRateLimitCooldown(response);
+                var resumeAt = DateTimeOffset.UtcNow.Add(cooldown);
+                _cache.Set(rateLimitCacheKey, resumeAt, cooldown);
+                _logger.LogWarning("WarcraftLogs rate limit reached; pausing requests until {RetryAt}", resumeAt);
+                using (response)
+                {
+                    response.EnsureSuccessStatusCode();
+                }
+            }
+
+            if (!ShouldRetry(response.StatusCode) || attempt == GraphQlMaxAttempts)
+            {
+                using (response)
+                {
+                    response.EnsureSuccessStatusCode();
+                }
+            }
+
+            var delay = ResolveRetryDelay(response, attempt);
+            _logger.LogWarning(
+                "WarcraftLogs GraphQL request failed with status {StatusCode}; retrying in {DelayMs}ms (attempt {Attempt}/{MaxAttempts})",
+                (int)response.StatusCode,
+                (int)delay.TotalMilliseconds,
+                attempt,
+                GraphQlMaxAttempts);
+
+            response.Dispose();
+            await Task.Delay(delay, cancellationToken);
+        }
+
+        throw new InvalidOperationException("Failed to execute WarcraftLogs GraphQL request after retries.");
+    }
+
+    private static bool ShouldRetry(HttpStatusCode statusCode)
+    {
+        return statusCode == HttpStatusCode.RequestTimeout ||
+               statusCode == HttpStatusCode.BadGateway ||
+               statusCode == HttpStatusCode.ServiceUnavailable ||
+               statusCode == HttpStatusCode.GatewayTimeout;
+    }
+
+    private static TimeSpan ResolveRateLimitCooldown(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter?.Delta is TimeSpan delta && delta > TimeSpan.Zero)
+        {
+            return delta;
+        }
+
+        if (retryAfter?.Date is DateTimeOffset date && date > DateTimeOffset.UtcNow)
+        {
+            return date - DateTimeOffset.UtcNow;
+        }
+
+        return TimeSpan.FromMinutes(1);
+    }
+
+    private static TimeSpan ResolveRetryDelay(HttpResponseMessage response, int attempt)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter?.Delta is TimeSpan delta && delta > TimeSpan.Zero)
+        {
+            return CapRetryDelay(delta);
+        }
+
+        if (retryAfter?.Date is DateTimeOffset date)
+        {
+            var fromDate = date - DateTimeOffset.UtcNow;
+            if (fromDate > TimeSpan.Zero)
+            {
+                return CapRetryDelay(fromDate);
+            }
+        }
+
+        var baseDelayMs = 500;
+        var exponentialDelayMs = baseDelayMs * (int)Math.Pow(2, attempt - 1);
+        return TimeSpan.FromMilliseconds(Math.Min(exponentialDelayMs, 5000));
+    }
+
+    private static TimeSpan CapRetryDelay(TimeSpan delay)
+    {
+        if (delay < TimeSpan.FromMilliseconds(200))
+        {
+            return TimeSpan.FromMilliseconds(200);
+        }
+
+        if (delay > TimeSpan.FromSeconds(10))
+        {
+            return TimeSpan.FromSeconds(10);
+        }
+
+        return delay;
+    }
+
+    private static async Task<HttpRequestMessage> CloneHttpRequestAsync(HttpRequestMessage request)
+    {
+        var clone = new HttpRequestMessage(request.Method, request.RequestUri)
+        {
+            Version = request.Version,
+            VersionPolicy = request.VersionPolicy
+        };
+
+        foreach (var header in request.Headers)
+        {
+            clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+
+        if (request.Content is not null)
+        {
+            var memory = new MemoryStream();
+            await request.Content.CopyToAsync(memory);
+            memory.Position = 0;
+
+            var contentClone = new StreamContent(memory);
+            foreach (var contentHeader in request.Content.Headers)
+            {
+                contentClone.Headers.TryAddWithoutValidation(contentHeader.Key, contentHeader.Value);
+            }
+
+            clone.Content = contentClone;
+        }
+
+        return clone;
     }
 }

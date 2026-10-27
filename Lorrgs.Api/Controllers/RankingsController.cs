@@ -20,7 +20,8 @@ namespace Lorrgs.Api.Controllers;
 public class RankingsController(
     ILogger<RankingsController> logger,
     WclClient warcraftLogsClient,
-    IOptions<RaidCatalogOptions> raidCatalogOptions) : ControllerBase
+    IOptions<RaidCatalogOptions> raidCatalogOptions,
+    IReportTimelineService timelineService) : ControllerBase
 {
     private static readonly HashSet<string> AllowedCharacterRankingMetrics = new(StringComparer.Ordinal)
     {
@@ -73,7 +74,7 @@ public class RankingsController(
 
     /// <summary>
     /// Get full ranking data for a spec on a specific boss.
-    /// Includes all top reports with fight details and player information.
+    /// Includes all top reports with fight details, player information and complete API-cached timelines.
     /// </summary>
     [HttpGet("spec/{specSlug}/{bossSlug}")]
     public async Task<IActionResult> GetSpecRanking(
@@ -98,7 +99,8 @@ public class RankingsController(
         [FromQuery] string? hardModeLevel = null,
         [FromQuery] string? externalBuffs = null,
         [FromQuery] bool includeCombatantInfo = false,
-        [FromQuery] bool includeOtherPlayers = true)
+        [FromQuery] bool includeOtherPlayers = true,
+        CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Fetching spec ranking: {SpecSlug}/{BossSlug} ({Difficulty}/{Metric})",
             specSlug, bossSlug, difficulty, metric);
@@ -158,11 +160,28 @@ public class RankingsController(
                 return NotFound(new { error = "Ranking not found" });
             }
 
+            foreach (var report in ranking.Reports)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var fight = report.Fights.FirstOrDefault();
+                var player = report.Players.FirstOrDefault();
+                if (fight is null || fight.FightId <= 0 || player is null ||
+                    (player.PlayerId <= 0 && string.IsNullOrWhiteSpace(player.Name))) continue;
+                report.Timeline = await timelineService.TryLoadCachedAsync(report.ReportId,
+                    fight.FightId, player.PlayerId > 0 ? player.PlayerId : null, player.Name,
+                    edition ?? "retail", cancellationToken);
+            }
             return Ok(ranking);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
-            _logger.LogWarning(ex, "WarcraftLogs rate limit hit while fetching spec ranking");
+            _logger.LogWarning(ex,
+                "WarcraftLogs rate limit hit while fetching spec ranking {SpecSlug}/{BossSlug} edition={Edition} difficulty={Difficulty} metric={Metric}",
+                specSlug, bossSlug, edition, difficulty, metric);
             return StatusCode(StatusCodes.Status429TooManyRequests, new
             {
                 error = "Warcraft Logs rate limit reached. Please retry shortly."
@@ -170,7 +189,9 @@ public class RankingsController(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching spec ranking");
+            _logger.LogError(ex,
+                "Error fetching spec ranking {SpecSlug}/{BossSlug} edition={Edition} difficulty={Difficulty} metric={Metric}",
+                specSlug, bossSlug, edition, difficulty, metric);
             return StatusCode(500, new { error = "Failed to fetch ranking data" });
         }
     }
@@ -267,7 +288,9 @@ public class RankingsController(
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
-            _logger.LogWarning(ex, "WarcraftLogs rate limit hit while fetching spec ranking info");
+            _logger.LogWarning(ex,
+                "WarcraftLogs rate limit hit while fetching spec ranking info {SpecSlug}/{BossSlug} edition={Edition} difficulty={Difficulty} metric={Metric}",
+                specSlug, bossSlug, edition, difficulty, metric);
             return StatusCode(StatusCodes.Status429TooManyRequests, new
             {
                 error = "Warcraft Logs rate limit reached. Please retry shortly."
@@ -275,7 +298,9 @@ public class RankingsController(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching spec ranking info");
+            _logger.LogError(ex,
+                "Error fetching spec ranking info {SpecSlug}/{BossSlug} edition={Edition} difficulty={Difficulty} metric={Metric}",
+                specSlug, bossSlug, edition, difficulty, metric);
             return StatusCode(500, new { error = "Failed to fetch ranking info" });
         }
     }
@@ -308,7 +333,7 @@ public class RankingsController(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching comp ranking");
+            _logger.LogError(ex, "Error fetching comp ranking {BossSlug} limit={Limit}", bossSlug, limit);
             return StatusCode(500, new { error = "Failed to fetch comp ranking" });
         }
     }
@@ -658,12 +683,13 @@ public class RankingsController(
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
-            _logger.LogWarning(ex, "WarcraftLogs rate limit hit while fetching spec ranking from API");
             throw;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching spec ranking from WarcraftLogs API");
+            _logger.LogError(ex,
+                "Error fetching spec ranking from WarcraftLogs API for {SpecSlug}/{BossSlug} edition={Edition} difficulty={Difficulty} metric={Metric}",
+                queryContext.SpecSlug, queryContext.BossSlug, edition, difficultyValue, metric);
             return null;
         }
     }
@@ -705,6 +731,9 @@ public class RankingsController(
         var encounters = specRankingsResponse.WorldData?.Zone?.Encounters;
         if (encounters == null)
         {
+            _logger.LogWarning(
+                "WarcraftLogs returned no encounters for {SpecSlug}/{BossSlug} zone={ZoneId} edition={Edition}",
+                queryContext.SpecSlug, queryContext.BossSlug, queryContext.ZoneId, edition);
             return (null, null);
         }
 
@@ -785,14 +814,23 @@ public class RankingsController(
                     edition,
                     bypassWclCache);
             }
+            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to enrich report percentiles for ranking response");
+                _logger.LogWarning(ex,
+                    "Failed to enrich report percentiles for {SpecSlug}/{BossSlug} edition={Edition} metric={Metric} batchOffset={BatchOffset} batchCount={BatchCount}; continuing without this batch",
+                    queryContext.SpecSlug, queryContext.BossSlug, edition, metric, offset, chunk.Count);
                 continue;
             }
 
             if (!response.TryGetProperty("reportData", out var reportData) || reportData.ValueKind != JsonValueKind.Object)
             {
+                _logger.LogWarning(
+                    "WarcraftLogs percentile enrichment returned no reportData for {SpecSlug}/{BossSlug} edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}",
+                    queryContext.SpecSlug, queryContext.BossSlug, edition, offset, chunk.Count);
                 continue;
             }
 
@@ -1116,7 +1154,7 @@ public class RankingsController(
                 var alias = $"c{i}";
                 aliasToKey[alias] = item.Key;
                 charactersBlock.AppendLine(
-                    $"    {alias}: character(name: \"{EscapeGraphQlString(item.Name)}\", serverSlug: \"{EscapeGraphQlString(item.ServerSlug)}\", serverRegion: \"{EscapeGraphQlString(item.ServerRegion)}\") {{ name faction guild {{ name faction }} }}");
+                    $"    {alias}: character(name: \"{EscapeGraphQlString(item.Name)}\", serverSlug: \"{EscapeGraphQlString(item.ServerSlug)}\", serverRegion: \"{EscapeGraphQlString(item.ServerRegion)}\") {{ name faction {{ id }} guild {{ name faction {{ id }} }} }}");
             }
 
             var queryText = CharacterFactionEnrichmentQueryTemplate.Replace(
@@ -1128,14 +1166,30 @@ public class RankingsController(
             {
                 response = await _warcraftLogsClient.QueryGraphQLAsync(queryText, null, edition, bypassWclCache);
             }
+            catch (Lorrgs.WarcraftLogs.WarcraftLogsGraphQlException ex)
+            {
+                _logger.LogWarning(ex,
+                    "WarcraftLogs rejected faction enrichment edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}; stopping remaining faction batches and returning rankings with available metadata",
+                    edition, offset, chunk.Count);
+                return;
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to enrich ranking factions from WarcraftLogs characterData");
+                _logger.LogWarning(ex,
+                    "Failed to enrich ranking factions from WarcraftLogs characterData edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}; continuing without this batch",
+                    edition, offset, chunk.Count);
                 continue;
             }
 
             if (!response.TryGetProperty("characterData", out var characterData) || characterData.ValueKind != JsonValueKind.Object)
             {
+                _logger.LogWarning(
+                    "WarcraftLogs faction enrichment returned no characterData edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}",
+                    edition, offset, chunk.Count);
                 continue;
             }
 
@@ -1146,13 +1200,13 @@ public class RankingsController(
                     continue;
                 }
 
-                var playerFactionId = ParseFactionId(TryGetString(characterElement, "faction"));
+                var playerFactionId = ReadFactionId(characterElement);
                 int? guildFactionId = null;
                 string? guildName = null;
 
                 if (characterElement.TryGetProperty("guild", out var guildElement) && guildElement.ValueKind == JsonValueKind.Object)
                 {
-                    guildFactionId = ParseFactionId(TryGetString(guildElement, "faction"));
+                    guildFactionId = ReadFactionId(guildElement);
                     guildName = TryGetString(guildElement, "name");
                 }
 
@@ -1299,20 +1353,22 @@ public class RankingsController(
             .Replace("\"", "\\\"", StringComparison.Ordinal);
     }
 
-    private static int? ParseFactionId(string? value)
+    private static int? ReadFactionId(JsonElement element)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (!element.TryGetProperty("faction", out var faction))
         {
             return null;
         }
 
-        var trimmed = value.Trim();
-        if (int.TryParse(trimmed, out var parsed))
+        if (faction.ValueKind == JsonValueKind.Object)
         {
-            return parsed;
+            if (!faction.TryGetProperty("id", out faction))
+            {
+                return null;
+            }
         }
 
-        return null;
+        return int.TryParse(faction.ToString(), out var parsed) ? parsed : null;
     }
 
     private sealed record CharacterLookupRequest(

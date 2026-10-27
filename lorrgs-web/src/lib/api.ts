@@ -7,6 +7,7 @@ const API_TIMEOUT_MS = 30000;
 type ApiOptions = {
   method?: string;
   headers?: HeadersInit;
+  signal?: AbortSignal;
 };
 
 export type WowRole = {
@@ -89,6 +90,7 @@ export type RankingReport = {
   startTime: string;
   fights?: RankingFight[];
   players?: RankingPlayer[];
+  timeline?: ReportTimeline | null;
 };
 
 export type SpecRankingData = {
@@ -104,6 +106,45 @@ export type SpecRankingData = {
   isDirty: boolean;
   percentile: number | null;
 };
+
+export type TimelineSpell = { id: number; name: string; icon: string | null };
+export type TimelineEvent = {
+  spellId: number;
+  timestamp: number;
+  duration: number | null;
+  kind: 'cast' | 'buff' | 'death';
+};
+export type ReportTimeline = {
+  reportCode: string;
+  fightId: number;
+  sourceId: number;
+  playerName: string;
+  duration: number;
+  isComplete: boolean;
+  spells: TimelineSpell[];
+  events: TimelineEvent[];
+};
+
+function timelineEndpoint(report: RankingReport, edition: string): string {
+  const player = report.players?.[0];
+  const params = new URLSearchParams({
+    fightId: String(report.fights?.[0]?.fightId ?? 0),
+    edition
+  });
+  if (player?.playerId && player.playerId > 0) params.set('sourceId', String(player.playerId));
+  if (player?.name) params.set('playerName', player.name);
+  return `/warcraftlogs/reports/${encodeURIComponent(report.reportId)}/timeline?${params}`;
+}
+
+export async function getReportTimeline(
+  report: RankingReport,
+  edition: string,
+  signal?: AbortSignal
+): Promise<ReportTimeline> {
+  const endpoint = timelineEndpoint(report, edition);
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  return get<ReportTimeline>(endpoint, { signal });
+}
 
 export type SpecRankingQueryOptions = {
   zoneId?: number;
@@ -277,6 +318,8 @@ async function buildApiError(response: Response): Promise<Error> {
         detail = payload.error.trim();
       } else if (typeof payload.message === 'string' && payload.message.trim()) {
         detail = payload.message.trim();
+      } else if (typeof payload.detail === 'string' && payload.detail.trim()) {
+        detail = payload.detail.trim();
       }
     } else {
       const text = (await response.text()).trim();
@@ -295,6 +338,9 @@ async function buildApiError(response: Response): Promise<Error> {
 export async function get<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
   const url = buildApiUrl(endpoint);
   const controller = new AbortController();
+  const cancel = () => controller.abort();
+  options.signal?.addEventListener('abort', cancel, { once: true });
+  if (options.signal?.aborted) controller.abort();
   const timeoutHandle = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
   let response: Response;
@@ -302,17 +348,19 @@ export async function get<T = unknown>(endpoint: string, options: ApiOptions = {
     response = await fetch(url, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', ...options.headers },
-      signal: controller.signal,
-      ...options
+      ...options,
+      signal: controller.signal
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
+      if (options.signal?.aborted) throw error;
       throw new Error(`API Error: request timed out after ${API_TIMEOUT_MS}ms`);
     }
 
     throw error;
   } finally {
     clearTimeout(timeoutHandle);
+    options.signal?.removeEventListener('abort', cancel);
   }
 
   if (!response.ok) {
@@ -412,6 +460,10 @@ export async function getBoss(slug: string) {
 export async function getSpells() {
   const payload = await get('/worlddata/spells');
   return normalizeApiCollection(payload, 'spells');
+}
+
+export async function getSpell(id: string | number) {
+  return get(`/worlddata/spells/${id}`);
 }
 
 export async function getTrinkets() {
