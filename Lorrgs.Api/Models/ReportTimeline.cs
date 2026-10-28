@@ -3,8 +3,9 @@ namespace Lorrgs.Api.Models;
 /// <summary>A spell observed in a report; durations are measured events, not assumed cooldowns.</summary>
 public sealed record TimelineSpell(int Id, string Name, string? Icon);
 
-/// <summary>A cast, buff interval, or death relative to the selected fight start, in milliseconds.</summary>
-public sealed record TimelineEvent(int SpellId, double Timestamp, double? Duration, string Kind);
+/// <summary>A cast, buff interval, death, or inferred marker relative to fight start, in milliseconds.</summary>
+public sealed record TimelineEvent(int SpellId, double Timestamp, double? Duration, string Kind,
+    bool IsInferred = false);
 
 /// <summary>A single player's fight timeline and its explicit pagination completeness.</summary>
 public sealed record ReportTimeline(
@@ -12,8 +13,9 @@ public sealed record ReportTimeline(
     double Duration, bool IsComplete, IReadOnlyList<TimelineSpell> Spells,
     IReadOnlyList<TimelineEvent> Events);
 
-/// <summary>An observed encounter phase transition relative to fight start.</summary>
-public sealed record TimelinePhase(int Id, double Timestamp);
+/// <summary>An encounter phase or intermission; NotePhaseId preserves the observed addon timer anchor.</summary>
+public sealed record TimelinePhase(double Id, double Timestamp, bool IsIntermission = false,
+    int? NotePhaseId = null);
 
 /// <summary>Enemy casts and observed phases from one reference fight, not a universal boss schedule.</summary>
 public sealed record BossTimeline(

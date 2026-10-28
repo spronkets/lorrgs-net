@@ -37,22 +37,29 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Run .NET tests (if present)
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t test_projects < <(grep -RIl '<PackageReference Include="Microsoft.NET.Test.Sdk"' --include='*.csproj' . || true)
+      - name: Test Warcraft Logs library with coverage
+        run: >-
+          dotnet test Lorrgs.WarcraftLogs.Tests/Lorrgs.WarcraftLogs.Tests.csproj
+          --configuration Release --verbosity normal
+          -p:CollectCoverage=true
+          -p:CoverletOutput="$GITHUB_WORKSPACE/TestResults/warcraftlogs"
 
-          if [ ${#test_projects[@]} -eq 0 ]; then
-            echo "No .NET test projects found. Skipping .NET test step."
-            exit 0
-          fi
+      - name: Test API and require 80% line and branch coverage per assembly
+        run: >-
+          dotnet test Lorrgs.Api.Tests/Lorrgs.Api.Tests.csproj
+          --configuration Release --verbosity normal
+          -p:CollectCoverage=true
+          -p:MergeWith="$GITHUB_WORKSPACE/TestResults/warcraftlogs.json"
+          -p:CoverletOutput="$GITHUB_WORKSPACE/TestResults/coverage"
+          -p:Threshold=80
 
-          printf 'Found .NET test projects:\n%s\n' "${test_projects[*]}"
-          for project in "${test_projects[@]}"; do
-            echo "Running tests for ${project}"
-            dotnet test "${project}" --configuration Release --verbosity normal
-          done
+      - name: Upload .NET coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-coverage
+          path: TestResults/*.cobertura.xml
+          if-no-files-found: warn
 
   build-web:
     runs-on: ubuntu-latest

@@ -1,0 +1,554 @@
+using System.Reflection;
+using System.Text.Json;
+using System.Net;
+using Lorrgs.Api.Controllers;
+using Lorrgs.Api.Models;
+using Lorrgs.Api.Services;
+using Lorrgs.Tests.TestSupport;
+using Lorrgs.WarcraftLogs;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+
+namespace Lorrgs.Api.Tests;
+
+public sealed class RankingsControllerTests : IDisposable
+{
+    private readonly TestClientFixture fixture = new();
+    public void Dispose() => fixture.Dispose();
+
+    [Theory]
+    [InlineData("edition")]
+    [InlineData("zoneId")]
+    [InlineData("className")]
+    [InlineData("specName")]
+    [InlineData("difficulty")]
+    [InlineData("metric-empty")]
+    [InlineData("metric-invalid")]
+    [InlineData("page")]
+    [InlineData("partition")]
+    [InlineData("bracket")]
+    [InlineData("size")]
+    [InlineData("hardModeLevel")]
+    [InlineData("externalBuffs")]
+    public async Task RankingEndpointsRejectInvalidInputsBeforeCallingUpstream(string invalid)
+    {
+        using var handler = new QueueHandler();
+        var client = fixture.CreateClient(handler);
+        var controller = Controller(client, new RecordingTimelineService());
+        var edition = invalid == "edition" ? null : "retail";
+        var zoneId = invalid == "zoneId" ? 0 : 38;
+        var className = invalid == "className" ? " " : "Paladin";
+        var specName = invalid == "specName" ? "" : "Retribution";
+        var difficulty = invalid == "difficulty" ? "impossible" : "mythic";
+        var metric = invalid == "metric-empty" ? "" : invalid == "metric-invalid" ? "invalid" : "dps";
+        int? page = invalid == "page" ? 0 : null;
+        int? partition = invalid == "partition" ? -1 : null;
+        int? bracket = invalid == "bracket" ? 0 : null;
+        int? size = invalid == "size" ? -1 : null;
+        var hardMode = invalid == "hardModeLevel" ? "invalid" : null;
+        var buffs = invalid == "externalBuffs" ? "invalid" : null;
+
+        var full = await controller.GetSpecRanking("retribution-paladin", "eranog", edition,
+            difficulty: difficulty, metric: metric, zoneId: zoneId, className: className, specName: specName,
+            page: page, partition: partition, bracket: bracket, size: size, hardModeLevel: hardMode, externalBuffs: buffs);
+        var info = await controller.GetSpecRankingInfo("retribution-paladin", "eranog", edition,
+            difficulty: difficulty, metric: metric, zoneId: zoneId, className: className, specName: specName,
+            page: page, partition: partition, bracket: bracket, size: size, hardModeLevel: hardMode, externalBuffs: buffs);
+        var dirty = await controller.MarkSpecRankingDirty("retribution-paladin", "eranog", edition,
+            difficulty: difficulty, metric: metric, zoneId: zoneId, className: className, specName: specName,
+            page: page, partition: partition, bracket: bracket, size: size, hardModeLevel: hardMode, externalBuffs: buffs);
+
+        var fullError = JsonSerializer.Serialize(Assert.IsType<BadRequestObjectResult>(full).Value);
+        var infoError = JsonSerializer.Serialize(Assert.IsType<BadRequestObjectResult>(info).Value);
+        Assert.Equal(fullError, infoError);
+        Assert.Equal(fullError, JsonSerializer.Serialize(Assert.IsType<BadRequestObjectResult>(dirty).Value));
+        Assert.Contains(invalid.Split('-')[0], fullError, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, handler.GraphQlRequests);
+        Assert.Equal(0, handler.TokenRequests);
+    }
+
+    [Theory]
+    [InlineData("any", "Any")]
+    [InlineData("highest", "Highest")]
+    [InlineData("normal-mode", "NormalMode")]
+    [InlineData("normal", "NormalMode")]
+    [InlineData("level0", "Level0")]
+    [InlineData("0", "Level0")]
+    [InlineData("level1", "Level1")]
+    [InlineData("1", "Level1")]
+    [InlineData("level2", "Level2")]
+    [InlineData("2", "Level2")]
+    [InlineData("level3", "Level3")]
+    [InlineData("3", "Level3")]
+    [InlineData("level4", "Level4")]
+    [InlineData("4", "Level4")]
+    public async Task HardModeAliasesAreSentAsCanonicalGraphQlValues(string input, string expected)
+    {
+        using var handler = new QueueHandler(RankingsPayload());
+        var response = await Controller(fixture.CreateClient(handler), new RecordingTimelineService())
+            .GetSpecRankingInfo("retribution-paladin", "eranog", "retail", metric: "dps",
+                zoneId: 38, className: "Paladin", specName: "Retribution", hardModeLevel: input);
+        Assert.IsType<OkObjectResult>(response);
+        Assert.Equal(expected, Assert.Single(handler.Requests).GetProperty("variables").GetProperty("hardModeLevel").GetString());
+    }
+
+    [Theory]
+    [InlineData("any", "Any")]
+    [InlineData("require", "Require")]
+    [InlineData("with", "Require")]
+    [InlineData("include", "Require")]
+    [InlineData("with external buffs", "Require")]
+    [InlineData("exclude", "Exclude")]
+    [InlineData("without", "Exclude")]
+    [InlineData("no", "Exclude")]
+    [InlineData("without external buffs", "Exclude")]
+    public async Task ExternalBuffAliasesAreSentAsCanonicalGraphQlValues(string input, string expected)
+    {
+        using var handler = new QueueHandler(RankingsPayload());
+        var response = await Controller(fixture.CreateClient(handler), new RecordingTimelineService())
+            .GetSpecRankingInfo("retribution-paladin", "eranog", "retail", metric: "hps",
+                zoneId: 38, className: "Paladin", specName: "Holy", externalBuffs: input);
+        Assert.IsType<OkObjectResult>(response);
+        Assert.Equal(expected, Assert.Single(handler.Requests).GetProperty("variables").GetProperty("externalBuffs").GetString());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task MarkDirtyAcknowledgesStateWithoutFetchingUpstream(bool dirty)
+    {
+        using var handler = new QueueHandler();
+        var response = await Controller(fixture.CreateClient(handler), new RecordingTimelineService())
+            .MarkSpecRankingDirty("retribution-paladin", "eranog", "retail", metric: " DPS ",
+                zoneId: 38, className: "Paladin", specName: "Retribution", dirty: dirty);
+        var json = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(response).Value);
+        Assert.Equal("dps", json.GetProperty("metric").GetString());
+        Assert.Equal("mythic", json.GetProperty("difficulty").GetString());
+        Assert.Contains(dirty ? "refresh" : "clean", json.GetProperty("message").GetString());
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData(true, 429)]
+    [InlineData(false, 500)]
+    public async Task RankingEndpointsSurfaceRateLimitsAndUnexpectedUpstreamFailures(bool rateLimited, int status)
+    {
+        Exception failure = rateLimited
+            ? new HttpRequestException("Limited", null, HttpStatusCode.TooManyRequests)
+            : new JsonException("Invalid response");
+        using var handler = new QueueHandler { GraphQlFailure = failure };
+        var controller = Controller(fixture.CreateClient(handler), new RecordingTimelineService());
+        var full = await controller.GetSpecRanking("retribution-paladin", "eranog", "retail",
+            metric: "dps", zoneId: 38, className: "Paladin", specName: "Retribution");
+        var info = await controller.GetSpecRankingInfo("retribution-paladin", "eranog", "retail",
+            metric: "dps", zoneId: 38, className: "Paladin", specName: "Retribution");
+        Assert.Equal(status, Assert.IsType<ObjectResult>(full).StatusCode);
+        Assert.Equal(status, Assert.IsType<ObjectResult>(info).StatusCode);
+        Assert.Equal(2, handler.GraphQlRequests);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PercentileEnrichmentMatchesFightThenClassSpecAndClosestOutput(bool nested)
+    {
+        const string entries = """
+            [{"name":"Player","amount":100,"report":{"code":"abc","fightID":7}}]
+            """;
+        const string ranks = """
+            [null,{"fightID":8,"roles":{"dps":{"characters":[{"name":"Player","rankPercent":1}]}}},
+             {"fightID":7,"roles":null},{"fightID":7,"roles":{
+             "bad":null,"empty":{},"malformed":{"characters":{}},
+             "dps":{"characters":[null,{"name":"Other","rankPercent":1},{"name":"Player"},
+               {"name":"Player","rankPercent":5,"class":"Mage","spec":"Fire","amount":100},
+               {"name":"Player","rankPercent":80,"class":"Paladin","spec":"Retribution","amount":150},
+               {"name":"Player","rankPercent":99,"class":"Paladin","spec":"Retribution","amount":101},
+               {"name":"Player","rankPercent":60,"class":"Paladin","spec":"Retribution","amount":200}]}}}]
+            """;
+        var rankings = nested ? JsonSerializer.SerializeToElement(new { data = JsonSerializer.Deserialize<JsonElement>(ranks) })
+            : JsonSerializer.Deserialize<JsonElement>(ranks);
+        var enrichment = JsonSerializer.Serialize(new
+        {
+            data = new { reportData = new { r0 = new { title = "Enriched", rankings } } }
+        });
+        using var handler = new QueueHandler(RankingsPayload(entries), enrichment);
+        var response = await Controller(fixture.CreateClient(handler), new RecordingTimelineService())
+            .GetSpecRanking("retribution-paladin", "eranog", "retail", metric: "dps",
+                zoneId: 38, className: "Paladin", specName: "Retribution");
+        var report = Assert.Single(Assert.IsType<SpecRankingData>(Assert.IsType<OkObjectResult>(response).Value).Reports);
+        Assert.Equal("Enriched", report.Title);
+        Assert.Equal(99, report.Percentile);
+        Assert.Equal(99, Assert.Single(report.Fights).Percentile);
+        Assert.Equal(2, handler.GraphQlRequests);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"data\":[]}")]
+    [InlineData("[{\"fightID\":7,\"roles\":{\"dps\":{\"characters\":[{\"name\":\"Player\",\"rankPercent\":\"bad\"}]}}}]")]
+    public async Task UnresolvablePercentilesRemainUnknownRatherThanInventingZero(string ranks)
+    {
+        const string entries = """[{"name":"Player","report":{"code":"abc","fightID":7}}]""";
+        var enrichment = JsonSerializer.Serialize(new
+        {
+            data = new { reportData = new { r0 = new { rankings = JsonSerializer.Deserialize<JsonElement>(ranks) } } }
+        });
+        using var handler = new QueueHandler(RankingsPayload(entries), enrichment);
+        var response = await Controller(fixture.CreateClient(handler), new RecordingTimelineService())
+            .GetSpecRanking("retribution-paladin", "eranog", "retail", metric: "dps",
+                zoneId: 38, className: "Paladin", specName: "Retribution");
+        var report = Assert.Single(Assert.IsType<SpecRankingData>(Assert.IsType<OkObjectResult>(response).Value).Reports);
+        Assert.Null(report.Percentile);
+        Assert.Null(Assert.Single(report.Fights).Percentile);
+    }
+
+    [Theory]
+    [InlineData("{\"faction\":{\"id\":2},\"guilds\":[{\"name\":\"Guild\",\"faction\":{\"id\":1}}]}", 2, "Guild")]
+    [InlineData("{\"guilds\":[{\"name\":\"Guild\",\"faction\":\"1\"}]}", 1, "Guild")]
+    [InlineData("{\"faction\":2,\"guilds\":[]}", 2, null)]
+    [InlineData("{\"faction\":{},\"guilds\":[{},{}]}", null, null)]
+    [InlineData("{\"faction\":\"bad\",\"guilds\":[null]}", null, null)]
+    [InlineData("null", null, null)]
+    public async Task FactionEnrichmentUsesCharacterFactionBeforeSingleGuildFallback(
+        string character, int? faction, string? guild)
+    {
+        const string entries = """
+            [{"name":"Player","percentile":90,"regionName":"NA","serverName":"Quel'  Thalas",
+              "report":{"code":"abc","fightID":7}}]
+            """;
+        var enrichment = JsonSerializer.Serialize(new
+        {
+            data = new { characterData = new { c0 = JsonSerializer.Deserialize<JsonElement>(character) } }
+        });
+        using var handler = new QueueHandler(RankingsPayload(entries), enrichment);
+        var response = await Controller(fixture.CreateClient(handler), new RecordingTimelineService())
+            .GetSpecRanking("retribution-paladin", "eranog", "retail", metric: "dps",
+                zoneId: 38, className: "Paladin", specName: "Retribution");
+        var player = Assert.Single(Assert.Single(
+            Assert.IsType<SpecRankingData>(Assert.IsType<OkObjectResult>(response).Value).Reports).Players);
+        Assert.Equal(faction, player.FactionId);
+        Assert.Equal(guild, player.GuildName);
+        Assert.Equal("US", player.ServerRegion);
+        Assert.Equal("quel-thalas", player.ServerSlug);
+        var query = handler.Requests[1].GetProperty("query").GetString();
+        Assert.Contains("serverRegion: \"US\"", query);
+        Assert.Contains("serverSlug: \"quel-thalas\"", query);
+    }
+
+    [Theory]
+    [InlineData("region", "EU", "Realm", "realm")]
+    [InlineData("serverRegion", "na", "R\u00e9alm", "realm")]
+    public async Task FactionLookupDeduplicatesCharactersAcrossReportsAndNormalizesRealmNames(
+        string regionField, string region, string realm, string expectedRealm)
+    {
+        var entry = new Dictionary<string, object?>
+        {
+            ["name"] = "Player", ["percentile"] = 90, [regionField] = region,
+            ["realmName"] = realm, ["report"] = new { code = "abc", fightID = 7 }
+        };
+        var entries = JsonSerializer.Serialize(new[] { entry, entry });
+        using var handler = new QueueHandler(RankingsPayload(entries),
+            """{"data":{"characterData":{"c0":{"faction":{"id":1},"guilds":[{"name":"Guild"}]}}}}""");
+        var response = await Controller(fixture.CreateClient(handler), new RecordingTimelineService())
+            .GetSpecRanking("retribution-paladin", "eranog", "retail", metric: "dps",
+                zoneId: 38, className: "Paladin", specName: "Retribution");
+        var reports = Assert.IsType<SpecRankingData>(Assert.IsType<OkObjectResult>(response).Value).Reports;
+        Assert.Equal(2, reports.Count);
+        Assert.All(reports, report =>
+        {
+            var player = Assert.Single(report.Players);
+            Assert.Equal(1, player.FactionId);
+            Assert.Equal("Guild", player.GuildName);
+            Assert.Equal(expectedRealm, player.ServerSlug);
+        });
+        var query = handler.Requests[1].GetProperty("query").GetString();
+        Assert.Contains("c0:", query);
+        Assert.DoesNotContain("c1:", query);
+        Assert.Equal(2, handler.GraphQlRequests);
+    }
+
+    [Theory]
+    [InlineData("lfr", 2)]
+    [InlineData("normal", 3)]
+    [InlineData(" HEROIC ", 4)]
+    [InlineData("mythic", 5)]
+    [InlineData("7", 7)]
+    [InlineData("", 5)]
+    public async Task GetSpecRankingForwardsNormalizedOptionsAndDifficulty(string difficulty, int expectedDifficulty)
+    {
+        using var handler = new QueueHandler(RankingsPayload());
+        var timelines = new RecordingTimelineService();
+        var controller = Controller(fixture.CreateClient(handler), timelines);
+
+        var response = await controller.GetSpecRanking("retribution-paladin", "eranog", "retail",
+            difficulty: difficulty, metric: " DPS ", zoneId: 38, encounterId: 2898,
+            className: " Paladin ", specName: " Retribution ", page: 2, partition: 3, bracket: 4,
+            serverRegion: " EU ", serverSlug: " realm ", filter: " value ", hardModeLevel: "level-2",
+            externalBuffs: "without", includeOtherPlayers: false);
+
+        var data = Assert.IsType<SpecRankingData>(Assert.IsType<OkObjectResult>(response).Value);
+        Assert.Equal("dps", data.Metric);
+        Assert.Equal(2, data.Page);
+        Assert.Equal(0, data.TotalCount);
+        Assert.True(data.HasMorePages);
+        var variables = Assert.Single(handler.Requests).GetProperty("variables");
+        Assert.Equal(expectedDifficulty, variables.GetProperty("difficulty").GetInt32());
+        Assert.Equal("Paladin", variables.GetProperty("className").GetString());
+        Assert.Equal("Retribution", variables.GetProperty("specName").GetString());
+        Assert.Equal(2, variables.GetProperty("page").GetInt32());
+        Assert.Equal(3, variables.GetProperty("partition").GetInt32());
+        Assert.Equal(4, variables.GetProperty("bracket").GetInt32());
+        Assert.Equal("EU", variables.GetProperty("serverRegion").GetString());
+        Assert.Equal("realm", variables.GetProperty("serverSlug").GetString());
+        Assert.Equal("value", variables.GetProperty("filter").GetString());
+        Assert.Equal("Level2", variables.GetProperty("hardModeLevel").GetString());
+        Assert.Equal("Exclude", variables.GetProperty("externalBuffs").GetString());
+        Assert.True(variables.GetProperty("includeCombatantInfo").GetBoolean());
+        Assert.False(variables.GetProperty("includeOtherPlayers").GetBoolean());
+        Assert.Equal(1, timelines.PhaseLoads);
+    }
+
+    [Theory]
+    [InlineData("Invalid difficulty setting or size specified.", true)]
+    [InlineData(null, true)]
+    [InlineData("Invalid difficulty setting or size specified.", false)]
+    public async Task RankingRecoversFromRejectedSizeEmptySizeOrRejectedDifficulty(string? error, bool hasSize)
+    {
+        using var handler = new QueueHandler(RankingsPayload(error: error), RankingsPayload());
+        var controller = Controller(fixture.CreateClient(handler), new RecordingTimelineService());
+
+        var response = await controller.GetSpecRanking("retribution-paladin", "eranog", "retail",
+            metric: "dps", zoneId: 38, encounterId: 2898, className: "Paladin", specName: "Retribution",
+            size: hasSize ? 10 : null);
+
+        Assert.IsType<OkObjectResult>(response);
+        Assert.Equal(2, handler.GraphQlRequests);
+        var retry = handler.Requests[1].GetProperty("variables");
+        Assert.Equal(JsonValueKind.Null, retry.GetProperty(hasSize ? "size" : "difficulty").ValueKind);
+        if (hasSize) Assert.Equal(5, retry.GetProperty("difficulty").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("{\"data\":{}}")]
+    [InlineData("{\"data\":{\"worldData\":{\"zone\":{\"encounters\":[]}}}}")]
+    public async Task MissingEncounterDataProducesEmptyRankingWithoutMoreUpstreamCalls(string payload)
+    {
+        using var handler = new QueueHandler(payload);
+        var controller = Controller(fixture.CreateClient(handler), new RecordingTimelineService());
+        var response = await controller.GetSpecRanking("retribution-paladin", "eranog", "retail",
+            metric: "dps", zoneId: 38, className: "Paladin", specName: "Retribution");
+        var ranking = Assert.IsType<SpecRankingData>(Assert.IsType<OkObjectResult>(response).Value);
+        Assert.Empty(ranking.Reports);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task GetSpecRankingMapsVisibleReportsAndBundlesCachedTimelineWithObservedPhases()
+    {
+        const string entries = """
+            [{"hidden":true,"report":{"code":"hidden"}},
+             {"name":"Missing report"},
+             {"report":{"code":" "}},
+             {"name":"Player","amount":123.4,"percentile":99,"duration":60000,"startTime":1700000000000,
+              "guild":{"name":"Guild","faction":1},"report":{"code":"abc","fightID":7,"startTime":1700000000},
+              "allCharacters":[{"name":" "},{"name":"Player","class":"Paladin","spec":"Retribution"},
+                {"name":"Peer","class":"Warrior","spec":"Arms"}]}]
+            """;
+        using var handler = new QueueHandler(RankingsPayload(entries));
+        var timelines = new RecordingTimelineService
+        {
+            Player = new("abc", 7, 5, "Player", 60000, true, [], []),
+            Boss = new("abc", 7, "Eranog", 60000, true, [], [], [new(2, 30000)])
+        };
+        var controller = Controller(fixture.CreateClient(handler), timelines);
+
+        var response = await controller.GetSpecRanking("retribution-paladin", "eranog", "retail",
+            metric: "dps", zoneId: 38, encounterId: 2898, className: "Paladin", specName: "Retribution");
+
+        var ranking = Assert.IsType<SpecRankingData>(Assert.IsType<OkObjectResult>(response).Value);
+        var report = Assert.Single(ranking.Reports);
+        Assert.Equal("abc", report.ReportId);
+        Assert.Equal("Report abc", report.Title);
+        Assert.Equal(99, report.Percentile);
+        Assert.Equal(60000, report.Duration);
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1700000000000).UtcDateTime, report.StartTime);
+        var fight = Assert.Single(report.Fights);
+        Assert.True(fight.IsKill);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1700000000).UtcDateTime, fight.StartTime);
+        Assert.Equal(timelines.Boss.Phases, fight.Phases);
+        Assert.Same(timelines.Player, report.Timeline);
+        Assert.Same(timelines.Boss, report.BossTimeline);
+        Assert.Equal(2, report.Players.Count);
+        Assert.Equal("Player", report.Players[0].Name);
+        Assert.Equal(70, report.Players[0].SpecId);
+        Assert.Equal(2, report.Players[0].ClassId);
+        Assert.Equal("Guild", report.Players[0].GuildName);
+        Assert.Equal(1, report.Players[0].FactionId);
+        Assert.Equal(123.4, report.Players[0].Performance);
+        Assert.Equal("arms-warrior", report.Players[1].SpecSlug);
+        Assert.Equal(("abc", 7, (int?)null, "Player", "retail", (int?)70), timelines.PlayerRequest);
+        Assert.Equal(1, timelines.BossLoads);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task GetSpecRankingInfoOmitsReportDetailsAndDoesNotLoadTimelines()
+    {
+        const string entries = """[{"name":"Player","percentile":90,"report":{"code":"abc","fightID":1}}]""";
+        using var handler = new QueueHandler(RankingsPayload(entries));
+        var timelines = new RecordingTimelineService();
+        var controller = Controller(fixture.CreateClient(handler), timelines);
+        var response = await controller.GetSpecRankingInfo("retribution-paladin", "eranog", "retail",
+            metric: "dps", zoneId: 38, className: "Paladin", specName: "Retribution", difficultyId: 4);
+        var ranking = Assert.IsType<SpecRankingData>(Assert.IsType<OkObjectResult>(response).Value);
+        Assert.Empty(ranking.Reports);
+        Assert.Equal(0, timelines.PhaseLoads);
+        Assert.Equal(0, timelines.BossLoads);
+        Assert.Equal(4, handler.Requests[0].GetProperty("variables").GetProperty("difficulty").GetInt32());
+    }
+
+    [Fact]
+    public async Task CachedPrivateReportIsRemovedWithoutFailingRankingResponse()
+    {
+        const string entries = """[{"name":"Player","percentile":90,"report":{"code":"abc","fightID":1}}]""";
+        using var handler = new QueueHandler(RankingsPayload(entries));
+        var timelines = new RecordingTimelineService { CacheFailure = new WarcraftLogsReportPrivateException("private") };
+        var controller = Controller(fixture.CreateClient(handler), timelines);
+        var response = await controller.GetSpecRanking("retribution-paladin", "eranog", "retail",
+            metric: "dps", zoneId: 38, className: "Paladin", specName: "Retribution");
+        Assert.Empty(Assert.IsType<SpecRankingData>(Assert.IsType<OkObjectResult>(response).Value).Reports);
+        Assert.Equal(0, timelines.BossLoads);
+    }
+
+    [Fact]
+    public async Task PercentileEnrichmentKeepsHealthyPartialDataAndDropsOnlyMissingReports()
+    {
+        const string partial = """
+            {"data":{"reportData":{"r0":null,"r1":{"title":"Healthy title",
+            "fights":[{"id":2,"startTime":0,"endTime":10000,"phaseTransitions":[]}],"rankings":[]}}},
+            "errors":[{"message":"This report does not exist.","path":["reportData","r0"]}]}
+            """;
+        using var handler = new QueueHandler(partial);
+        var reports = new List<RankingReport> { Report("enrichmentMissing", 1), Report("enrichmentHealthy", 2) };
+
+        await Enrich(fixture.CreateClient(handler), reports);
+
+        Assert.Equal("Healthy title", Assert.Single(reports).Title);
+        Assert.Equal(1, handler.GraphQlRequests);
+    }
+
+    [Fact]
+    public async Task PercentileEnrichmentRetriesPathlessFailuresPerReportAndKeepsHealthyReports()
+    {
+        const string pathless = """{"data":null,"errors":[{"message":"You do not have permission to view this report."}]}""";
+        const string healthy = """
+            {"data":{"reportData":{"r1":{"title":"Recovered title",
+            "fights":[{"id":4,"startTime":0,"endTime":10000,"phaseTransitions":[]}],"rankings":[]}}}}
+            """;
+        using var handler = new QueueHandler(pathless, pathless, healthy);
+        var reports = new List<RankingReport> { Report("enrichmentPrivatePathless", 3), Report("enrichmentRecovery", 4) };
+
+        await Enrich(fixture.CreateClient(handler), reports);
+
+        Assert.Equal("Recovered title", Assert.Single(reports).Title);
+        Assert.Equal(3, handler.GraphQlRequests);
+    }
+
+    [Fact]
+    public async Task PercentileEnrichmentSurfacesUnknownErrorsWithoutPerReportRetries()
+    {
+        using var handler = new QueueHandler("""{"errors":[{"message":"Invalid query argument."}]}""");
+
+        await Assert.ThrowsAsync<WarcraftLogsGraphQlException>(() => Enrich(fixture.CreateClient(handler),
+            [Report("enrichmentBrokenQuery", 5)]));
+
+        Assert.Equal(1, handler.GraphQlRequests);
+    }
+
+    private static Task Enrich(WarcraftLogsClient client, List<RankingReport> reports)
+    {
+        var service = new ReportTimelineService(client, NullLogger<ReportTimelineService>.Instance);
+        var controller = new RankingsController(NullLogger<RankingsController>.Instance, client,
+            Options.Create(new RaidCatalogOptions()), service);
+        // Isolate enrichment without fetching the world/ranking catalog.
+        var contextType = typeof(RankingsController).GetNestedType("RankingQueryContext", BindingFlags.NonPublic)!;
+        var context = Activator.CreateInstance(contextType, 1, 3470, "Paladin", "Retribution",
+            "retribution-paladin", "nekzali-the-soulcoiler", "Nek'zali the Soulcoiler", 2, 70);
+        var method = typeof(RankingsController).GetMethod("PopulatePlayerPercentilesAsync",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        return (Task)method.Invoke(controller, [reports, context, "dps", "retail", false])!;
+    }
+
+    private static RankingReport Report(string code, int fightId) => new()
+    {
+        ReportId = code,
+        Title = code,
+        Fights = [new RankingFight { FightId = fightId, Name = "Encounter" }]
+    };
+
+    private static RankingsController Controller(WarcraftLogsClient client, IReportTimelineService timelines) =>
+        new(NullLogger<RankingsController>.Instance, client, Options.Create(new RaidCatalogOptions()), timelines);
+
+    private static string RankingsPayload(string entries = "[]", string? error = null) =>
+        JsonSerializer.Serialize(new
+        {
+            data = new
+            {
+                worldData = new
+                {
+                    zone = new
+                    {
+                        encounters = new[]
+                        {
+                            new
+                            {
+                                id = 2898, name = "Eranog",
+                                characterRankings = new
+                                {
+                                    page = 2, count = entries == "[]" ? 0 : 101, hasMorePages = true,
+                                    rankings = JsonSerializer.Deserialize<JsonElement>(entries), error
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+    private sealed class RecordingTimelineService : IReportTimelineService
+    {
+        public int PhaseLoads { get; private set; }
+        public int BossLoads { get; private set; }
+        public ReportTimeline? Player { get; init; }
+        public BossTimeline? Boss { get; init; }
+        public Exception? CacheFailure { get; init; }
+        public (string, int, int?, string?, string, int?)? PlayerRequest { get; private set; }
+
+        public Task<ReportTimeline> LoadAsync(string reportCode, int fightId, int? sourceId, string? playerName,
+            string edition, CancellationToken cancellationToken, int? specId = null) =>
+            throw new InvalidOperationException("Rankings must not fetch uncached player events.");
+
+        public Task<ReportTimeline?> TryLoadCachedAsync(string reportCode, int fightId, int? sourceId, string? playerName,
+            string edition, CancellationToken cancellationToken, int? specId = null)
+        {
+            PlayerRequest = (reportCode, fightId, sourceId, playerName, edition, specId);
+            return CacheFailure is null ? Task.FromResult(Player) : Task.FromException<ReportTimeline?>(CacheFailure);
+        }
+
+        public Task<BossTimeline?> LoadBossAsync(string reportCode, int fightId, string edition, bool cacheOnly,
+            CancellationToken cancellationToken)
+        {
+            Assert.True(cacheOnly);
+            BossLoads++;
+            return Task.FromResult(Boss);
+        }
+
+        public Task PopulateFightPhasesAsync(IReadOnlyList<RankingReport> reports, string edition,
+            CancellationToken cancellationToken)
+        {
+            PhaseLoads++;
+            return Task.CompletedTask;
+        }
+    }
+}

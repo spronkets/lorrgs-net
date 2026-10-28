@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { timelineErrorSummary } from '../timelineError';
   import TimelinePhases from './TimelinePhases.svelte';
   import BossIcon from './BossIcon.svelte';
@@ -15,6 +16,7 @@
     showCasts: boolean;
     bossSlug?: string;
     bossIconName?: string;
+    onloaded?: (_timeline: BossTimeline) => void;
   };
   let {
     report,
@@ -24,7 +26,8 @@
     showIcons,
     showCasts,
     bossSlug = '',
-    bossIconName
+    bossIconName,
+    onloaded
   }: Props = $props();
   let timeline = $state<BossTimeline | null>(null);
   let loading = $state(false);
@@ -39,10 +42,14 @@
     timeline = bundled;
     error = '';
     loading = bundled === null;
+    if (bundled) untrack(() => onloaded?.(bundled));
     if (!bundled) {
       getBossTimeline(current, currentEdition, controller.signal)
         .then((result) => {
-          if (!controller.signal.aborted) timeline = result;
+          if (!controller.signal.aborted) {
+            timeline = result;
+            onloaded?.(result);
+          }
         })
         .catch((failure) => {
           if (controller.signal.aborted) return;

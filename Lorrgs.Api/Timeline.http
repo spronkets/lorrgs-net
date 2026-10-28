@@ -3,14 +3,20 @@
 ### Replace the sample report code, fight and name with a visible ranking row.
 GET {{baseUrl}}/api/warcraftlogs/reports/REPLACE_REPORT/timeline?fightId=1&playerName=REPLACE_PLAYER&edition=anniversary
 
-### Known actor ID instead of a name
-GET {{baseUrl}}/api/warcraftlogs/reports/REPLACE_REPORT/timeline?fightId=1&sourceId=7&edition=retail
+### Known actor ID instead of a name; optional specId enables Retail specialization corrections.
+GET {{baseUrl}}/api/warcraftlogs/reports/REPLACE_REPORT/timeline?fightId=1&sourceId=7&edition=retail&specId=264
 
 ### Real enemy casts and observed phase transitions for the reference fight
 GET {{baseUrl}}/api/warcraftlogs/reports/N8v2dBGMZX6wrfaA/timeline/boss?fightId=106&edition=anniversary
 
 ### Invalid identity is rejected without contacting Warcraft Logs (400)
 GET {{baseUrl}}/api/warcraftlogs/reports/invalid/timeline?fightId=0&edition=anniversary
+
+### A public report timeline request for a private report returns ProblemDetails (403).
+GET {{baseUrl}}/api/warcraftlogs/reports/REPLACE_PRIVATE_REPORT/timeline?fightId=1&playerName=REPLACE_PLAYER&edition=retail
+
+### A deleted or nonexistent report timeline request returns ProblemDetails (404).
+GET {{baseUrl}}/api/warcraftlogs/reports/REPLACE_MISSING_REPORT/timeline?fightId=1&playerName=REPLACE_PLAYER&edition=retail
 
 ### Initial rankings include each complete timeline already available in the API file cache.
 ### Uncached timelines are omitted without requesting events from Warcraft Logs.

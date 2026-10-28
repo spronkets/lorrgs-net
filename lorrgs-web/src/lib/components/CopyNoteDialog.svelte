@@ -24,9 +24,15 @@
   const fight = $derived(report.fights?.find((fight) => fight.fightId === timeline.fightId));
   const hasPhases = $derived(
     (
+      (report.bossTimeline?.fightId === timeline.fightId ? report.bossTimeline.phases : null) ??
       fight?.phases ??
-      (report.bossTimeline?.fightId === timeline.fightId ? report.bossTimeline.phases : [])
-    ).some((phase) => phase.timestamp > 0)
+      []
+    ).some(
+      (phase) =>
+        phase.timestamp > 0 &&
+        !phase.isIntermission &&
+        Number.isInteger(phase.notePhaseId ?? phase.id)
+    )
   );
   const specId = $derived(
     report.players?.find((player) => player.specSlug === specSlug)?.specId ??
@@ -107,6 +113,8 @@
   {:else if dynamic}
     <p class="hint">
       Phase numbering must match the phase notifications used by your raid addon or boss mod.
+      Intermission markers are excluded; corrected phase labels retain their observed WCL timer
+      anchors.
     </p>
   {/if}
   {#if !timeline.isComplete}

@@ -76,7 +76,7 @@ export type RankingPlayer = {
 
 export type RankingFight = {
   encounterId?: number;
-  phases?: { id: number; timestamp: number }[] | null;
+  phases?: TimelinePhase[] | null;
   fightId: number;
   name: string;
   duration: number;
@@ -118,7 +118,14 @@ export type TimelineEvent = {
   spellId: number;
   timestamp: number;
   duration: number | null;
-  kind: 'cast' | 'buff' | 'death';
+  kind: 'cast' | 'buff' | 'death' | 'marker';
+  isInferred?: boolean;
+};
+export type TimelinePhase = {
+  id: number;
+  timestamp: number;
+  isIntermission?: boolean;
+  notePhaseId?: number | null;
 };
 export type ReportTimeline = {
   reportCode: string;
@@ -138,7 +145,7 @@ export type BossTimeline = {
   isComplete: boolean;
   spells: TimelineSpell[];
   events: TimelineEvent[];
-  phases: { id: number; timestamp: number }[];
+  phases: TimelinePhase[];
 };
 
 export function getBossTimeline(
@@ -164,6 +171,7 @@ function timelineEndpoint(report: RankingReport, edition: string): string {
   });
   if (player?.playerId && player.playerId > 0) params.set('sourceId', String(player.playerId));
   if (player?.name) params.set('playerName', player.name);
+  if (player?.specId && player.specId > 0) params.set('specId', String(player.specId));
   return `/warcraftlogs/reports/${encodeURIComponent(report.reportId)}/timeline?${params}`;
 }
 
@@ -343,7 +351,10 @@ async function buildApiError(response: Response): Promise<Error> {
   try {
     const contentType = response.headers.get('content-type') || '';
 
-    if (contentType.includes('application/json')) {
+    if (
+      contentType.includes('application/json') ||
+      contentType.includes('application/problem+json')
+    ) {
       const payload = (await response.json()) as Record<string, unknown>;
       if (typeof payload.error === 'string' && payload.error.trim()) {
         detail = payload.error.trim();

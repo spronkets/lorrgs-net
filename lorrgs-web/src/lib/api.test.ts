@@ -36,6 +36,7 @@ describe('api utilities', () => {
     );
     await getReportTimeline(report, 'retail');
     expect(fetch.mock.calls[2][0]).toContain('edition=retail');
+    expect(fetch.mock.calls[2][0]).toContain('specId=70');
   });
 
   it('retains cached timelines included in the initial rankings response without extra requests', async () => {
@@ -65,6 +66,22 @@ describe('api utilities', () => {
 
   it('builds URLs relative to the configured API base', () => {
     expect(buildApiUrl('/specs')).toMatch(/\/specs$/);
+  });
+
+  it('shows upstream report availability details from Problem Details responses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+        headers: new Headers({ 'Content-Type': 'application/problem+json' }),
+        json: async () => ({ detail: 'This Warcraft Logs report is private or inaccessible.' })
+      })
+    );
+    await expect(getReportTimeline(rows[0].report, 'retail')).rejects.toThrow(
+      'This Warcraft Logs report is private or inaccessible.'
+    );
   });
 
   it('normalizes object payloads into arrays for the UI', () => {

@@ -67,13 +67,22 @@ export function buildRaidNote(
     return { text: '', count: 0, error: 'Encounter ID is unavailable. Use MRT format instead.' };
   const bossPhases =
     report.bossTimeline?.fightId === timeline.fightId ? report.bossTimeline.phases : [];
-  const phases = [...(fight?.phases ?? bossPhases)]
-    .filter((phase) => phase.timestamp >= 0 && phase.timestamp <= timeline.duration && phase.id > 0)
+  const phases = [...(bossPhases.length ? bossPhases : (fight?.phases ?? []))]
+    .filter((phase) => !phase.isIntermission)
+    .map((phase) => ({ ...phase, id: phase.notePhaseId ?? phase.id }))
+    .filter(
+      (phase) =>
+        phase.timestamp >= 0 &&
+        phase.timestamp <= timeline.duration &&
+        Number.isInteger(phase.id) &&
+        phase.id > 0
+    )
     .sort((a, b) => a.timestamp - b.timestamp);
   const casts = timeline.events
     .filter(
       (event) =>
         event.kind === 'cast' &&
+        !event.isInferred &&
         event.spellId > 0 &&
         event.timestamp >= 0 &&
         event.timestamp <= timeline.duration &&

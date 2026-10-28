@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Net;
 using Microsoft.Extensions.Options;
+using Lorrgs.WarcraftLogs;
 using WclClient = Lorrgs.WarcraftLogs.WarcraftLogsClient;
 
 namespace Lorrgs.Api.Controllers;
@@ -165,18 +166,28 @@ public class RankingsController(
             ranking.BossIconUrl = !string.IsNullOrWhiteSpace(bossIcon)
                 ? $"https://wow.zamimg.com/images/wow/icons/medium/{bossIcon}"
                 : null;
-            foreach (var report in ranking.Reports)
+            foreach (var report in ranking.Reports.ToArray())
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var fight = report.Fights.FirstOrDefault();
                 var player = report.Players.FirstOrDefault();
                 if (fight is null || fight.FightId <= 0 || player is null ||
                     (player.PlayerId <= 0 && string.IsNullOrWhiteSpace(player.Name))) continue;
-                report.Timeline = await timelineService.TryLoadCachedAsync(report.ReportId,
-                    fight.FightId, player.PlayerId > 0 ? player.PlayerId : null, player.Name,
-                    edition ?? "retail", cancellationToken);
-                report.BossTimeline = await timelineService.LoadBossAsync(report.ReportId, fight.FightId,
-                    edition ?? "retail", true, cancellationToken);
+                try
+                {
+                    report.Timeline = await timelineService.TryLoadCachedAsync(report.ReportId,
+                        fight.FightId, player.PlayerId > 0 ? player.PlayerId : null, player.Name,
+                        edition ?? "retail", cancellationToken, player.SpecId);
+                    report.BossTimeline = await timelineService.LoadBossAsync(report.ReportId, fight.FightId,
+                        edition ?? "retail", true, cancellationToken);
+                    if (report.BossTimeline is { IsComplete: true } reference)
+                        fight.Phases = reference.Phases;
+                }
+                catch (Exception ex) when (ex is WarcraftLogsReportPrivateException or WarcraftLogsReportNotFoundException)
+                {
+                    _logger.LogWarning(ex, "Cached ranking timeline report unavailable report={ReportCode}", report.ReportId);
+                    ranking.Reports.Remove(report);
+                }
             }
             return Ok(ranking);
         }
@@ -692,12 +703,16 @@ public class RankingsController(
         {
             throw;
         }
+        catch (WarcraftLogsGraphQlException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex,
                 "Error fetching spec ranking from WarcraftLogs API for {SpecSlug}/{BossSlug} edition={Edition} difficulty={Difficulty} metric={Metric}",
                 queryContext.SpecSlug, queryContext.BossSlug, edition, difficultyValue, metric);
-            return null;
+            throw;
         }
     }
 
@@ -794,6 +809,14 @@ public class RankingsController(
 
         const int chunkSize = 10;
 
+        static string ReportSelection(string alias, RankingReport report)
+        {
+            var fightIds = string.Join(", ", report.Fights.Select(fight => fight.FightId).Distinct().Order());
+            return $"    {alias}: report(code: \"{report.ReportId}\") {{ code title " +
+                $"fights(fightIDs: [{fightIds}]) {{ id encounterID startTime endTime phaseTransitions {{ id startTime }} }} " +
+                "rankings(playerMetric: $playerMetric) }";
+        }
+
         for (var offset = 0; offset < unresolvedReports.Count; offset += chunkSize)
         {
             var chunk = unresolvedReports.Skip(offset).Take(chunkSize).ToList();
@@ -805,10 +828,7 @@ public class RankingsController(
                 var report = chunk[i];
                 var alias = $"r{i}";
                 aliasToReport[alias] = report;
-                var fightIds = string.Join(", ", report.Fights.Select(fight => fight.FightId).Distinct().Order());
-                reportsBlock.AppendLine($"    {alias}: report(code: \"{report.ReportId}\") {{ code title " +
-                    $"fights(fightIDs: [{fightIds}]) {{ id encounterID startTime endTime phaseTransitions {{ id startTime }} }} " +
-                    "rankings(playerMetric: $playerMetric) }");
+                reportsBlock.AppendLine(ReportSelection(alias, report));
             }
 
             var queryText = ReportRankingsEnrichmentQueryTemplate.Replace(
@@ -828,15 +848,64 @@ public class RankingsController(
             {
                 throw;
             }
+            catch (WarcraftLogsGraphQlException ex) when (ex.IsReportAccessFailure)
+            {
+                var aliasesKnown = ex.Errors.All(error =>
+                    error.ReportAlias is { } alias && aliasToReport.ContainsKey(alias));
+                if (aliasesKnown && ex.PartialData is { ValueKind: JsonValueKind.Object } partialData &&
+                    partialData.TryGetProperty("reportData", out var partialReports) &&
+                    partialReports.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var alias in ex.InaccessibleReportAliases)
+                    {
+                        _logger.LogWarning("Ranking enrichment report unavailable report={ReportCode}", aliasToReport[alias].ReportId);
+                        reports.Remove(aliasToReport[alias]);
+                    }
+                    response = partialData;
+                }
+                else
+                {
+                    // Without usable paths or partial data, isolate only this failed batch.
+                    var recoveredReports = new Dictionary<string, JsonElement>();
+                    foreach (var entry in aliasToReport)
+                    {
+                        var singleQuery = ReportRankingsEnrichmentQueryTemplate.Replace(
+                            "__REPORTS_BLOCK__", ReportSelection(entry.Key, entry.Value));
+                        try
+                        {
+                            var singleResponse = await _warcraftLogsClient.QueryGraphQLAsync(singleQuery,
+                                new { playerMetric = metricForReportRanking }, edition, bypassWclCache);
+                            if (singleResponse.ValueKind != JsonValueKind.Object ||
+                                !singleResponse.TryGetProperty("reportData", out var singleReportData) ||
+                                singleReportData.ValueKind != JsonValueKind.Object)
+                                throw new InvalidOperationException("Warcraft Logs returned no report enrichment data.");
+                            recoveredReports[entry.Key] = singleReportData.GetProperty(entry.Key).Clone();
+                        }
+                        catch (WarcraftLogsGraphQlException singleError) when (
+                            singleError.IsReportAccessFailure ||
+                            singleError is WarcraftLogsReportPrivateException or WarcraftLogsReportNotFoundException)
+                        {
+                            _logger.LogWarning(singleError, "Ranking enrichment report unavailable report={ReportCode}", entry.Value.ReportId);
+                            reports.Remove(entry.Value);
+                        }
+                    }
+                    response = JsonSerializer.SerializeToElement(new { reportData = recoveredReports });
+                }
+            }
+            catch (WarcraftLogsGraphQlException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex,
-                    "Failed to enrich report percentiles for {SpecSlug}/{BossSlug} edition={Edition} metric={Metric} batchOffset={BatchOffset} batchCount={BatchCount}; continuing without this batch",
+                _logger.LogError(ex,
+                    "Failed to enrich report percentiles for {SpecSlug}/{BossSlug} edition={Edition} metric={Metric} batchOffset={BatchOffset} batchCount={BatchCount}",
                     queryContext.SpecSlug, queryContext.BossSlug, edition, metric, offset, chunk.Count);
-                continue;
+                throw;
             }
 
-            if (!response.TryGetProperty("reportData", out var reportData) || reportData.ValueKind != JsonValueKind.Object)
+            if (response.ValueKind != JsonValueKind.Object ||
+                !response.TryGetProperty("reportData", out var reportData) || reportData.ValueKind != JsonValueKind.Object)
             {
                 _logger.LogWarning(
                     "WarcraftLogs percentile enrichment returned no reportData for {SpecSlug}/{BossSlug} edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}",
@@ -848,6 +917,7 @@ public class RankingsController(
             {
                 if (!reportData.TryGetProperty(entry.Key, out var reportElement) || reportElement.ValueKind != JsonValueKind.Object)
                 {
+                    reports.Remove(entry.Value);
                     continue;
                 }
 
@@ -1179,12 +1249,9 @@ public class RankingsController(
             {
                 response = await _warcraftLogsClient.QueryGraphQLAsync(queryText, null, edition, bypassWclCache);
             }
-            catch (Lorrgs.WarcraftLogs.WarcraftLogsGraphQlException ex)
+            catch (WarcraftLogsGraphQlException)
             {
-                _logger.LogWarning(ex,
-                    "WarcraftLogs rejected faction enrichment edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}; stopping remaining faction batches and returning rankings with available metadata",
-                    edition, offset, chunk.Count);
-                return;
+                throw;
             }
             catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
             {
@@ -1192,10 +1259,10 @@ public class RankingsController(
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex,
-                    "Failed to enrich ranking factions from WarcraftLogs characterData edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}; continuing without this batch",
+                _logger.LogError(ex,
+                    "Failed to enrich ranking factions from WarcraftLogs characterData edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}",
                     edition, offset, chunk.Count);
-                continue;
+                throw;
             }
 
             if (!response.TryGetProperty("characterData", out var characterData) || characterData.ValueKind != JsonValueKind.Object)

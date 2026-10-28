@@ -8,7 +8,7 @@
   import BossTimelineRow from './BossTimelineRow.svelte';
   import { TimelineLoader } from '../timelineLoader.svelte';
   import type { InspectedSpell, TimelineMagnification } from '../timelineTypes';
-  import type { RankingReport, ReportTimeline } from '../api';
+  import type { BossTimeline, RankingReport, ReportTimeline } from '../api';
   import {
     TIMELINE_ZOOM_LEVELS,
     canLoadTimeline,
@@ -40,6 +40,11 @@
   let viewportWidth = $state(0);
   let previousFirstKey = '';
   let referenceKey = $state('');
+  let bossReferences = $state<Record<string, BossTimeline>>({});
+  function reportWithReference(report: RankingReport): RankingReport {
+    const bossTimeline = bossReferences[timelineKey(report)];
+    return bossTimeline ? { ...report, bossTimeline } : report;
+  }
   const referenceReport = $derived(
     reports.find(({ report }) => timelineKey(report) === referenceKey)?.report ?? reports[0]?.report
   );
@@ -113,6 +118,7 @@
   {#if noteSelection}
     <CopyNoteDialog
       {...noteSelection}
+      report={reportWithReference(noteSelection.report)}
       {hidden}
       {difficulty}
       {specSlug}
@@ -281,6 +287,14 @@
             {bossSlug}
             {bossIconName}
             report={referenceReport}
+            onloaded={(timeline) => {
+              const matches = reports.filter(
+                ({ report }) =>
+                  report.reportId === timeline.reportCode &&
+                  report.fights?.[0]?.fightId === timeline.fightId
+              );
+              for (const { report } of matches) bossReferences[timelineKey(report)] = timeline;
+            }}
             {edition}
             {axisDuration}
             {ticks}
@@ -290,7 +304,7 @@
         {/if}
         {#each reports as { report, rank } (timelineKey(report))}
           <TimelineRow
-            {report}
+            report={reportWithReference(report)}
             isReference={referenceReport !== undefined &&
               timelineKey(report) === timelineKey(referenceReport)}
             onreference={(selected) => (referenceKey = timelineKey(selected))}
@@ -313,7 +327,8 @@
             bind:inspected
             bind:magnifier
             onload={(report) => loader.loadOne(report)}
-            oncopy={(timeline) => (noteSelection = { timeline, report })}
+            oncopy={(timeline) =>
+              (noteSelection = { timeline, report: reportWithReference(report) })}
           />
         {:else}
           <p>No loaded reports match these filters.</p>

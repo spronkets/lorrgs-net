@@ -35,6 +35,16 @@ HTTP error responses carry `Cache-Control: no-store`, so browsers and proxies
 do not retain failures such as rate-limit responses. This does not change the
 24-hour file cache for successful Warcraft Logs data.
 
+Private and deleted upstream reports are distinguished from other GraphQL failures.
+Ranking metadata batches omit only inaccessible reports and retain healthy partial
+results. When an access error lacks usable paths or partial data, only the failed
+batch is retried per report to identify unavailable entries. Partial-error GraphQL
+responses are never cached as successes. Cached data is not revalidated with extra
+permission requests. Timeline endpoints return explanatory 403/404 Problem Details
+for upstream private/missing reports; these statuses describe Warcraft Logs
+availability, not new authentication requirements. This API remains public, with
+its existing unrestricted CORS policy.
+
 ### Ranking analytics
 
 Spec rankings now open a compact **aligned timeline workspace** by default.
@@ -62,6 +72,71 @@ reason to request it again. Phase lines remain behind casts, buffs and row contr
 Missing phase data is not guessed. The API bundles cached boss timelines with
 rankings; otherwise only the current reference is fetched using the same 24-hour
 file cache. Boss and player event queries have independent cache keys.
+
+Nek'zali phase labels are corrected once a complete boss event stream is available:
+the first Ritual of Awakening starts intermission 1.5, the last Soul Transfer starts
+intermission 1.75 fifteen seconds before its logged completion, and the last raw WCL
+phase 3 transition starts displayed phase 2. Other encounters and incomplete boss
+streams retain their observed transitions. These corrections are recomputed from
+cached raw data; they do not require a separate Warcraft Logs request. Corrected
+references update the matching player's phase markers when they finish loading.
+Raid-note timers exclude intermission markers and retain the original integer WCL
+phase anchor (for example, displayed phase 2 uses WCL phase 3).
+
+Retail player timelines accept an optional `specId` query parameter; ranking rows
+provide it automatically. Known specs remove Marksmanship Explosive Shot recasts
+within ten seconds and Restoration Druid Tree of Life recasts within 120 seconds.
+Restoration Shaman's measured Ascendance intervals under thirteen seconds are labeled
+Deeply Rooted Elements, without reclassifying fight-end-clipped intervals.
+Preservation Stasis stores use measured store-to-release durations and exclude
+replayed Dream Breath casts inside one second of release. A missing Stasis store in
+a complete stream is shown as an explicitly inferred interval, not a player cast.
+Devourer Void Metamorphosis ends have explicitly inferred markers, not synthetic
+casts. Inferred events are never included in raid-note cast exports. Unknown specs
+and non-Retail editions keep the generic event normalization. These rules apply to
+both bundled and individually requested timelines without changing raw file-cache
+keys or the 24-hour lifetime; the separate rotation analyzer retains raw cast metrics.
+
+Backend regression tests use xUnit and the standard .NET test SDK.
+`Lorrgs.WarcraftLogs.Tests` covers response parsing, edition configuration,
+OAuth, HTTP retry/rate-limit behavior, concurrent request deduplication, and
+24-hour file caching across client instances. `Lorrgs.Api.Tests` covers rotation
+pagination/scoring, cache expiry/invalidation/cleanup, raid catalog mapping,
+ranking validation/fallbacks, percentile/faction enrichment, world-data endpoint
+filtering and cache parity, timeline pagination/actor selection/buff
+normalization, spec corrections, batch isolation, fresh/cache correction parity,
+and endpoint error mappings. Both reference their production
+projects and are included in the solution. Run all backend tests with
+`dotnet test Lorrgs.slnx`, or select a project with
+`dotnet test Lorrgs.WarcraftLogs.Tests\Lorrgs.WarcraftLogs.Tests.csproj`.
+Tests use queued HTTP responses and isolated temporary caches, not live Warcraft
+Logs requests. Cache expiry tests age temporary files rather than waiting or
+modifying application caches.
+
+Collect and enforce coverage using Coverlet's native MSBuild integration:
+
+```powershell
+$coverage = Join-Path (Get-Location) "TestResults"
+dotnet test Lorrgs.WarcraftLogs.Tests\Lorrgs.WarcraftLogs.Tests.csproj --configuration Release -p:CollectCoverage=true "-p:CoverletOutput=$coverage\warcraftlogs"
+dotnet test Lorrgs.Api.Tests\Lorrgs.Api.Tests.csproj --configuration Release -p:CollectCoverage=true "-p:MergeWith=$coverage\warcraftlogs.json" "-p:CoverletOutput=$coverage\coverage" -p:Threshold=80
+```
+
+The first command writes Coverlet JSON and Cobertura XML reports under
+`TestResults`. The second merges the library's JSON results with the API tests'
+coverage before checking thresholds, so library code exercised by either test
+project counts toward the same assembly.
+
+CI requires at least **80% line coverage and 80% branch coverage separately for
+each production assembly** (`Lorrgs.Api` and `Lorrgs.WarcraftLogs`). Both projects
+configure `ThresholdType=line,branch` and `ThresholdStat=minimum`. Coverlet
+natively merges coverage and fails `dotnet test` if either metric in either
+assembly is below the threshold. Run these commands sequentially, not in
+parallel. No production code is excluded and no custom coverage parser is used.
+
+CI also uploads the reports as the `dotnet-coverage` artifact, including on test
+failure when reports are available. Uploading is optional; the coverage check
+reads the local reports and does not depend on the artifact step. Coverage
+complements behavior assertions; it does not prove every regression is prevented.
 
 The timeline workspace composes focused Svelte 5 components: `SpellSelection`
 owns spell presets and selection, `TimelineRow` renders each player's metadata

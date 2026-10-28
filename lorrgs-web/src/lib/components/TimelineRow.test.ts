@@ -27,6 +27,23 @@ function props() {
 }
 
 describe('TimelineRow', () => {
+  it('labels inferred markers without presenting them as observed player casts', async () => {
+    const input = props();
+    render(TimelineRow, {
+      ...input,
+      timeline: {
+        ...response(input.report),
+        spells: [{ id: 267134, name: 'Drop Void Meta', icon: null }],
+        events: [
+          { spellId: 267134, timestamp: 10000, duration: 0, kind: 'marker', isInferred: true }
+        ]
+      }
+    });
+    const marker = screen.getByRole('button', { name: /Drop Void Meta.*inferred/ });
+    expect(marker).toHaveClass('cast');
+    await fireEvent.focus(marker);
+    expect(marker).toHaveClass('spell-highlighted');
+  });
   it('keeps icons above the lower event bars and centers events within separate lanes', async () => {
     const input = props();
     const { container, rerender } = render(TimelineRow, {

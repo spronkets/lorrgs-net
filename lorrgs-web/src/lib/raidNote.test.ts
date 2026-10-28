@@ -41,6 +41,45 @@ function note(overrides: Partial<RaidNoteOptions> = {}, hidden = new Set<number>
 }
 
 describe('raid note export', () => {
+  it('never exports inferred events as player casts', () => {
+    const sample: ReportTimeline = {
+      ...timeline,
+      events: [
+        timeline.events[0],
+        { kind: 'cast', spellId: 370537, timestamp: 1000, duration: 30000, isInferred: true },
+        { kind: 'marker', spellId: 267134, timestamp: 2000, duration: 0, isInferred: true }
+      ]
+    };
+    const output = buildRaidNote(sample, report, new Set(), options);
+    expect(output.count).toBe(1);
+    expect(output.text).not.toMatch(/370537|267134/);
+  });
+
+  it('uses observed addon anchors, not fractional intermission IDs or corrected display labels', () => {
+    const sample = {
+      ...report,
+      bossTimeline: {
+        ...bossResponse(report),
+        phases: [
+          { id: 1, timestamp: 0, notePhaseId: 1 },
+          { id: 1.5, timestamp: 20000, isIntermission: true },
+          { id: 1.75, timestamp: 45000, isIntermission: true },
+          { id: 2, timestamp: 90000, notePhaseId: 3 }
+        ]
+      }
+    };
+    const output = buildRaidNote(timeline, sample, new Set(), { ...options, dynamic: true });
+    expect(output.text).toContain('{time:00:24.5}');
+    expect(output.text).toContain('{time:00:18.8,p3}');
+    expect(output.text).not.toMatch(/p1\\.5|p1\\.75|p2/);
+    expect(
+      buildRaidNote(timeline, sample, new Set(), {
+        ...options,
+        dynamic: true,
+        format: 'nsrt'
+      }).text
+    ).toContain('ph:3;time:18.8;');
+  });
   it('matches MRT syntax with chronological casts and tenth-second rounding', () => {
     expect(note()).toEqual({
       text: '{time:00:24.5} - {spell:343527}\n{time:00:25.2} - {spell:255937}\n{time:01:48.8} - {spell:31884}',

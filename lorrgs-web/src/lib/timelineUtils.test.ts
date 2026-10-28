@@ -27,6 +27,22 @@ const timeline: ReportTimeline = {
 };
 
 describe('aligned timeline utilities', () => {
+  it('clips inferred prepull intervals for display and treats markers as cast-layer annotations', () => {
+    const sample: ReportTimeline = {
+      ...timeline,
+      events: [
+        { kind: 'buff', spellId: 370537, timestamp: -4000, duration: 30000, isInferred: true },
+        { kind: 'marker', spellId: 267134, timestamp: 10000, duration: 0, isInferred: true }
+      ]
+    };
+    expect(visibleTimelineEvents(sample, new Set(), true, true, true)[0]).toMatchObject({
+      timestamp: 0,
+      duration: 26000,
+      isInferred: true
+    });
+    expect(visibleTimelineEvents(sample, new Set(), false, true, true)).toHaveLength(1);
+    expect(sample.events[0].timestamp).toBe(-4000);
+  });
   it('measures consecutive casts only, sorting and deduplicating timestamps without inventing edge gaps', () => {
     expect(
       castIntervals(

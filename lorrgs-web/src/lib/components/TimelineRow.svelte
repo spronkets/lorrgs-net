@@ -187,7 +187,9 @@
   </div>
   <div class="track" style={`height: ${height}px`}>
     <TimelinePhases
-      phases={report.fights?.[0]?.phases ?? report.bossTimeline?.phases ?? []}
+      phases={report.bossTimeline && report.bossTimeline.fightId === report.fights?.[0]?.fightId
+        ? report.bossTimeline.phases
+        : (report.fights?.[0]?.phases ?? [])}
       {axisDuration}
     />
     {#if !timeline && endTime > 0}
@@ -236,13 +238,13 @@
         {@const icon = spellIconUrl(spell?.icon ?? null)}
         {@const powerWindow = isPowerWindow(spell)}
         {@const appearance = spellAppearance(spell, castSpellIds.has(event.spellId))}
-        {@const title = `${timelineTime(event.timestamp)} · ${spell?.name ?? 'Death'}${event.duration !== null ? ` · ${timelineTime(event.duration)} uptime` : ''}${powerWindow ? ' · DPS / power window' : ''}`}
+        {@const title = `${timelineTime(event.timestamp)} · ${spell?.name ?? 'Death'}${event.duration !== null ? ` · ${timelineTime(event.duration)} uptime` : ''}${powerWindow ? ' · DPS / power window' : ''}${event.isInferred ? ' · inferred' : ''}`}
         <button
           type="button"
           class="event"
           class:buff={event.kind === 'buff'}
           class:death={event.kind === 'death'}
-          class:cast={event.kind === 'cast'}
+          class:cast={event.kind === 'cast' || event.kind === 'marker'}
           class:power-window={powerWindow}
           class:spell-dimmed={inspected !== null && inspected.id !== event.spellId}
           class:spell-highlighted={inspected?.id === event.spellId}
@@ -273,7 +275,7 @@
             inspected = {
               id: event.spellId,
               name: spell?.name ?? 'Death',
-              detail: `${timeline.playerName} · ${appearance.label} · ${event.kind} at ${timelineTime(event.timestamp)}${event.duration !== null ? ` · ${timelineTime(event.duration)} measured uptime` : ''}`,
+              detail: `${timeline.playerName} · ${appearance.label} · ${event.kind} at ${timelineTime(event.timestamp)}${event.duration !== null ? ` · ${timelineTime(event.duration)} ${event.isInferred ? 'inferred' : 'measured'} uptime` : ''}${event.isInferred ? ' · inferred' : ''}`,
               color: appearance.color
             };
           }}
@@ -285,7 +287,7 @@
             (inspected = {
               id: event.spellId,
               name: spell?.name ?? 'Death',
-              detail: `${timeline.playerName} · ${appearance.label} · ${event.kind} at ${timelineTime(event.timestamp)}${event.duration !== null ? ` · ${timelineTime(event.duration)} measured uptime` : ''}`,
+              detail: `${timeline.playerName} · ${appearance.label} · ${event.kind} at ${timelineTime(event.timestamp)}${event.duration !== null ? ` · ${timelineTime(event.duration)} ${event.isInferred ? 'inferred' : 'measured'} uptime` : ''}${event.isInferred ? ' · inferred' : ''}`,
               color: appearance.color
             })}
           onblur={() => (inspected = null)}
@@ -295,6 +297,7 @@
           {#if event.kind === 'cast'}
             {#if showIcons && icon}<img src={icon} alt="" loading="lazy" />
             {:else}<span class="cast-dot">◆</span>{/if}
+          {:else if event.kind === 'marker'}<span class="cast-dot" aria-hidden="true">◇</span>
           {:else if event.kind === 'death'}<span class="death-label">†</span>{/if}
         </button>
       {/each}

@@ -175,16 +175,17 @@ public class WarcraftLogsClient(
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
         using var doc = JsonDocument.Parse(content);
 
-        if (doc.RootElement.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Array)
+        if (doc.RootElement.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Array &&
+            errors.GetArrayLength() > 0)
         {
-            var firstError = errors.EnumerateArray().FirstOrDefault();
-            var errorMessage = firstError.ValueKind == JsonValueKind.Object &&
-                               firstError.TryGetProperty("message", out var messageElement)
-                ? messageElement.GetString()
-                : "Unknown GraphQL error";
+            var parsedErrors = errors.EnumerateArray().Select(ParseGraphQlError).ToArray();
+            var partialData = doc.RootElement.TryGetProperty("data", out var partialDataElement)
+                ? partialDataElement.Clone()
+                : (JsonElement?)null;
 
-            _logger.LogError("GraphQL error from WarcraftLogs: {Error}", errorMessage);
-            throw new WarcraftLogsGraphQlException($"GraphQL error: {errorMessage}");
+            foreach (var error in parsedErrors)
+                _logger.LogError("GraphQL error from WarcraftLogs: {Error}", error.Message ?? "Unknown GraphQL error");
+            throw WarcraftLogsGraphQlException.Create(parsedErrors, partialData);
         }
 
         if (doc.RootElement.TryGetProperty("data", out var dataElement))
@@ -194,6 +195,45 @@ public class WarcraftLogsClient(
 
         throw new InvalidOperationException("No data property in WarcraftLogs response");
     }
+
+    private static WarcraftLogsGraphQlError ParseGraphQlError(JsonElement error)
+    {
+        var message = error.ValueKind == JsonValueKind.Object &&
+            error.TryGetProperty("message", out var messageElement) &&
+            messageElement.ValueKind == JsonValueKind.String
+                ? messageElement.GetString()
+                : null;
+        var path = error.ValueKind == JsonValueKind.Object &&
+            error.TryGetProperty("path", out var pathElement) &&
+            pathElement.ValueKind == JsonValueKind.Array
+                ? pathElement.EnumerateArray().Select(item => item.Clone()).ToArray()
+                : [];
+        return new WarcraftLogsGraphQlError(message, path, error.Clone(), ClassifyReportFailure(message, path));
+    }
+
+    private static WarcraftLogsReportFailureKind? ClassifyReportFailure(
+        string? message, IReadOnlyList<JsonElement> path)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return null;
+        var reportPath = path.Any(segment => segment.ValueKind == JsonValueKind.String &&
+            segment.GetString() == "reportData") &&
+            path.Any(segment => segment.ValueKind == JsonValueKind.String &&
+                (segment.GetString() == "report" || IsReportAlias(segment.GetString())));
+        if (!reportPath && !message.Contains("report", StringComparison.OrdinalIgnoreCase)) return null;
+        if (ContainsAny(message, "private", "permission", "not authorized", "not allowed",
+                "access denied", "not have access", "forbidden"))
+            return WarcraftLogsReportFailureKind.Private;
+        if (ContainsAny(message, "report not found", "report code not found", "no report found",
+                "could not find report", "report does not exist", "unknown report", "report was not found"))
+            return WarcraftLogsReportFailureKind.NotFound;
+        return null;
+    }
+
+    private static bool IsReportAlias(string? value) =>
+        value is { Length: > 1 } && value[0] == 'r' && value[1..].All(char.IsAsciiDigit);
+
+    private static bool ContainsAny(string message, params string[] phrases) =>
+        phrases.Any(phrase => message.Contains(phrase, StringComparison.OrdinalIgnoreCase));
 
     public async Task<T> QueryGraphQLAsync<T>(
         string query,

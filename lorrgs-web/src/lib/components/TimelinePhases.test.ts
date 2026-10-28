@@ -3,6 +3,15 @@ import { describe, expect, it } from 'vitest';
 import TimelinePhases from './TimelinePhases.svelte';
 
 describe('TimelinePhases', () => {
+  it('distinguishes corrected intermissions from numbered phases', () => {
+    render(TimelinePhases, {
+      phases: [{ id: 1.75, timestamp: 45000, isIntermission: true }],
+      axisDuration: 100000
+    });
+    expect(screen.getByRole('img', { name: 'Intermission 1.75 at 0:45' })).toHaveTextContent(
+      'I1.75'
+    );
+  });
   it('positions and labels observed transitions on the shared elapsed-time axis', async () => {
     const { rerender } = render(TimelinePhases, {
       phases: [

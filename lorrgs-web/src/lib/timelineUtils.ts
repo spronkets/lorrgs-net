@@ -117,12 +117,19 @@ export function visibleTimelineEvents(
   showBuffs: boolean,
   showDeaths: boolean
 ): TimelineEvent[] {
-  return timeline.events.filter((event) =>
-    event.kind === 'death'
-      ? showDeaths
-      : !hidden.has(event.spellId) &&
-        ((event.kind === 'cast' && showCasts) || (event.kind === 'buff' && showBuffs))
-  );
+  return timeline.events
+    .filter((event) =>
+      event.kind === 'death'
+        ? showDeaths
+        : !hidden.has(event.spellId) &&
+          (((event.kind === 'cast' || event.kind === 'marker') && showCasts) ||
+            (event.kind === 'buff' && showBuffs))
+    )
+    .map((event) =>
+      event.timestamp < 0 && event.duration !== null
+        ? { ...event, timestamp: 0, duration: Math.max(0, event.duration + event.timestamp) }
+        : event
+    );
 }
 
 export function eventLanes(events: TimelineEvent[]): { event: TimelineEvent; lane: number }[] {

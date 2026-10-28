@@ -16,6 +16,40 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('ranking cooldown comparison', () => {
+  it('updates the matching player phases when corrected boss data arrives after player data', async () => {
+    let resolveBoss!: (_timeline: ReturnType<typeof bossResponse>) => void;
+    vi.mocked(getBossTimeline).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveBoss = resolve;
+        })
+    );
+    const report = {
+      ...rows[0].report,
+      timeline: response(rows[0].report),
+      fights: [{ ...rows[0].report.fights[0], phases: [{ id: 2, timestamp: 20000 }] }]
+    };
+    const { container } = render(RankingsTimeline, {
+      reports: [{ report, rank: 1 }],
+      edition: 'retail'
+    });
+    expect(container.querySelector('.player-row [aria-label="Phase 2 at 0:20"]')).not.toBeNull();
+    resolveBoss({
+      ...bossResponse(report),
+      phases: [
+        { id: 1.5, timestamp: 20000, isIntermission: true },
+        { id: 2, timestamp: 90000, notePhaseId: 3 }
+      ]
+    });
+    await waitFor(() => {
+      expect(
+        container.querySelector('.player-row [aria-label="Intermission 1.5 at 0:20"]')
+      ).not.toBeNull();
+      expect(container.querySelector('.player-row [aria-label="Phase 2 at 1:30"]')).not.toBeNull();
+      expect(container.querySelector('.player-row [aria-label="Phase 2 at 0:20"]')).toBeNull();
+    });
+    expect(fetchTimeline).not.toHaveBeenCalled();
+  });
   it('selects a target before Analyze and reuses bundled reference data across sorting', async () => {
     const reports = rows.map(({ report, rank }) => ({
       rank,

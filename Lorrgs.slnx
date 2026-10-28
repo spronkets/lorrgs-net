@@ -1,4 +1,6 @@
 <Solution>
+  <Project Path="Lorrgs.Api.Tests/Lorrgs.Api.Tests.csproj" />
   <Project Path="Lorrgs.Api/Lorrgs.Api.csproj" />
+  <Project Path="Lorrgs.WarcraftLogs.Tests/Lorrgs.WarcraftLogs.Tests.csproj" />
   <Project Path="Lorrgs.WarcraftLogs/Lorrgs.WarcraftLogs.csproj" />
 </Solution>

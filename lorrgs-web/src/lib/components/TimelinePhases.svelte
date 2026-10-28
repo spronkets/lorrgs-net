@@ -1,6 +1,7 @@
 <script lang="ts">
   import { timelineTime } from '../timelineUtils';
-  type Props = { phases: { id: number; timestamp: number }[]; axisDuration: number };
+  import type { TimelinePhase } from '../api';
+  type Props = { phases: TimelinePhase[]; axisDuration: number };
   let { phases, axisDuration }: Props = $props();
 </script>
 
@@ -9,8 +10,9 @@
     class="phase"
     style={`left: ${(phase.timestamp / axisDuration) * 100}%`}
     role="img"
-    aria-label={`Phase ${phase.id} at ${timelineTime(phase.timestamp)}`}
-    title={`Phase ${phase.id} · ${timelineTime(phase.timestamp)}`}><span>P{phase.id}</span></span
+    aria-label={`${phase.isIntermission ? 'Intermission' : 'Phase'} ${phase.id} at ${timelineTime(phase.timestamp)}`}
+    title={`${phase.isIntermission ? 'Intermission' : 'Phase'} ${phase.id} · ${timelineTime(phase.timestamp)}`}
+    ><span>{phase.isIntermission ? 'I' : 'P'}{phase.id}</span></span
   >
 {/each}
 

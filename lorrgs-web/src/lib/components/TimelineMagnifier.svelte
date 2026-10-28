@@ -37,11 +37,12 @@
         <span
           class="magnified-event"
           class:buff={event.kind === 'buff'}
-          class:cast={event.kind === 'cast'}
+          class:cast={event.kind === 'cast' || event.kind === 'marker'}
           class:death={event.kind === 'death'}
           class:spell-dimmed={inspected?.id !== event.spellId}
           style={`--spell-color: ${appearance.color}; left: ${((Math.max(start, event.timestamp) - start) / span) * 100}%; top: ${event.kind === 'buff' ? 34 : 4}px; width: ${event.kind === 'buff' ? `${((Math.min(start + span, event.timestamp + (event.duration ?? 0)) - Math.max(start, event.timestamp)) / span) * 100}%` : '28px'}`}
-          >{#if event.kind === 'cast' && icon}<img src={icon} alt="" />{/if}</span
+          >{#if event.kind === 'cast' && icon}<img src={icon} alt="" />
+          {:else if event.kind === 'marker'}<span aria-label="Inferred marker">◇</span>{/if}</span
         >
       {/each}
     </div>
