@@ -25,6 +25,12 @@
   let error = '';
   let theme = 'light';
   let hasHydratedQuery = false;
+  let toolsMenu: HTMLDetailsElement;
+
+  function openTool(page: string) {
+    currentPage = page;
+    toolsMenu.open = false;
+  }
 
   const THEME_STORAGE_KEY = 'lorrgs-theme';
   const PAGE_QUERY_KEY = 'page';
@@ -130,38 +136,77 @@
   }
 </script>
 
+<svelte:window
+  on:keydown={(event) => {
+    if (event.key === 'Escape' && toolsMenu?.open) {
+      toolsMenu.open = false;
+      toolsMenu.querySelector('summary')?.focus();
+    }
+  }}
+/>
+
 <div class="app" class:theme-dark={theme === 'dark'} class:theme-light={theme === 'light'}>
   <header class="app-header">
-    <div class="header-content">
+    <nav class="app-nav" aria-label="Main navigation">
       <button
         class="brand-toggle"
         type="button"
-        on:click={toggleTheme}
-        title={theme === 'dark' ? 'Switch to Light mode' : 'Switch to Dark mode'}
-        aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        on:click={() => (currentPage = 'home')}
+        aria-label="LorrgsNET home"
       >
         LorrgsNET
       </button>
-      <p>
-        Warcraft Logs rankings and performance analyzer based on
-        <a href="https://lorrgs.io/" target="_blank" rel="noreferrer">lorrgs.io</a>.
-      </p>
-    </div>
-    <nav class="app-nav">
-      <button class:active={currentPage === 'home'} on:click={() => (currentPage = 'home')}>
+      <button
+        class:active={currentPage === 'home'}
+        aria-current={currentPage === 'home' ? 'page' : undefined}
+        on:click={() => (currentPage = 'home')}
+      >
         Spec Rankings
       </button>
-      <button class:active={currentPage === 'comp'} on:click={() => (currentPage = 'comp')}>
+      <button
+        class:active={currentPage === 'comp'}
+        aria-current={currentPage === 'comp' ? 'page' : undefined}
+        on:click={() => (currentPage = 'comp')}
+      >
         Comp Rankings
       </button>
+      <details class="tools-menu" bind:this={toolsMenu}>
+        <summary class:active={currentPage === 'worlddata' || currentPage === 'rotation'}
+          >Tools</summary
+        >
+        <div class="tools-options">
+          <button class:active={currentPage === 'worlddata'} on:click={() => openTool('worlddata')}>
+            World Data
+          </button>
+          <button class:active={currentPage === 'rotation'} on:click={() => openTool('rotation')}>
+            Rotation Analyzer
+          </button>
+        </div>
+      </details>
       <button
-        class:active={currentPage === 'worlddata'}
-        on:click={() => (currentPage = 'worlddata')}
+        type="button"
+        class="theme-toggle"
+        on:click={toggleTheme}
+        aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
       >
-        World Data
-      </button>
-      <button class:active={currentPage === 'rotation'} on:click={() => (currentPage = 'rotation')}>
-        Rotation Analyzer
+        <svg
+          aria-hidden="true"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+        >
+          {#if theme === 'dark'}
+            <circle cx="12" cy="12" r="4" /><path
+              d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"
+            />
+          {:else}
+            <path d="M20 15.5A9 9 0 0 1 8.5 4 9 9 0 1 0 20 15.5Z" />
+          {/if}
+        </svg>
       </button>
     </nav>
   </header>
@@ -187,6 +232,11 @@
       {/if}
     {/if}
   </main>
+  <footer class="app-footer">
+    LorrgsNET is a Warcraft Logs report analyzer focused on individual performance, based on
+    <a href="https://lorrgs.io/" target="_blank" rel="noreferrer">lorrgs.io</a>
+    and ported to .NET and Svelte for fun.
+  </footer>
 </div>
 
 <style>
@@ -205,6 +255,9 @@
   }
 
   .app {
+    --class-text-shade: #172433;
+    --class-text-share: 55%;
+    --class-text-ceiling: 0.49;
     --app-bg:
       radial-gradient(circle at 8% 10%, rgba(248, 232, 197, 0.24), transparent 42%),
       radial-gradient(circle at 88% 0%, rgba(72, 173, 167, 0.22), transparent 34%),
@@ -230,6 +283,9 @@
   }
 
   .app.theme-dark {
+    --class-text-shade: #ffffff;
+    --class-text-share: 72%;
+    --class-text-ceiling: 1;
     --app-bg:
       radial-gradient(circle at 10% 8%, rgba(96, 72, 34, 0.24), transparent 40%),
       radial-gradient(circle at 90% 0%, rgba(27, 114, 118, 0.24), transparent 35%),
@@ -256,12 +312,6 @@
     position: sticky;
     top: 0;
     z-index: 10;
-  }
-
-  .header-content {
-    max-width: 1600px;
-    margin: 0 auto;
-    margin-bottom: 0.4rem;
   }
 
   .brand-toggle {
@@ -297,51 +347,74 @@
     outline-color: #8bddd6;
   }
 
-  .header-content p {
-    margin: 0.15rem 0 0 0;
-    color: var(--subtitle-color);
-    font-size: 0.75rem;
-  }
-
-  .header-content p a {
-    color: var(--title-color);
-    text-decoration: none;
-    font-weight: 600;
-    transition: color 0.2s;
-  }
-
-  .header-content p a:hover {
-    color: #2a8e8f;
-  }
-
-  .header-content p a:focus-visible {
-    outline: 2px solid #2a8e8f;
-    outline-offset: 2px;
-    border-radius: 0.2rem;
-  }
-
-  .app.theme-dark .header-content p a:hover {
-    color: #8bddd6;
-  }
-
-  .app.theme-dark .header-content p a:focus-visible {
-    outline-color: #8bddd6;
-  }
-
   .app-nav {
-    max-width: 1400px;
+    max-width: 1560px;
     margin: 0 auto;
     display: flex;
     flex-wrap: wrap;
     gap: 0.65rem;
+    align-items: center;
+  }
+
+  .app-nav .brand-toggle {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    margin-right: 0.6rem;
+    color: var(--title-color);
+    font-size: 1.15rem;
+    box-shadow: none;
+  }
+  .tools-menu {
+    position: relative;
+    margin-left: auto;
+  }
+  .tools-menu summary {
+    cursor: pointer;
+    color: var(--nav-text);
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+  }
+  .tools-menu summary.active {
+    color: var(--title-color);
+    font-weight: 700;
+  }
+  .tools-options {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    display: grid;
+    gap: 6px;
+    min-width: 180px;
+    padding: 8px;
+    background: var(--nav-bg);
+    border: 1px solid var(--nav-line);
+    border-radius: 6px;
+    box-shadow: 0 6px 20px #0003;
+  }
+  .tools-options button {
+    text-align: left;
+  }
+  .app-nav .theme-toggle {
+    display: flex;
+    padding: 6px;
+    border-radius: 4px;
+  }
+  .app-footer {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.75rem;
+    color: var(--subtitle-color);
+  }
+  .app-footer a {
+    color: inherit;
   }
 
   .app-nav button {
     background: var(--nav-bg);
     border: 1px solid var(--nav-line);
     color: var(--nav-text);
-    padding: 0.48rem 0.92rem;
-    border-radius: 999px;
+    padding: 0.35rem 0.65rem;
+    border-radius: 4px;
     cursor: pointer;
     font-size: 0.88rem;
     font-weight: 600;
@@ -388,7 +461,41 @@
 
   @media (max-width: 900px) {
     .app-header {
-      padding: 1.25rem 1rem 1rem;
+      padding: 0.6rem 1rem;
+    }
+
+    @media (max-width: 600px) {
+      .app-header {
+        padding: 6px 10px;
+      }
+      .app-main {
+        padding: 10px 10px 20px;
+      }
+      .app-nav {
+        gap: 6px;
+      }
+      .app-nav .brand-toggle {
+        flex: 1;
+        margin: 0;
+        text-align: left;
+      }
+      .app-nav > button:not(.brand-toggle):not(.theme-toggle) {
+        order: 2;
+        flex: 1 0 calc(50% - 6px);
+        min-height: 40px;
+      }
+      .tools-menu {
+        margin-left: 0;
+      }
+      .tools-menu summary,
+      .app-nav .theme-toggle {
+        min-height: 40px;
+        padding: 10px;
+      }
+      .tools-options {
+        background: var(--header-bg);
+        backdrop-filter: blur(12px);
+      }
     }
 
     .app-main {

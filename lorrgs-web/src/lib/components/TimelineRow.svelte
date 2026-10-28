@@ -415,6 +415,28 @@
     display: flex;
     border-bottom: 1px solid var(--line);
   }
+  @media (max-width: 600px) {
+    .player-row {
+      flex-direction: column;
+    }
+    .player-row .identity {
+      box-sizing: border-box;
+      width: var(--timeline-viewport-width);
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .player-row .track {
+      width: calc(100% - 34px);
+    }
+    .player-row .copy-note {
+      min-width: 30px;
+      min-height: 30px;
+      box-sizing: border-box;
+    }
+    .player-row .player-heading {
+      min-height: 24px;
+    }
+  }
   .identity {
     width: 220px;
     flex-shrink: 0;
@@ -657,7 +679,6 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    border-bottom: 2px solid var(--line);
     background: color-mix(in srgb, var(--line) 15%, transparent);
     pointer-events: none;
   }

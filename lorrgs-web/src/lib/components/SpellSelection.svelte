@@ -151,6 +151,27 @@
 </details>
 
 <style>
+  @media (max-width: 600px) {
+    .spell-selection .spell-actions {
+      margin-bottom: 6px;
+    }
+    .spell-selection .spell-actions > input {
+      min-width: 0;
+      width: 55%;
+    }
+    .spell-selection .spell-presets {
+      width: 100%;
+    }
+    .spell-selection .spell-presets button,
+    .spell-selection .spell-actions > button {
+      min-height: 36px;
+    }
+    .spell-selection .spell-buttons button {
+      min-width: 32px;
+      min-height: 32px;
+      justify-content: center;
+    }
+  }
   .spell-group-row {
     display: flex;
     flex-wrap: wrap;
@@ -234,6 +255,12 @@
     margin-top: 3px;
     max-height: 132px;
     overflow-y: auto;
+  }
+  @media (max-width: 600px), (pointer: coarse) {
+    .spell-selection .spell-buttons {
+      max-height: none;
+      overflow-y: visible;
+    }
   }
   .spell-buttons button {
     display: inline-flex;

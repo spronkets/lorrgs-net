@@ -1,6 +1,15 @@
-import { afterEach } from 'vitest';
+import { afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/svelte';
 import '@testing-library/jest-dom/vitest';
+
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
 
 HTMLDialogElement.prototype.showModal = function () {
   this.setAttribute('open', '');

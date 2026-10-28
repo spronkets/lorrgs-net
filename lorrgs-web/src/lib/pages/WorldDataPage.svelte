@@ -41,7 +41,9 @@
               style="background-color: {classColor(cls.nameSlug, cls.color)}"
             ></div>
             <div class="data-info">
-              <h4 style="color: {classColor(cls.nameSlug, cls.color)}">{cls.name}</h4>
+              <h4 class="class-text" style="--class-accent: {classColor(cls.nameSlug, cls.color)}">
+                {cls.name}
+              </h4>
               <p class="slug">{cls.nameSlug}</p>
             </div>
           </div>
@@ -64,8 +66,8 @@
               <h4>{spec.fullName}</h4>
               <p class="slug">{spec.fullNameSlug}</p>
               <p
-                class="meta"
-                style="color: {classColor(
+                class="meta class-text"
+                style="--class-accent: {classColor(
                   worldData.classes?.find((c) => c.id === spec.classId)?.nameSlug,
                   worldData.classes?.find((c) => c.id === spec.classId)?.color
                 )}"
@@ -176,6 +178,17 @@
 </div>
 
 <style>
+  .class-text {
+    color: oklch(
+      from
+        color-mix(
+          in srgb,
+          var(--class-accent) var(--class-text-share, 55%),
+          var(--class-text-shade, #172433)
+        )
+        min(l, var(--class-text-ceiling, 0.49)) c h
+    );
+  }
   .world-data-page {
     animation: fadeIn 0.3s ease-in-out;
   }

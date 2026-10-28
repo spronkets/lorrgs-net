@@ -37,6 +37,7 @@
   const loader = new TimelineLoader(() => edition);
   let hidden = $state<Set<number>>(new Set());
   let scrollContainer: HTMLDivElement;
+  let viewportWidth = $state(0);
   let previousFirstKey = '';
   let referenceKey = $state('');
   const referenceReport = $derived(
@@ -75,8 +76,18 @@
   const ticks = $derived(
     Array.from({ length: Math.floor(axisDuration / 30000) + 1 }, (_, i) => i * 30000)
   );
+  const labelStep = $derived(
+    viewportWidth > 0 && viewportWidth <= 600
+      ? Math.max(
+          30000,
+          Math.ceil(
+            axisDuration / Math.max(1, Math.floor(((viewportWidth - 34) * zoom) / 100 / 60)) / 30000
+          ) * 30000
+        )
+      : 30000
+  );
   const labelTicks = $derived([
-    ...ticks.filter((tick) => tick < axisDuration - 15000),
+    ...ticks.filter((tick) => tick % labelStep === 0 && tick < axisDuration - labelStep / 2),
     axisDuration
   ]);
   const queue = $derived(reports.map(({ report }) => report).filter(canLoadTimeline));
@@ -225,6 +236,9 @@
     {showBuffs}
     {showDeaths}
   />
+  <p class="mobile-timeline-hint">
+    Full fight fits at 100%. Increase Zoom to inspect crowded casts.
+  </p>
   <div class="timeline-panel">
     <div class="spell-inspector" aria-live="polite" aria-atomic="true">
       {#if inspected}
@@ -243,10 +257,14 @@
     <div
       class="timeline-scroll"
       bind:this={scrollContainer}
+      bind:clientWidth={viewportWidth}
       role="region"
       aria-label="Aligned player timelines"
     >
-      <div class="timeline-grid" style={`width: calc(${zoom}% - ${248 * (zoom / 100 - 1)}px)`}>
+      <div
+        class="timeline-grid"
+        style={`--timeline-zoom: ${zoom}; --timeline-viewport-width: ${viewportWidth ? `${viewportWidth}px` : '100%'}`}
+      >
         <div class="axis-row">
           <div class="identity axis-label">Player / elapsed time</div>
           <div class="axis">
@@ -323,6 +341,12 @@
   }
   .timeline-panel {
     min-width: 0;
+  }
+  .timeline-grid {
+    width: calc(var(--timeline-zoom) * 1% - 248px * (var(--timeline-zoom) / 100 - 1));
+  }
+  .mobile-timeline-hint {
+    display: none;
   }
   .option-toggle input {
     position: absolute;
@@ -458,7 +482,6 @@
     overflow: auto;
     width: 100%;
     max-width: 100%;
-    max-height: 70vh;
     border: 1px solid var(--line);
     border-radius: 4px;
     background: var(--panel);
@@ -506,5 +529,35 @@
   .load-error {
     font-size: 12px;
     color: #ce4141;
+  }
+  @media (max-width: 600px) {
+    .mobile-timeline-hint {
+      display: block;
+      margin: 0 0 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .timeline-grid {
+      width: calc(100% * var(--timeline-zoom) / 100);
+    }
+    .axis-label {
+      display: none;
+    }
+    .axis {
+      width: calc(100% - 34px);
+    }
+    .timeline-controls fieldset {
+      flex: 1 0 100%;
+      box-sizing: border-box;
+      flex-wrap: nowrap;
+    }
+    .option-toggle span {
+      width: 36px;
+      height: 36px;
+    }
+    .timeline-controls button,
+    .timeline-controls select {
+      min-height: 40px;
+    }
   }
 </style>

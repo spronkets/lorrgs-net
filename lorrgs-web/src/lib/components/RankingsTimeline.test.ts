@@ -306,10 +306,10 @@ describe('ranking cooldown comparison', () => {
     await waitFor(() =>
       expect(container.querySelector('.axis .end-label')).toHaveTextContent('5:01')
     );
-    expect(container.querySelector('.timeline-grid')).toHaveStyle({ width: 'calc(100% - 0px)' });
+    expect(container.querySelector('.timeline-grid')).toHaveStyle({ '--timeline-zoom': '100' });
     expect(container.querySelector('.axis')).not.toHaveTextContent('5:30');
     await rerender({ reports: reports.slice(0, 1), edition: 'anniversary' });
-    expect(container.querySelector('.timeline-grid')).toHaveStyle({ width: 'calc(100% - 0px)' });
+    expect(container.querySelector('.timeline-grid')).toHaveStyle({ '--timeline-zoom': '100' });
     expect(container.querySelector('.axis .end-label')).toHaveTextContent('0:41');
     expect(fetchTimeline).toHaveBeenCalledTimes(2);
   });
@@ -398,7 +398,7 @@ describe('ranking cooldown comparison', () => {
     const height = document.querySelector('.track')?.getAttribute('style');
     expect(screen.getByLabelText('Zoom')).toHaveValue('100');
     await fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '200' } });
-    expect(document.querySelector('.timeline-grid')).toHaveStyle({ width: 'calc(200% - 248px)' });
+    expect(document.querySelector('.timeline-grid')).toHaveStyle({ '--timeline-zoom': '200' });
     expect(document.querySelector('.track')?.getAttribute('style')).toBe(height);
     expect(fetchTimeline).toHaveBeenCalledTimes(3);
     await fireEvent.click(screen.getByRole('button', { name: 'Load next 3 timelines' }));

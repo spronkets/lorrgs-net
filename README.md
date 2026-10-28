@@ -91,9 +91,34 @@ spell lanes remain available for dense or overlapping timelines.
 The compact toolbar uses labeled region buttons, paired kill-time/date inputs,
 icon-style timeline toggles and icon-first spell groups. Group headings toggle
 their spells together; **Spell names** expands the icons into labeled buttons.
-Search, individual toggles, hover/focus details, sorting and summary statistics
+Search, individual toggles, hover/focus details, sorting and report counts
 remain available. Sample notes and timeline guidance are expandable rather than
 occupying the main workspace.
+The compact application bar keeps Spec Rankings and Comp Rankings visible, with
+World Data and Rotation Analyzer under Tools and a separate theme button.
+Branding attribution appears in the footer. The comparison heading retains edition,
+raid, specialization, boss artwork, and Change selection without an enclosing card.
+Region and kill-time filters stay visible; date range, sorting, and Reset filters
+live under Filters, whose active count includes all non-default filter and sort values.
+Class-colored comparison and World Data labels use theme-aware text tones with a
+light-mode lightness ceiling for readability. Icons, badges, and class accents
+retain their original colors; the comparison's dark-mode text treatment is unchanged.
+Report-count, best DPS, and median kill-time summaries are omitted. The timeline
+initially shows ten reports; Load more beneath it reveals the next ten from the
+cached ranking response without another ranking request. Filters and sorting apply
+to the whole response before pagination and reset the visible batch to ten.
+Only visible reports enter the timeline loader; its existing three-at-a-time
+loading controls remain available.
+On phones, navigation uses two predictable rows. The comparison fills the width with
+spec and boss side by side and Change selection at the top right. Region and kill-time
+controls use full-width groups with larger touch targets. Player and boss details sit
+above their tracks instead of consuming the chart width. At 100% zoom the full fight
+fits the available width, with time labels spaced for the screen and a small end gutter
+for note actions. Higher zoom levels expand the aligned tracks and scroll horizontally
+together, with details pinned to the visible left edge. Timeline rows expand with
+the page on all devices rather than using nested vertical scrolling. Spell lists
+also expand on small screens and touch-first devices. Scrollbar appearance remains
+browser-native; zoomed timelines retain horizontal scrolling.
 Use spell selection/search, cast/buff/death toggles, separate spell lanes, and
 percentage zoom controls to compare usage. Highlighting a spell by hover or keyboard focus shows measured
 seconds between consecutive visible casts per player within the existing row height.
@@ -292,11 +317,31 @@ missing, without reserving icon space. Portrait lookup does not query Warcraft L
 Ranking boss images also use Wowhead and are omitted when metadata is missing.
 The app does not use RPGLogs-hosted images.
 Boss artwork is rendered by the shared `BossIcon` component: a square bordered
-frame with a centered portrait fitted without cropping or zoom, reused in selectors, headings and ranking
+frame with a horizontally centered, bottom-aligned portrait fitted to its visible bounds
+and enlarged by 20% for a fuller composition, reused in selectors, headings and ranking
 rows. Missing or failed images are omitted rather than replaced with placeholders.
 Callers supply a boss `slug` and optionally an `iconName` from world metadata;
 the component owns URL resolution and falls back to the slug's journal portrait.
-Transparent image padding is excluded when fitting and centering visible artwork.
+Transparent image padding is excluded when fitting and aligning visible artwork.
+Zoom is anchored to the visible artwork's bottom center, rather than transparent image padding.
+The generated backdrop uses saturated portrait colors, broad dark radial bands,
+uneven light-and-dark spiral bands reaching beyond the frame, and nine broad,
+overlapping light fans without thin spoke highlights.
+Light displacement breaks up the geometry without muddying the small icon with
+grain. A dark edge vignette frames the composition; a solid white silhouette edge
+uses a narrow antialiased alpha expansion to avoid whole-pixel dilation jumps.
+A narrow, dark portrait-tinted backing outside the white edge provides local
+contrast against bright fans without darkening the entire background.
+Faint baked-in portrait shadows are removed with an alpha cutoff before outlining.
+Portrait fitting uses the same shadow-removal cutoff, so invisible shadow padding
+does not shrink the visible boss artwork.
+Fan widths, lengths, and brightness use a fresh random seed per page load combined
+with the boss slug. Matching bosses share a pattern within a page, but refreshing
+generates a new one. All effects are local SVG/CSS with no extra image requests or animation.
+The light fans, bands, and background glow originate at the alpha-weighted center
+of the fitted visible portrait, not the square frame's center.
+Fan reach is calculated from that origin to the frame edge, with varied overshoot
+and angular widths so the light extends to the border.
 The frame and background use the portrait's detected dominant color, excluding
 transparent, near-black and near-white pixels. Detection samples the loaded image
 in a small canvas; no additional API request or image-analysis service is used.

@@ -343,23 +343,28 @@
             {selectedVersion} / {selectedRaidOption?.name || selectedRaid}
           </p>
           <h2 class="selection-title">
-            <span class="spec-media selection-spec-media">
-              <img
-                class="spec-icon"
-                src={getSpecIconUrl(getSpecClassSlug(selectedSpecMeta), selectedSpecMeta.nameSlug)}
-                alt=""
-              />
-              <img
-                class="class-icon"
-                src={getClassIconUrl(getSpecClassSlug(selectedSpecMeta))}
-                alt={selectedClassMeta?.name || 'Class'}
-              />
+            <span class="selected-spec">
+              <span class="spec-media selection-spec-media">
+                <img
+                  class="spec-icon"
+                  src={getSpecIconUrl(
+                    getSpecClassSlug(selectedSpecMeta),
+                    selectedSpecMeta.nameSlug
+                  )}
+                  alt=""
+                />
+                <img
+                  class="class-icon"
+                  src={getClassIconUrl(getSpecClassSlug(selectedSpecMeta))}
+                  alt={selectedClassMeta?.name || 'Class'}
+                />
+              </span>
+              <span class="spec-value">{selectedSpecMeta.fullName}</span>
             </span>
-            <span class="spec-value">{selectedSpecMeta.fullName}</span>
             <span class="versus">vs.</span>
             <span class="selected-boss">
               <BossIcon slug={selectedBoss} iconName={selectedBossIconName} size={38} />
-              {selectedBossMeta?.name || selectedBoss}
+              <span>{selectedBossMeta?.name || selectedBoss}</span>
             </span>
           </h2>
         </div>
@@ -753,14 +758,12 @@
   }
 
   .selection-collapsed {
-    background: var(--summary-bg);
-    border: 1px solid
-      color-mix(in srgb, var(--class-accent, var(--summary-border)) 48%, var(--summary-border));
-    border-radius: var(--radius-xl);
-    box-shadow:
-      var(--summary-shadow),
-      0 0 0 1px color-mix(in srgb, var(--class-accent, #7ca6c2) 24%, transparent);
-    padding: var(--space-5) var(--space-6);
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--summary-border);
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0.35rem 0 0.75rem;
     margin-bottom: var(--selector-block-gap);
     display: grid;
     gap: var(--space-2);
@@ -846,7 +849,15 @@
   }
 
   .selection-title .spec-value {
-    color: color-mix(in srgb, var(--class-accent, var(--summary-value)) 72%, #ffffff 28%);
+    color: oklch(
+      from
+        color-mix(
+          in srgb,
+          var(--class-accent, var(--summary-value)) var(--class-text-share, 55%),
+          var(--class-text-shade, #172433)
+        )
+        min(l, var(--class-text-ceiling, 0.49)) c h
+    );
   }
 
   .versus {
@@ -855,12 +866,12 @@
     font-weight: 400;
   }
 
+  .selected-spec,
   .selected-boss {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
   }
-
 
   .edit-selection {
     justify-self: start;
@@ -905,6 +916,53 @@
   }
 
   @media (max-width: 700px) {
+    .comparison-open .selection-collapsed {
+      position: relative;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 4px;
+      padding: 44px 0 10px;
+    }
+    .comparison-open .selection-collapsed .selection-overview {
+      min-width: 0;
+    }
+    .comparison-open .selection-collapsed .value {
+      position: absolute;
+      top: 12px;
+      left: 0;
+      max-width: calc(100% - 135px);
+    }
+    .selection-overview > div {
+      width: 100%;
+      min-width: 0;
+    }
+    .selection-title {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 8px;
+      width: 100%;
+      font-size: clamp(11px, 3vw, 16px);
+    }
+    .selection-title .selected-spec,
+    .selection-title .selected-boss {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 0;
+      gap: 8px;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+    .selection-title .versus {
+      text-align: center;
+      font-size: 0.8rem;
+    }
+    .comparison-open .edit-selection {
+      position: absolute;
+      top: 0;
+      right: 0;
+      min-height: 40px;
+    }
     .spec-grid {
       grid-template-columns: 1fr 1fr;
     }

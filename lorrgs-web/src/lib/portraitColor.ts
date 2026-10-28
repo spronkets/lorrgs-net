@@ -24,20 +24,43 @@ export function fitPortraitArtwork(
   width: number,
   height: number
 ): string {
+  return portraitArtworkLayout(pixels, width, height).fit;
+}
+
+export function portraitArtworkLayout(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number
+): { fit: string; lightX: number; lightY: number } {
   let left = width,
     top = height,
     right = -1,
     bottom = -1;
+  let weight = 0,
+    centerX = 0,
+    centerY = 0;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if (!(pixels[(y * width + x) * 4 + 3] > 16)) continue;
+      const sourceAlpha = pixels[(y * width + x) * 4 + 3] / 255;
+      // Match the portrait filter's shadow-removal curve: alpha * 5 - 4.
+      const alpha = Math.max(0, sourceAlpha * 5 - 4);
+      if (!alpha) continue;
       left = Math.min(left, x);
       right = Math.max(right, x);
       top = Math.min(top, y);
       bottom = Math.max(bottom, y);
+      weight += alpha;
+      centerX += (x + 0.5) * alpha;
+      centerY += (y + 0.5) * alpha;
     }
   }
-  if (right < left || bottom < top) return '';
+  if (!weight) return { fit: '', lightX: 50, lightY: 50 };
   const span = Math.max(right - left + 1, bottom - top + 1);
-  return `width: ${(width / span) * 100}%; height: ${(height / span) * 100}%; left: ${50 - ((left + (right - left + 1) / 2) / span) * 100}%; top: ${50 - ((top + (bottom - top + 1) / 2) / span) * 100}%`;
+  const offsetX = 50 - ((left + (right - left + 1) / 2) / span) * 100;
+  const offsetY = 100 - ((bottom + 1) / span) * 100;
+  return {
+    fit: `width: ${(width / span) * 100}%; height: ${(height / span) * 100}%; left: ${offsetX}%; top: ${offsetY}%; transform-origin: ${((left + (right - left + 1) / 2) / width) * 100}% ${((bottom + 1) / height) * 100}%`,
+    lightX: offsetX + (centerX / weight / span) * 100,
+    lightY: offsetY + (centerY / weight / span) * 100
+  };
 }

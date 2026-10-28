@@ -133,6 +133,20 @@
     border-bottom: 1px solid var(--line);
     background: var(--panel);
   }
+  @media (max-width: 600px) {
+    .boss-row {
+      flex-direction: column;
+    }
+    .boss-row .identity {
+      box-sizing: border-box;
+      width: var(--timeline-viewport-width);
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .boss-row .track {
+      width: calc(100% - 34px);
+    }
+  }
   .identity {
     width: 220px;
     flex-shrink: 0;

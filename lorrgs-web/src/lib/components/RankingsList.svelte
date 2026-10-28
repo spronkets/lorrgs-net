@@ -1,9 +1,7 @@
 <script lang="ts">
   import {
-    formatRankingDuration,
     getRankingFilterError,
     selectRankingReports,
-    summarizeRankingReports,
     type RankingFilters,
     type RankingSort
   } from '../rankingUtils';
@@ -16,6 +14,7 @@
 
   let filters: RankingFilters = emptyFilters();
   let sort: RankingSort = 'rank';
+  let reportLimit = 10;
 
   function emptyFilters(): RankingFilters {
     return { region: '', minDuration: '', maxDuration: '', fromDate: '', toDate: '' };
@@ -26,22 +25,21 @@
     sort = 'rank';
   }
 
-  function formatPerformance(value: number | null | undefined) {
-    return typeof value === 'number' && Number.isFinite(value)
-      ? value.toLocaleString(undefined, { maximumFractionDigits: 1 })
-      : 'N/A';
-  }
-
   $: apiReports = Array.isArray(rankings?.reports) ? rankings.reports : ([] as RankingReport[]);
   $: filterError = getRankingFilterError(filters);
   $: visibleReports = selectRankingReports(apiReports, filters, sort);
-  $: summary = summarizeRankingReports(visibleReports.map((entry) => entry.report));
+  $: {
+    void visibleReports;
+    reportLimit = 10;
+  }
+  $: displayedReports = visibleReports.slice(0, reportLimit);
+  $: activeFilterCount = Object.values(filters).filter(Boolean).length + (sort !== 'rank' ? 1 : 0);
 </script>
 
 <div class="rankings-list">
   <section class="analytics" aria-label="Ranking analytics">
     <div class="analytics-filters">
-      <fieldset class="filter-group">
+      <fieldset class="filter-group region-filter">
         <legend>Region</legend>
         {#each ['', 'us', 'eu', 'kr', 'tw', 'cn'] as region (region)}
           <button
@@ -53,7 +51,7 @@
           >
         {/each}
       </fieldset>
-      <fieldset class="filter-group">
+      <fieldset class="filter-group duration-filter">
         <legend>Kill time</legend>
         <input
           aria-label="Minimum kill time"
@@ -69,38 +67,34 @@
           class="kill-time"
         />
       </fieldset>
-      <fieldset class="filter-group">
-        <legend>Date range</legend>
-        <input aria-label="From date" type="date" bind:value={filters.fromDate} />
-        <span aria-hidden="true">–</span>
-        <input aria-label="To date" type="date" bind:value={filters.toDate} />
-      </fieldset>
-      <label
-        >Sort by
-        <select bind:value={sort}>
-          <option value="rank">Original rank</option>
-          <option value="performance">Performance (highest)</option>
-          <option value="duration">Kill time (shortest)</option>
-          <option value="date">Date (newest)</option>
-        </select>
-      </label>
-      <button type="button" on:click={resetFilters}>Reset filters</button>
+      <details class="advanced-filters">
+        <summary>Filters{activeFilterCount ? ` (${activeFilterCount} active)` : ''}</summary>
+        <div class="advanced-options">
+          <fieldset class="filter-group">
+            <legend>Date range</legend>
+            <input aria-label="From date" type="date" bind:value={filters.fromDate} />
+            <span aria-hidden="true">–</span>
+            <input aria-label="To date" type="date" bind:value={filters.toDate} />
+          </fieldset>
+          <label
+            >Sort by
+            <select bind:value={sort}>
+              <option value="rank">Original rank</option>
+              <option value="performance">Performance (highest)</option>
+              <option value="duration">Kill time (shortest)</option>
+              <option value="date">Date (newest)</option>
+            </select>
+          </label>
+          <button type="button" on:click={resetFilters}>Reset filters</button>
+        </div>
+      </details>
     </div>
     {#if filterError}<p role="alert">{filterError}</p>{/if}
-    <div class="analytics-summary" aria-live="polite">
-      <span>Showing {summary.count} of {apiReports.length} loaded reports</span>
-      <span
-        >Best {rankings?.metric?.toUpperCase() || 'performance'}: {formatPerformance(
-          summary.bestPerformance
-        )}</span
-      >
-      <span>Median kill time: {formatRankingDuration(summary.medianDuration)}</span>
-    </div>
   </section>
 
   {#key `${edition}:${rankings?.specSlug}:${rankings?.bossSlug}:${rankings?.updated}`}
     <RankingsTimeline
-      reports={visibleReports}
+      reports={displayedReports}
       {edition}
       bossSlug={rankings?.bossSlug ?? ''}
       {bossIconName}
@@ -109,9 +103,66 @@
       classId={apiReports[0]?.players?.[0]?.classId ?? 0}
     />
   {/key}
+  {#if displayedReports.length < visibleReports.length}
+    <button class="load-more" type="button" on:click={() => (reportLimit += 10)}>
+      Load more
+    </button>
+  {/if}
 </div>
 
 <style>
+  @media (max-width: 600px) {
+    .analytics .analytics-filters {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+    }
+    .analytics .region-filter,
+    .analytics .duration-filter {
+      grid-column: 1 / -1;
+    }
+    .analytics .filter-group {
+      gap: 6px;
+    }
+    .analytics .filter-group legend {
+      margin-bottom: 5px;
+    }
+    .analytics .filter-group button {
+      flex: 1;
+      min-width: 34px;
+      min-height: 38px;
+    }
+    .analytics .duration-filter input {
+      flex: 1;
+      width: 0;
+      min-width: 0;
+    }
+    .analytics .advanced-filters[open] {
+      grid-column: 1 / -1;
+    }
+    .analytics .filter-group input,
+    .analytics .advanced-options select {
+      min-height: 38px;
+    }
+    .analytics .advanced-filters summary {
+      min-height: 38px;
+      box-sizing: border-box;
+      padding: 10px;
+      border: 1px solid currentColor;
+      border-radius: 4px;
+    }
+    .analytics .advanced-options {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .analytics .advanced-options .filter-group {
+      flex-wrap: wrap;
+    }
+    .analytics .advanced-options input {
+      min-width: 0;
+      flex: 1;
+    }
+  }
   .filter-group {
     display: flex;
     gap: 3px;
@@ -155,11 +206,10 @@
     width: 80px;
   }
   .analytics {
-    padding: 0.6rem;
+    padding: 0.35rem 0;
     margin-bottom: 0.6rem;
-    border: 1px solid #c2d8e7;
-    border-radius: 0.5rem;
-    background: #fff;
+    border: 0;
+    background: transparent;
     color: #2a4b69;
   }
 
@@ -187,13 +237,36 @@
     color: #2a4b69;
   }
 
-  .analytics-summary {
+  .advanced-filters summary {
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0.3rem;
+  }
+  .advanced-options {
     display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
-    margin-top: 0.5rem;
-    font-size: 0.75rem;
-    font-weight: 600;
+    align-items: end;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+  }
+  .load-more {
+    display: block;
+    margin: 12px auto 0;
+    min-height: 40px;
+    padding: 8px 24px;
+    border: 1px solid #8fc1e4;
+    border-radius: 4px;
+    background: #f3f9ff;
+    color: #2a4b69;
+    font: inherit;
+    cursor: pointer;
+  }
+  .load-more:hover {
+    border-color: #c64a85;
+  }
+  .load-more:focus-visible {
+    outline: 2px solid #c64a85;
+    outline-offset: 2px;
   }
 
   .rankings-list {
@@ -212,14 +285,14 @@
   }
 
   :global(.theme-dark) .analytics {
-    background: #13263a;
-    border-color: #355472;
+    background: transparent;
     color: #c9e4f8;
   }
 
   :global(.theme-dark) .analytics-filters input,
   :global(.theme-dark) .analytics-filters select,
-  :global(.theme-dark) .analytics-filters button {
+  :global(.theme-dark) .analytics-filters button,
+  :global(.theme-dark) .load-more {
     background: #102032;
     border-color: #355472;
     color: #c9e4f8;
