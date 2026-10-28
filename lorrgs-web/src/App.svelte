@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Alert from './lib/components/Alert.svelte';
   import { onMount } from 'svelte';
   import * as API from './lib/api';
   import HomePage from './lib/pages/HomePage.svelte';
@@ -213,9 +214,7 @@
 
   <main class="app-main">
     {#if error}
-      <div class="error-banner">
-        <p><strong>Error:</strong> {error}</p>
-      </div>
+      <Alert variant="error">{error}</Alert>
     {/if}
 
     {#if loading}
@@ -233,9 +232,20 @@
     {/if}
   </main>
   <footer class="app-footer">
-    LorrgsNET is a Warcraft Logs report analyzer focused on individual performance, based on
-    <a href="https://lorrgs.io/" target="_blank" rel="noreferrer">lorrgs.io</a>
-    and ported to .NET and Svelte for fun.
+    <p>
+      LorrgsNET is a personal, unofficial adaptation of
+      <a href="https://lorrgs.io/" target="_blank" rel="noreferrer">lorrgs.io</a>, with its Python
+      API ported to .NET and its frontend rebuilt from scratch in Svelte.
+      Combat data is retrieved from <a href="https://www.warcraftlogs.com/" target="_blank" rel="noreferrer"
+        >Warcraft Logs</a
+      >, and item and ability tooltips are provided by
+      <a href="https://www.wowhead.com/" target="_blank" rel="noreferrer">Wowhead</a>.
+      World of Warcraft images and game artwork are copyright Blizzard Entertainment, Inc.
+      World of Warcraft, Warcraft, and Blizzard Entertainment are trademarks or registered
+      trademarks of Blizzard Entertainment, Inc. in the U.S. and/or other countries.
+      LorrgsNET is not affiliated with or endorsed by lorrgs.io, Warcraft Logs, Wowhead, or
+      Blizzard Entertainment.
+    </p>
   </footer>
 </div>
 
@@ -404,6 +414,10 @@
     padding: 0.75rem 1.25rem;
     font-size: 0.75rem;
     color: var(--subtitle-color);
+    line-height: 1.6;
+  }
+  .app-footer p {
+    margin: 0;
   }
   .app-footer a {
     color: inherit;
@@ -440,16 +454,6 @@
     margin: 0 auto;
     width: 100%;
     padding: 0.75rem 1.25rem 1.5rem;
-  }
-
-  .error-banner {
-    background: #fef2f2;
-    border: 1px solid #f3b4b4;
-    color: #8a2929;
-    padding: 1rem;
-    border-radius: 0.75rem;
-    margin-bottom: 1.25rem;
-    box-shadow: 0 7px 20px rgba(153, 48, 48, 0.08);
   }
 
   .loading {

@@ -25,6 +25,25 @@ describe('App version mapping', () => {
     const nav = screen.getByRole('navigation', { name: 'Main navigation' });
     expect(nav).not.toHaveTextContent('Warcraft Logs rankings');
     expect(screen.getByText('lorrgs.io').closest('footer')).not.toBeNull();
+    const footer = screen.getByRole('contentinfo');
+    expect(footer).toHaveTextContent(
+      'Combat data is retrieved from Warcraft Logs, and item and ability tooltips are provided by Wowhead.'
+    );
+    expect(footer).toHaveTextContent('copyright Blizzard Entertainment, Inc.');
+    expect(footer).toHaveTextContent(
+      'trademarks or registered trademarks of Blizzard Entertainment, Inc. in the U.S. and/or other countries.'
+    );
+    expect(footer).toHaveTextContent(
+      'not affiliated with or endorsed by lorrgs.io, Warcraft Logs, Wowhead, or Blizzard Entertainment.'
+    );
+    expect(screen.getByRole('link', { name: 'Warcraft Logs' })).toHaveAttribute(
+      'href',
+      'https://www.warcraftlogs.com/'
+    );
+    expect(screen.getByRole('link', { name: 'Wowhead' })).toHaveAttribute(
+      'href',
+      'https://www.wowhead.com/'
+    );
     const tools = screen.getByText('Tools').closest('details')!;
     expect(tools).not.toHaveAttribute('open');
     await fireEvent.click(screen.getByText('Tools'));

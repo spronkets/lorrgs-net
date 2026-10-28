@@ -1,3 +1,5 @@
+import { RATE_LIMIT_MESSAGE } from './timelineError';
+
 const API_BASE: string =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE) || '/api';
 const HEALTH_READY_URL: string | undefined =
@@ -346,6 +348,7 @@ export function normalizeApiCollection(payload: unknown, fallbackKey = ''): unkn
 }
 
 async function buildApiError(response: Response): Promise<Error> {
+  if (response.status === 429) return new Error(RATE_LIMIT_MESSAGE);
   let detail = '';
 
   try {

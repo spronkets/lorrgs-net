@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Alert from './Alert.svelte';
   import { onMount, untrack } from 'svelte';
   import Toast from './Toast.svelte';
   import CopyNoteDialog from './CopyNoteDialog.svelte';
@@ -219,10 +220,10 @@
   </div>
   <SpellSelection {timelines} classId={selectedClassId} {edition} bind:hidden bind:inspected />
   {#if loader.stopped}
-    <p class="load-error" role="alert">
-      Timeline loading paused after an error. Remaining reports were not requested. Use Retry or
-      Resume timeline loading after resolving the error.
-    </p>
+    <Alert variant="warning">
+      Timeline loading is paused. Remaining reports haven't been requested. Use Retry or Resume
+      timeline loading when you're ready.
+    </Alert>
   {/if}
   {#if clipboardNotification}
     {#key clipboardNotification}
@@ -331,7 +332,7 @@
               (noteSelection = { timeline, report: reportWithReference(report) })}
           />
         {:else}
-          <p>No loaded reports match these filters.</p>
+          <Alert>No loaded reports match these filters.</Alert>
         {/each}
       </div>
     </div>
@@ -540,10 +541,6 @@
     top: 8px;
     padding-left: 3px;
     font: 11px monospace;
-  }
-  .load-error {
-    font-size: 12px;
-    color: #ce4141;
   }
   @media (max-width: 600px) {
     .mobile-timeline-hint {

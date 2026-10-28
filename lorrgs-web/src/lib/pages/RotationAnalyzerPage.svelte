@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Alert from '../components/Alert.svelte';
   import { onMount } from 'svelte';
   import * as API from '../api';
 
@@ -290,7 +291,7 @@
   {/if}
 
   {#if error}
-    <div class="error">{error}</div>
+    <Alert variant="error">{error}</Alert>
   {/if}
 
   {#if analysis}
@@ -381,14 +382,6 @@
   button:disabled {
     opacity: 0.6;
     cursor: default;
-  }
-
-  .error {
-    background: #4a2020;
-    border: 1px solid #8b3a3a;
-    color: #ffafaf;
-    padding: 0.75rem 1rem;
-    border-radius: 0.4rem;
   }
 
   .table {

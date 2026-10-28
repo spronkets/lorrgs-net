@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Alert from './Alert.svelte';
   import {
     getRankingFilterError,
     selectRankingReports,
@@ -14,7 +15,6 @@
 
   let filters: RankingFilters = emptyFilters();
   let sort: RankingSort = 'rank';
-  let reportLimit = 10;
 
   function emptyFilters(): RankingFilters {
     return { region: '', minDuration: '', maxDuration: '', fromDate: '', toDate: '' };
@@ -28,11 +28,6 @@
   $: apiReports = Array.isArray(rankings?.reports) ? rankings.reports : ([] as RankingReport[]);
   $: filterError = getRankingFilterError(filters);
   $: visibleReports = selectRankingReports(apiReports, filters, sort);
-  $: {
-    void visibleReports;
-    reportLimit = 10;
-  }
-  $: displayedReports = visibleReports.slice(0, reportLimit);
   $: activeFilterCount = Object.values(filters).filter(Boolean).length + (sort !== 'rank' ? 1 : 0);
 </script>
 
@@ -89,12 +84,12 @@
         </div>
       </details>
     </div>
-    {#if filterError}<p role="alert">{filterError}</p>{/if}
+    {#if filterError}<Alert variant="error">{filterError}</Alert>{/if}
   </section>
 
   {#key `${edition}:${rankings?.specSlug}:${rankings?.bossSlug}:${rankings?.updated}`}
     <RankingsTimeline
-      reports={displayedReports}
+      reports={visibleReports}
       {edition}
       bossSlug={rankings?.bossSlug ?? ''}
       {bossIconName}
@@ -103,11 +98,6 @@
       classId={apiReports[0]?.players?.[0]?.classId ?? 0}
     />
   {/key}
-  {#if displayedReports.length < visibleReports.length}
-    <button class="load-more" type="button" on:click={() => (reportLimit += 10)}>
-      Load more
-    </button>
-  {/if}
 </div>
 
 <style>
@@ -249,25 +239,6 @@
     gap: 0.5rem;
     padding: 0.5rem 0;
   }
-  .load-more {
-    display: block;
-    margin: 12px auto 0;
-    min-height: 40px;
-    padding: 8px 24px;
-    border: 1px solid #8fc1e4;
-    border-radius: 4px;
-    background: #f3f9ff;
-    color: #2a4b69;
-    font: inherit;
-    cursor: pointer;
-  }
-  .load-more:hover {
-    border-color: #c64a85;
-  }
-  .load-more:focus-visible {
-    outline: 2px solid #c64a85;
-    outline-offset: 2px;
-  }
 
   .rankings-list {
     animation: slideUp 0.3s ease-in-out;
@@ -291,8 +262,7 @@
 
   :global(.theme-dark) .analytics-filters input,
   :global(.theme-dark) .analytics-filters select,
-  :global(.theme-dark) .analytics-filters button,
-  :global(.theme-dark) .load-more {
+  :global(.theme-dark) .analytics-filters button {
     background: #102032;
     border-color: #355472;
     color: #c9e4f8;

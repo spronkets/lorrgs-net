@@ -93,7 +93,7 @@ describe('ranking analytics', () => {
     expect(screen.getByText('Alice')).toBeInTheDocument();
   });
 
-  it('shows ten reports at a time and resets pagination for filters, sorting, and new data', async () => {
+  it('shows the full ranking response without pagination and filters all reports', async () => {
     const manyRankings: SpecRankingData = {
       ...rankings,
       reports: Array.from({ length: 25 }, (_, index) => ({
@@ -104,28 +104,19 @@ describe('ranking analytics', () => {
     };
     const { container, rerender } = render(RankingsList, { rankings: manyRankings });
     const rowCount = () => container.querySelectorAll('.player-row').length;
-    expect(rowCount()).toBe(10);
-    expect(screen.queryByText('25 reports')).not.toBeInTheDocument();
-    const more = screen.getByRole('button', { name: 'Load more' });
-    expect(container.querySelector('.workspace')?.nextElementSibling).toBe(more);
-    await fireEvent.click(more);
-    expect(rowCount()).toBe(20);
-    await fireEvent.click(more);
     expect(rowCount()).toBe(25);
+    expect(screen.getByText('Player25')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Region EU' }));
-    expect(rowCount()).toBe(10);
-    expect(container.querySelector('.player-row .rank')).toHaveTextContent('2.');
-    await fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
     expect(rowCount()).toBe(12);
+    expect(container.querySelector('.player-row .rank')).toHaveTextContent('2.');
     await fireEvent.click(screen.getByText('Filters (1 active)'));
     await fireEvent.change(screen.getByLabelText('Sort by'), { target: { value: 'date' } });
-    expect(rowCount()).toBe(10);
-    await fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(rowCount()).toBe(12);
     await rerender({ rankings: { ...manyRankings, updated: '2026-10-23T12:00:00Z' } });
-    expect(rowCount()).toBe(10);
+    expect(rowCount()).toBe(12);
     await fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
-    expect(rowCount()).toBe(10);
+    expect(rowCount()).toBe(25);
   });
 
   it('shows invalid-input feedback instead of silently ignoring malformed filters', async () => {

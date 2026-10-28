@@ -7,7 +7,8 @@ public sealed record WclSpecRankingsResponse(
     [property: JsonPropertyName("worldData")] WclWorldDataNode? WorldData);
 
 public sealed record WclWorldDataNode(
-    [property: JsonPropertyName("zone")] WclZoneNode? Zone);
+    [property: JsonPropertyName("zone")] WclZoneNode? Zone,
+    [property: JsonPropertyName("encounter")] WclEncounterNode? Encounter);
 
 public sealed record WclZoneNode(
     [property: JsonPropertyName("encounters")] List<WclEncounterNode>? Encounters);

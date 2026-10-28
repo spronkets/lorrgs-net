@@ -49,7 +49,7 @@ public sealed class ReportTimelineService(
                 }
             }
         }
-        var groups = reports.Where(report => report.Fights.Count > 0)
+        var groups = reports.Where(report => report.Fights.Any(fight => fight.Phases is null))
             .GroupBy(report => report.ReportId).OrderBy(group => group.Key, StringComparer.Ordinal).ToArray();
         foreach (var chunk in groups.Chunk(20))
             await PopulatePhaseChunkAsync(reports, chunk, edition, cancellationToken);
@@ -67,6 +67,7 @@ public sealed class ReportTimelineService(
         {
             variables[$"code{index}"] = chunk[index].Key;
             variables[$"fights{index}"] = chunk[index].SelectMany(report => report.Fights)
+                .Where(fight => fight.Phases is null)
                 .Select(fight => fight.FightId).Distinct().Order().ToArray();
             definitions.Add($"$code{index}: String!, $fights{index}: [Int!]");
             selections.Add($"r{index}: report(code: $code{index}) {{ fights(fightIDs: $fights{index}) " +

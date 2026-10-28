@@ -67,6 +67,9 @@ public class RankingsController(
     private static readonly string SpecRankingsQuery =
         GraphQlResourceLoader.Load("Rankings.SpecRankings.graphql");
 
+    private static readonly string EncounterListQuery =
+        GraphQlResourceLoader.Load("Rankings.EncounterList.graphql");
+
     private static readonly string ReportRankingsEnrichmentQueryTemplate =
         GraphQlResourceLoader.Load("Rankings.ReportRankingsEnrichment.graphql");
 
@@ -154,7 +157,8 @@ public class RankingsController(
                 normalizedMetric,
                 edition,
                 requestOptions,
-                refresh);
+                refresh,
+                cancellationToken: cancellationToken);
 
             if (ranking == null)
             {
@@ -241,7 +245,8 @@ public class RankingsController(
         [FromQuery] string? hardModeLevel = null,
         [FromQuery] string? externalBuffs = null,
         [FromQuery] bool includeCombatantInfo = false,
-        [FromQuery] bool includeOtherPlayers = true)
+        [FromQuery] bool includeOtherPlayers = true,
+        CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Fetching spec ranking info: {SpecSlug}/{BossSlug}", specSlug, bossSlug);
 
@@ -292,7 +297,9 @@ public class RankingsController(
                 normalizedMetric,
                 edition,
                 requestOptions,
-                refresh);
+                refresh,
+                includeReportDetails: false,
+                cancellationToken: cancellationToken);
 
             if (ranking == null)
             {
@@ -303,6 +310,10 @@ public class RankingsController(
             ranking.Reports?.Clear();
 
             return Ok(ranking);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
@@ -497,7 +508,9 @@ public class RankingsController(
         string metric,
         string? edition,
         RankingRequestOptions requestOptions,
-        bool bypassWclCache)
+        bool bypassWclCache,
+        bool includeReportDetails = true,
+        CancellationToken cancellationToken = default)
     {
         _logger.LogDebug(
             "Querying WarcraftLogs API for spec ranking: {SpecSlug}/{BossSlug} zone={ZoneId} encounter={EncounterId} class={ClassName} spec={SpecName}",
@@ -533,7 +546,8 @@ public class RankingsController(
                 activeDifficulty,
                 activeOptions,
                 edition,
-                bypassWclCache);
+                bypassWclCache,
+                cancellationToken);
 
             if (queryResult.CharacterRankings == null)
             {
@@ -555,7 +569,8 @@ public class RankingsController(
                     activeDifficulty,
                     sizeFallbackOptions,
                     edition,
-                    bypassWclCache);
+                    bypassWclCache,
+                    cancellationToken);
 
                 if (retryWithoutSize.CharacterRankings != null)
                 {
@@ -583,7 +598,8 @@ public class RankingsController(
                     activeDifficulty,
                     sizeFallbackOptions,
                     edition,
-                    bypassWclCache);
+                    bypassWclCache,
+                    cancellationToken);
 
                 if (retryWithoutSize.CharacterRankings != null)
                 {
@@ -606,7 +622,8 @@ public class RankingsController(
                     null,
                     activeOptions,
                     edition,
-                    bypassWclCache);
+                    bypassWclCache,
+                    cancellationToken);
 
                 if (retryWithoutDifficulty.CharacterRankings != null)
                 {
@@ -638,8 +655,14 @@ public class RankingsController(
             ranking.TotalCount = characterRankings.Count;
             ranking.HasMorePages = characterRankings.HasMorePages;
 
+            if (!includeReportDetails)
+            {
+                return ranking;
+            }
+
             foreach (var rankingElem in characterRankings.Rankings)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (rankingElem.Hidden)
                 {
                     continue;
@@ -694,10 +717,14 @@ public class RankingsController(
                 ranking.Reports.Add(report);
             }
 
-            await PopulatePlayerPercentilesAsync(ranking.Reports, queryContext, metric, edition, bypassWclCache);
-            await EnrichPlayerFactionsAsync(ranking.Reports, edition, bypassWclCache);
+            await PopulatePlayerPercentilesAsync(ranking.Reports, queryContext, metric, edition, bypassWclCache, cancellationToken);
+            await EnrichPlayerFactionsAsync(ranking.Reports, edition, bypassWclCache, cancellationToken);
 
             return ranking;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
@@ -722,11 +749,27 @@ public class RankingsController(
         int? difficulty,
         RankingRequestOptions requestOptions,
         string? edition,
-        bool bypassWclCache)
+        bool bypassWclCache,
+        CancellationToken cancellationToken)
     {
+        var encounterId = queryContext.EncounterId;
+        if (encounterId <= 0)
+        {
+            var encounterList = await _warcraftLogsClient.QueryGraphQLAsync<WclSpecRankingsResponse>(
+                EncounterListQuery, new { zoneId = queryContext.ZoneId }, edition, bypassWclCache, cancellationToken);
+            var encounters = encounterList.WorldData?.Zone?.Encounters;
+            if (encounters is null || !TryFindEncounter(encounters, queryContext, out var selectedEncounter))
+            {
+                _logger.LogWarning("Encounter {BossSlug} was not returned for zone {ZoneId}",
+                    queryContext.BossSlug, queryContext.ZoneId);
+                return (null, null);
+            }
+            encounterId = selectedEncounter.Id;
+        }
+
         var variables = new
         {
-            zoneId = queryContext.ZoneId,
+            encounterId,
             className = queryContext.ClassName,
             specName = queryContext.SpecName,
             metric,
@@ -748,24 +791,15 @@ public class RankingsController(
             SpecRankingsQuery,
             variables,
             edition,
-            bypassWclCache);
+            bypassWclCache,
+            cancellationToken);
 
-        var encounters = specRankingsResponse.WorldData?.Zone?.Encounters;
-        if (encounters == null)
+        var encounter = specRankingsResponse.WorldData?.Encounter;
+        if (encounter is null)
         {
             _logger.LogWarning(
-                "WarcraftLogs returned no encounters for {SpecSlug}/{BossSlug} zone={ZoneId} edition={Edition}",
-                queryContext.SpecSlug, queryContext.BossSlug, queryContext.ZoneId, edition);
-            return (null, null);
-        }
-
-        if (!TryFindEncounter(encounters, queryContext, out var encounter))
-        {
-            _logger.LogWarning(
-                "Encounter {BossSlug} ({BossId}) was not returned for zone {ZoneId}",
-                queryContext.BossSlug,
-                queryContext.EncounterId,
-                queryContext.ZoneId);
+                "WarcraftLogs returned no encounter for {SpecSlug}/{BossSlug} encounter={EncounterId} edition={Edition}",
+                queryContext.SpecSlug, queryContext.BossSlug, encounterId, edition);
             return (null, null);
         }
 
@@ -783,7 +817,8 @@ public class RankingsController(
         RankingQueryContext queryContext,
         string metric,
         string? edition,
-        bool bypassWclCache)
+        bool bypassWclCache,
+        CancellationToken cancellationToken)
     {
         if (reports.Count == 0)
         {
@@ -800,6 +835,8 @@ public class RankingsController(
             .Where(static report =>
                 !string.IsNullOrWhiteSpace(report.ReportId) &&
                 (!report.Percentile.HasValue || report.Fights.Any(fight => !fight.Percentile.HasValue)))
+            .GroupBy(report => report.ReportId, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
             .ToList();
 
         if (unresolvedReports.Count == 0)
@@ -809,18 +846,20 @@ public class RankingsController(
 
         const int chunkSize = 10;
 
-        static string ReportSelection(string alias, RankingReport report)
+        static string ReportSelection(string alias, IGrouping<string, RankingReport> group)
         {
-            var fightIds = string.Join(", ", report.Fights.Select(fight => fight.FightId).Distinct().Order());
-            return $"    {alias}: report(code: \"{report.ReportId}\") {{ code title " +
+            var fightIds = string.Join(", ", group.SelectMany(report => report.Fights)
+                .Select(fight => fight.FightId).Distinct().Order());
+            return $"    {alias}: report(code: \"{EscapeGraphQlString(group.Key)}\") {{ code title " +
                 $"fights(fightIDs: [{fightIds}]) {{ id encounterID startTime endTime phaseTransitions {{ id startTime }} }} " +
-                "rankings(playerMetric: $playerMetric) }";
+                $"rankings(fightIDs: [{fightIds}], playerMetric: $playerMetric) }}";
         }
 
         for (var offset = 0; offset < unresolvedReports.Count; offset += chunkSize)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var chunk = unresolvedReports.Skip(offset).Take(chunkSize).ToList();
-            var aliasToReport = new Dictionary<string, RankingReport>(StringComparer.OrdinalIgnoreCase);
+            var aliasToReport = new Dictionary<string, IGrouping<string, RankingReport>>(StringComparer.OrdinalIgnoreCase);
             var reportsBlock = new StringBuilder();
 
             for (var i = 0; i < chunk.Count; i++)
@@ -842,7 +881,12 @@ public class RankingsController(
                     queryText,
                     new { playerMetric = metricForReportRanking },
                     edition,
-                    bypassWclCache);
+                    bypassWclCache,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
             {
@@ -858,8 +902,8 @@ public class RankingsController(
                 {
                     foreach (var alias in ex.InaccessibleReportAliases)
                     {
-                        _logger.LogWarning("Ranking enrichment report unavailable report={ReportCode}", aliasToReport[alias].ReportId);
-                        reports.Remove(aliasToReport[alias]);
+                        _logger.LogWarning("Ranking enrichment report unavailable report={ReportCode}", aliasToReport[alias].Key);
+                        foreach (var report in aliasToReport[alias]) reports.Remove(report);
                     }
                     response = partialData;
                 }
@@ -874,7 +918,7 @@ public class RankingsController(
                         try
                         {
                             var singleResponse = await _warcraftLogsClient.QueryGraphQLAsync(singleQuery,
-                                new { playerMetric = metricForReportRanking }, edition, bypassWclCache);
+                                new { playerMetric = metricForReportRanking }, edition, bypassWclCache, cancellationToken);
                             if (singleResponse.ValueKind != JsonValueKind.Object ||
                                 !singleResponse.TryGetProperty("reportData", out var singleReportData) ||
                                 singleReportData.ValueKind != JsonValueKind.Object)
@@ -885,8 +929,8 @@ public class RankingsController(
                             singleError.IsReportAccessFailure ||
                             singleError is WarcraftLogsReportPrivateException or WarcraftLogsReportNotFoundException)
                         {
-                            _logger.LogWarning(singleError, "Ranking enrichment report unavailable report={ReportCode}", entry.Value.ReportId);
-                            reports.Remove(entry.Value);
+                            _logger.LogWarning(singleError, "Ranking enrichment report unavailable report={ReportCode}", entry.Value.Key);
+                            foreach (var report in entry.Value) reports.Remove(report);
                         }
                     }
                     response = JsonSerializer.SerializeToElement(new { reportData = recoveredReports });
@@ -917,34 +961,37 @@ public class RankingsController(
             {
                 if (!reportData.TryGetProperty(entry.Key, out var reportElement) || reportElement.ValueKind != JsonValueKind.Object)
                 {
-                    reports.Remove(entry.Value);
+                    foreach (var report in entry.Value) reports.Remove(report);
                     continue;
                 }
 
-                if (reportElement.TryGetProperty("fights", out var fightMetadata) && fightMetadata.ValueKind == JsonValueKind.Array)
-                    ReportTimelineService.ApplyFightMetadata(entry.Value, fightMetadata);
-
-                if (!reportElement.TryGetProperty("rankings", out var rankingsElement))
+                foreach (var report in entry.Value)
                 {
-                    continue;
-                }
+                    if (reportElement.TryGetProperty("fights", out var fightMetadata) && fightMetadata.ValueKind == JsonValueKind.Array)
+                        ReportTimelineService.ApplyFightMetadata(report, fightMetadata);
 
-                var enrichedTitle = TryGetString(reportElement, "title");
-                if (!string.IsNullOrWhiteSpace(enrichedTitle))
-                {
-                    entry.Value.Title = enrichedTitle;
-                }
+                    if (!reportElement.TryGetProperty("rankings", out var rankingsElement))
+                    {
+                        continue;
+                    }
 
-                var percentile = TryResolvePlayerRankPercent(rankingsElement, entry.Value, queryContext);
-                if (!percentile.HasValue)
-                {
-                    continue;
-                }
+                    var enrichedTitle = TryGetString(reportElement, "title");
+                    if (!string.IsNullOrWhiteSpace(enrichedTitle))
+                    {
+                        report.Title = enrichedTitle;
+                    }
 
-                entry.Value.Percentile = percentile;
-                foreach (var fight in entry.Value.Fights)
-                {
-                    fight.Percentile = percentile;
+                    var percentile = TryResolvePlayerRankPercent(rankingsElement, report, queryContext);
+                    if (!percentile.HasValue)
+                    {
+                        continue;
+                    }
+
+                    report.Percentile = percentile;
+                    foreach (var fight in report.Fights)
+                    {
+                        fight.Percentile = percentile;
+                    }
                 }
             }
         }
@@ -1158,7 +1205,8 @@ public class RankingsController(
         return players;
     }
 
-    private async Task EnrichPlayerFactionsAsync(List<RankingReport> reports, string? edition, bool bypassWclCache)
+    private async Task EnrichPlayerFactionsAsync(List<RankingReport> reports, string? edition, bool bypassWclCache,
+        CancellationToken cancellationToken)
     {
         if (reports.Count == 0)
         {
@@ -1216,7 +1264,7 @@ public class RankingsController(
             return;
         }
 
-        var lookupRequests = lookupRequestsByKey.Values.ToList();
+        var lookupRequests = lookupRequestsByKey.Values.OrderBy(request => request.Key, StringComparer.Ordinal).ToList();
 
         if (lookupRequests.Count == 0)
         {
@@ -1227,6 +1275,7 @@ public class RankingsController(
 
         for (var offset = 0; offset < lookupRequests.Count; offset += chunkSize)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var chunk = lookupRequests.Skip(offset).Take(chunkSize).ToList();
             var aliasToKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var charactersBlock = new StringBuilder();
@@ -1247,7 +1296,11 @@ public class RankingsController(
             JsonElement response;
             try
             {
-                response = await _warcraftLogsClient.QueryGraphQLAsync(queryText, null, edition, bypassWclCache);
+                response = await _warcraftLogsClient.QueryGraphQLAsync(queryText, null, edition, bypassWclCache, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (WarcraftLogsGraphQlException)
             {
@@ -1803,7 +1856,7 @@ public class RankingsController(
         var requestedEdition = NormalizeOptionalValue(edition);
 
         var resolvedZoneId = zoneId;
-        var resolvedEncounterId = encounterId;
+        var resolvedEncounterId = encounterId ?? (boss?.RaidId == zoneId ? boss?.Id : null);
         var resolvedClassName = NormalizeOptionalValue(className);
         var resolvedSpecName = NormalizeOptionalValue(specName);
         var resolvedBossName = boss?.Name ?? bossSlug;

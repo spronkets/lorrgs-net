@@ -1,0 +1,10 @@
+query RankingEncounters($zoneId: Int!) {
+  worldData {
+    zone(id: $zoneId) {
+      encounters {
+        id
+        name
+      }
+    }
+  }
+}

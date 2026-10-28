@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Alert from './Alert.svelte';
   import { untrack } from 'svelte';
   import { timelineErrorSummary } from '../timelineError';
   import TimelinePhases from './TimelinePhases.svelte';
@@ -86,9 +87,11 @@
     {#if loading}
       <span class="message" role="status">Loading boss events…</span>
     {:else if error}
-      <div class="message error" role="alert">
-        <span>{timelineErrorSummary(error)}</span>
-        <button type="button" onclick={() => attempt++}>Retry boss timeline</button>
+      <div class="message">
+        <Alert variant="error" compact>
+          <span>{timelineErrorSummary(error)}</span>
+          <button type="button" onclick={() => attempt++}>Retry boss timeline</button>
+        </Alert>
       </div>
     {:else if timeline}
       <TimelinePhases phases={timeline.phases} {axisDuration} />
@@ -117,23 +120,17 @@
       >
         <span>{timelineTime(timeline.duration)}</span>
       </span>
-      {#if !timeline.isComplete}<small class="incomplete"
-          >Partial boss timeline — event limit reached</small
-        >
-      {:else if timeline.events.length === 0}<span class="message"
-          >No enemy casts were recorded for this fight.</span
-        >{/if}
+      {#if !timeline.isComplete}<div class="incomplete">
+          <Alert variant="warning" compact>Partial boss timeline — event limit reached</Alert>
+        </div>
+      {:else if timeline.events.length === 0}<div class="message">
+          <Alert compact>No enemy casts were recorded for this fight.</Alert>
+        </div>{/if}
     {/if}
   </div>
 </div>
 
 <style>
-  .message.error {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #ce4141;
-  }
   .boss-row {
     display: flex;
     min-height: 68px;
@@ -173,11 +170,6 @@
     font-weight: 600;
     text-decoration: none;
   }
-  small {
-    display: block;
-    color: var(--muted);
-    font-size: 10px;
-  }
   .track {
     position: relative;
     width: calc(100% - 248px);
@@ -198,6 +190,7 @@
     transform: translateY(-50%);
     font-size: 12px;
     z-index: 1;
+    max-width: calc(100% - 16px);
   }
   button {
     color: var(--text);
@@ -244,10 +237,6 @@
     bottom: 2px;
     color: var(--muted);
     font: 10px monospace;
-  }
-  .error,
-  .incomplete {
-    color: #ce4141;
   }
   .incomplete {
     position: absolute;

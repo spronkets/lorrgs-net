@@ -20,4 +20,4 @@ GET {{baseUrl}}/api/warcraftlogs/reports/REPLACE_MISSING_REPORT/timeline?fightId
 
 ### Initial rankings include each complete timeline already available in the API file cache.
 ### Uncached timelines are omitted without requesting events from Warcraft Logs.
-GET {{baseUrl}}/api/rankings/spec/retribution-paladin/illidan-stormrage?edition=anniversary&difficulty=normal&metric=dps
+GET {{baseUrl}}/api/rankings/spec/retribution-paladin/illidan-stormrage?edition=anniversary&difficulty=normal&metric=dps&zoneId=1060&encounterId=50609&className=Paladin&specName=Retribution

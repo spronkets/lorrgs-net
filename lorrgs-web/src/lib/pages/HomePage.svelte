@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Alert from '../components/Alert.svelte';
   import { onMount, tick } from 'svelte';
   import * as API from '../api';
   import {
@@ -275,7 +276,8 @@
           encounterId: selectedEncounterId || undefined,
           className: selectedClassMeta?.name || undefined,
           specName: selectedSpecMeta?.name || undefined,
-          difficultyId: selectedDifficultyId || undefined
+          difficultyId: selectedDifficultyId || undefined,
+          includeOtherPlayers: false
         }
       );
     } catch (err) {
@@ -439,13 +441,11 @@
     {#if rankingsLoading}
       <div class="loading">Loading rankings...</div>
     {:else if rankingsError}
-      <div class="error">
-        <p><strong>Error:</strong> {rankingsError}</p>
-      </div>
+      <Alert variant="error">{rankingsError}</Alert>
     {:else if rankings}
       <RankingsList {rankings} edition={selectedEditionSlug} bossIconName={selectedBossIconName} />
     {:else if selectedBoss && selectedSpec && lastRankingsRequestKey}
-      <div class="no-data">No rankings found for this selection</div>
+      <Alert>No rankings found for this selection</Alert>
     {/if}
   {/if}
 </div>
@@ -892,27 +892,16 @@
     box-shadow: var(--select-hover-ring);
   }
 
-  .loading,
-  .no-data,
-  .error {
+  .loading {
     margin-bottom: var(--space-7);
   }
 
-  .loading,
-  .no-data {
+  .loading {
     background: var(--summary-bg);
     border: 1px dashed var(--panel-border);
     border-radius: 0.75rem;
     padding: 1rem;
     color: var(--summary-value);
-  }
-
-  .error {
-    background: #fef2f2;
-    border: 1px solid #f3b4b4;
-    color: #8a2929;
-    padding: 1rem;
-    border-radius: 0.75rem;
   }
 
   @media (max-width: 700px) {

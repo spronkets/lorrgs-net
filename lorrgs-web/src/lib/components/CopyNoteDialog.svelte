@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Alert from './Alert.svelte';
   import { onMount } from 'svelte';
   import type { RankingReport, ReportTimeline } from '../api';
   import { buildRaidNote, specNoteTag, type NoteFormat, type NoteTarget } from '../raidNote';
@@ -109,7 +110,7 @@
   </div>
   <p class="hint">MRT: Method Raid Tools / Smart CD Reminder. NSRT: Northern Sky Raid Tools.</p>
   {#if !hasPhases}
-    <p class="hint">No observed phase transitions; times are relative to pull.</p>
+    <Alert compact>No observed phase transitions; times are relative to pull.</Alert>
   {:else if dynamic}
     <p class="hint">
       Phase numbering must match the phase notifications used by your raid addon or boss mod.
@@ -118,7 +119,7 @@
     </p>
   {/if}
   {#if !timeline.isComplete}
-    <p class="warning" role="status">Partial timeline: this note may be missing casts.</p>
+    <Alert variant="warning" compact>Partial timeline: this note may be missing casts.</Alert>
   {/if}
   <label class="preview"
     >Note preview
@@ -128,17 +129,17 @@
       spellcheck="false"
       onclick={(event) => event.currentTarget.select()}></textarea>
   </label>
-  {#if note.error}<p role="alert">{note.error}</p>{/if}
-  {#if copyError}<p role="alert">{copyError}</p>{/if}
+  {#if note.error}<Alert variant="error">{note.error}</Alert>{/if}
+  {#if copyError}<Alert variant="error">{copyError}</Alert>{/if}
   <footer>
     <span>{note.count} selected casts</span>
     <button type="button" disabled={Boolean(note.error)} onclick={copy}>Copy to clipboard</button>
   </footer>
   <p class="hint">Only casts for spells currently shown in the timeline are included.</p>
-  <p class="warning">
+  <Alert variant="warning" compact>
     Adjust timings for your group's composition and kill time; another player's timings may not suit
     your fight.
-  </p>
+  </Alert>
 </dialog>
 
 <style>
@@ -235,13 +236,5 @@
     min-height: 260px;
     resize: vertical;
     font: 12px/1.6 monospace;
-  }
-  .warning {
-    color: #b77821;
-    font-size: 12px;
-  }
-  [role='alert'] {
-    color: #ce4141;
-    font-size: 13px;
   }
 </style>

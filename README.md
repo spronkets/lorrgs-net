@@ -179,9 +179,30 @@ Class-colored comparison and World Data labels use theme-aware text tones with a
 light-mode lightness ceiling for readability. Icons, badges, and class accents
 retain their original colors; the comparison's dark-mode text treatment is unchanged.
 Report-count, best DPS, and median kill-time summaries are omitted. The timeline
-initially shows ten reports; Load more beneath it reveals the next ten from the
-cached ranking response without another ranking request. Filters and sorting apply
-to the whole response before pagination and reset the visible batch to ten.
+shows all reports returned for the requested Warcraft Logs ranking page, without
+client-side pagination or a Load more button. Filters and sorting apply to the
+entire returned response.
+Warcraft Logs exposes a `page` argument but no supported page-size argument;
+`size` means raid size, not result count. The upstream lorrgs.io site's 50-report
+limit is applied by its own loader after fetching rankings, not sent to Warcraft
+Logs. No custom API batching or cursor layer is used here. Successful Warcraft
+Logs responses remain in the existing 24-hour file cache.
+Ranking queries target only the selected encounter, not every boss in its raid.
+When an encounter ID is unavailable, a cached names/IDs-only lookup resolves it
+before requesting rankings. The comparison requests only the ranked player
+(`includeOtherPlayers=false`); public API callers can still request raid rosters.
+Percentile enrichment batches up to ten unique report codes, combines players
+from the same report, and restricts rankings and fight metadata to the requested
+fight IDs. Phase metadata returned by that query is reused; phase-only batches
+include only unresolved reports and fights. Character lookups remain deduplicated
+and batched in groups of twenty. Report and character batches use stable ordering
+so ranking-order changes alone do not invalidate their file-cache entries.
+The info-only ranking endpoint skips all per-report enrichment.
+Rate-limit responses use a friendly message in rankings and timelines instead of
+raw HTTP errors, without automatically retrying or claiming a specific reset time.
+Inline errors, warnings, and informational notices share the theme-aware Alert
+component, with severity icons, accessible announcements, and compact timeline
+variants. Notices show their message directly without an "Error:" prefix.
 Only visible reports enter the timeline loader; its existing three-at-a-time
 loading controls remain available.
 On phones, navigation uses two predictable rows. The comparison fills the width with

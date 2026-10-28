@@ -123,6 +123,8 @@ public sealed class WarcraftLogsClientCacheTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             client.QueryGraphQLAsync("query Cancel", cancellationToken: cancellation.Token));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            client.QueryGraphQLAsync<System.Text.Json.JsonElement>("query Cancel", cancellationToken: cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             client.TryQueryGraphQLFromCacheAsync("query Cancel", cancellationToken: cancellation.Token));
         Assert.Equal(0, handler.GraphQlRequests);
         Assert.Empty(Directory.GetFiles(fixture.CacheDirectory));

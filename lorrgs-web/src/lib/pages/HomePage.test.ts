@@ -80,6 +80,9 @@ it('combines the spec icons and encounter heading inside the selection panel', a
   expect(heading.querySelector('.spec-icon')?.nextElementSibling).toHaveClass('class-icon');
   expect(within(heading).getByRole('img', { name: 'Paladin' })).toBeInTheDocument();
   await screen.findByRole('region', { name: 'Cooldown comparison timelines' });
+  expect(vi.mocked(getSpecRankings).mock.calls[0][5]).toMatchObject({
+    includeOtherPlayers: false
+  });
   const expectedIcon =
     'https://wow.zamimg.com/images/wow/icons/medium/achievement_boss_illidan.jpg';
   expect(heading.querySelector('.boss-icon')).toHaveAttribute('src', expectedIcon);

@@ -233,6 +233,31 @@ public sealed class ReportTimelineServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task PopulateFightPhasesQueriesOnlyUnresolvedReportsAndFightsThenReusesResults()
+    {
+        const string response = """
+            {"data":{"reportData":{"r0":{"fights":[{"id":2,"encounterID":45,
+              "startTime":1000,"endTime":5000,"phaseTransitions":[]}]}}}}
+            """;
+        using var handler = new QueueHandler(response);
+        var service = CreateService(handler);
+        var resolved = Report("alreadyResolved", 1);
+        resolved.Fights[0].Phases = [];
+        var mixed = Report("mixed", 2);
+        mixed.Fights.Add(new RankingFight { FightId = 3, Name = "Encounter", Phases = [] });
+        var reports = new List<RankingReport> { resolved, mixed };
+
+        await service.PopulateFightPhasesAsync(reports, "retail", CancellationToken.None);
+        await service.PopulateFightPhasesAsync(reports, "retail", CancellationToken.None);
+
+        var variables = Assert.Single(handler.Requests).GetProperty("variables");
+        Assert.Equal("mixed", variables.GetProperty("code0").GetString());
+        Assert.Equal(2, Assert.Single(variables.GetProperty("fights0").EnumerateArray()).GetInt32());
+        Assert.False(variables.TryGetProperty("code1", out _));
+        Assert.All(reports.SelectMany(report => report.Fights), fight => Assert.NotNull(fight.Phases));
+    }
+
+    [Fact]
     public async Task PopulateFightPhasesKeepsHealthyAliasesFromPartialResponses()
     {
         const string response = """

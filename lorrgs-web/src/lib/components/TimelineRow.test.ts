@@ -178,7 +178,11 @@ describe('TimelineRow', () => {
       timeline: undefined,
       error: 'API Error: 429 Too Many Requests - {"traceId":"private"}'
     });
-    expect(screen.getByText('Too Many Requests')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Warcraft Logs needs a breather. We've hit its request limit, so please try again later."
+      )
+    ).toBeInTheDocument();
     expect(screen.queryByText(/traceId/)).not.toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(input.onload).toHaveBeenCalledWith(input.report);

@@ -239,9 +239,10 @@ public class WarcraftLogsClient(
         string query,
         object? variables = null,
         string? edition = null,
-        bool bypassCache = false)
+        bool bypassCache = false,
+        CancellationToken cancellationToken = default)
     {
-        var data = await QueryGraphQLAsync(query, variables, edition, bypassCache);
+        var data = await QueryGraphQLAsync(query, variables, edition, bypassCache, cancellationToken);
         var result = JsonSerializer.Deserialize<T>(data.GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
             PropertyNameCaseInsensitive = true

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Alert from '../components/Alert.svelte';
   import * as API from '../api';
   import { getBlizzardClassColor } from '../classColors';
   import BossIcon from '../components/BossIcon.svelte';
@@ -49,23 +50,18 @@
       {/each}
     </select>
     {#if boss?.icon}
-      <BossIcon
-        slug={selectedBoss}
-        iconName={boss.icon}
-        alt={boss.name}
-        size={40}
-      />
+      <BossIcon slug={selectedBoss} iconName={boss.icon} alt={boss.name} size={40} />
     {/if}
   </div>
 
   {#if loading}
     <div class="status">Loading comp rankings…</div>
   {:else if error}
-    <div class="status error">{error}</div>
+    <Alert variant="error">{error}</Alert>
   {:else if !selectedBoss}
-    <div class="status muted">Select a boss to view comp rankings.</div>
+    <Alert>Select a boss to view comp rankings.</Alert>
   {:else if !rankings?.reports?.length}
-    <div class="status muted">No comp rankings available.</div>
+    <Alert>No comp rankings available.</Alert>
   {:else}
     <div class="reports">
       {#each rankings.reports as report, reportIdx (`${report.reportId}-${reportIdx}`)}
@@ -138,17 +134,10 @@
     min-width: 220px;
   }
 
-
   .status {
     padding: 2rem;
     text-align: center;
     color: #aaa;
-  }
-  .status.error {
-    color: #f66;
-  }
-  .status.muted {
-    color: #666;
   }
 
   .reports {

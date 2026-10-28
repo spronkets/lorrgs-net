@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildApiUrl,
+  get,
+  send,
   getReportTimeline,
   getBossTimeline,
   getSpecRankings,
@@ -12,6 +14,23 @@ import { rows, response } from './testing/timelineFixtures';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('api utilities', () => {
+  it.each(['get', 'send'] as const)(
+    'shows a friendly rate-limit message for %s without retrying',
+    async (method) => {
+      const fetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Raw upstream detail', traceId: 'private' }), {
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: { 'content-type': 'application/json' }
+        })
+      );
+      vi.stubGlobal('fetch', fetch);
+      await expect(method === 'get' ? get('/rankings') : send('/rankings', {})).rejects.toThrow(
+        "Warcraft Logs needs a breather. We've hit its request limit, so please try again later."
+      );
+      expect(fetch).toHaveBeenCalledTimes(1);
+    }
+  );
   it('requests the selected fight boss reference from the API without browser caching', async () => {
     const fetch = vi
       .fn()

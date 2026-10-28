@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Alert from './Alert.svelte';
   import { timelineErrorSummary } from '../timelineError';
   import TimelinePhases from './TimelinePhases.svelte';
   import type { RankingReport, ReportTimeline } from '../api';
@@ -301,22 +302,27 @@
           {:else if event.kind === 'death'}<span class="death-label">†</span>{/if}
         </button>
       {/each}
-      {#if !timeline.isComplete}<span class="incomplete"
-          >Partial timeline — event limit reached</span
-        >{/if}
+      {#if !timeline.isComplete}<div class="incomplete">
+          <Alert variant="warning" compact>Partial timeline — event limit reached</Alert>
+        </div>{/if}
       {#if timeline.events.length === 0}
-        <span class="track-message"
-          >Warcraft Logs returned no cast, buff or death events for this player and fight.</span
-        >
-      {:else if events.length === 0}<span class="track-message"
-          >No events match the spell / timeline selection.</span
-        >{/if}
+        <div class="track-message">
+          <Alert compact
+            >Warcraft Logs returned no cast, buff or death events for this player and fight.</Alert
+          >
+        </div>
+      {:else if events.length === 0}<div class="track-message">
+          <Alert compact>No events match the spell / timeline selection.</Alert>
+        </div>{/if}
     {:else if loading}
       <span class="track-message loading-message" role="status">Loading report events…</span>
     {:else if error}
       <div class="track-message error-message">
-        <span>{timelineErrorSummary(error)}</span>
-        <button type="button" disabled={batchLoading} onclick={() => onload(report)}>Retry</button>
+        <Alert variant="error" compact>
+          <span>{timelineErrorSummary(error)}</span>
+          <button type="button" disabled={batchLoading} onclick={() => onload(report)}>Retry</button
+          >
+        </Alert>
       </div>
     {:else if canLoadTimeline(report)}
       <div class="unloaded-controls">
@@ -330,9 +336,9 @@
         </button>
       </div>
     {:else}
-      <span class="track-message"
-        >Timeline unavailable: report is missing fight or player identity.</span
-      >
+      <div class="track-message">
+        <Alert compact>Timeline unavailable: report is missing fight or player identity.</Alert>
+      </div>
     {/if}
     {#if timeline}
       <button
@@ -660,6 +666,7 @@
     margin: 0;
     font-size: 12px;
     z-index: 1;
+    max-width: calc(100% - 16px);
   }
   .loading-message,
   .unloaded-controls {
@@ -689,7 +696,6 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #ce4141;
     max-width: 580px;
     white-space: normal;
     margin-top: 5px;
@@ -699,6 +705,5 @@
     right: 8px;
     bottom: 0;
     font-size: 10px;
-    color: #c57822;
   }
 </style>
