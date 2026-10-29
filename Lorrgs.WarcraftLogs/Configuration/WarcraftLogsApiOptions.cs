@@ -12,7 +12,7 @@ public sealed class WarcraftLogsApiOptions
 
     public string ClientSecret { get; set; } = string.Empty;
 
-    public int GraphQlCacheTtlSeconds { get; set; } = 86400;
+    public TimeSpan GraphQlCacheTtl { get; set; } = TimeSpan.FromDays(10);
 
     public Dictionary<string, WarcraftLogsEndpointOptions> EditionEndpoints { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);

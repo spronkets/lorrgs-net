@@ -28,7 +28,7 @@ public sealed class WarcraftLogsApiOptionsTests
         var result = options.ResolveEndpoint(edition);
         Assert.Equal(options.BaseUrl, result.BaseUrl);
         Assert.Equal(options.AuthUrl, result.AuthUrl);
-        Assert.Equal(86400, options.GraphQlCacheTtlSeconds);
+        Assert.Equal(TimeSpan.FromDays(10), options.GraphQlCacheTtl);
     }
 
     [Theory]

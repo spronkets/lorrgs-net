@@ -1,6 +1,14 @@
 @Lorrgs.Api_HostAddress = http://localhost:5247
 
-GET {{Lorrgs.Api_HostAddress}}/weatherforecast/
+### Anniversary world-data cache
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/bosses?edition=anniversary
 Accept: application/json
 
 ###
+
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/bosses?edition=retail
+Accept: application/json
+
+### Missing edition returns 400
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/bosses
+Accept: application/json

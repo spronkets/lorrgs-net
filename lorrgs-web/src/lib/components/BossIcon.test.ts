@@ -3,6 +3,16 @@ import { describe, expect, it, vi } from 'vitest';
 import BossIcon from './BossIcon.svelte';
 
 describe('BossIcon', () => {
+  it('uses the real Zul Aman portraits directly without an image fallback', () => {
+    const { container } = render(BossIcon, {
+      slug: 'nalorakk',
+      iconName: 'ui-ej-boss-nalorakk.png'
+    });
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://wow.zamimg.com/images/wow/journal/ui-ej-boss-nalorakk.png'
+    );
+  });
   it('generates varied decorative rays that remain stable for the same boss', async () => {
     const { container, rerender } = render(BossIcon, { slug: 'halazzi' });
     const rays = container.querySelector('.boss-rays')!;
@@ -113,10 +123,13 @@ describe('BossIcon', () => {
     });
   });
 
-  it('omits missing and failed images and recovers when the source changes', async () => {
+  it('uses the generic icon for unknown bosses, hides failed images, and recovers on source changes', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { container, rerender } = render(BossIcon, { slug: 'unknown' });
-    expect(container.querySelector('.boss-portrait')).toBeNull();
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://wow.zamimg.com/images/icons/boss.gif'
+    );
     await rerender({ slug: 'unknown', iconName: 'missing' });
     await fireEvent.error(container.querySelector('img')!);
     expect(error).toHaveBeenCalledWith('Unable to load boss icon', {

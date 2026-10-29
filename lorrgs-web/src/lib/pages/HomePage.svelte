@@ -1,6 +1,6 @@
 <script lang="ts">
   import Alert from '../components/Alert.svelte';
-  import { onMount, tick } from 'svelte';
+  import { createEventDispatcher, onMount, tick } from 'svelte';
   import * as API from '../api';
   import {
     type SpecRankingData,
@@ -35,7 +35,8 @@
     instances: {}
   };
 
-  let selectedVersion = '';
+  export let selectedVersion = '';
+  const dispatch = createEventDispatcher<{ editionChange: { version: string } }>();
   let selectedRaid = '';
   let selectedBoss = '';
   let selectedSpec = '';
@@ -84,6 +85,7 @@
     if (selectedVersion === version) return;
     selectedVersion = version;
     onVersionChange();
+    dispatch('editionChange', { version });
   }
 
   // Group specs by roleId, then map to role objects

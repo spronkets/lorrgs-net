@@ -16,9 +16,29 @@ This repository is not the official hosted service at https://lorrgs.io/. It is 
 ### Warcraft Logs response caching
 
 Successful GraphQL responses are stored as JSON files in the API's
-`Data/cache/wcl-graphql` directory for 24 hours by default
-(`WarcraftLogs:GraphQlCacheTtlSeconds = 86400`), independently of `Cache:DefaultTtlSeconds`.
-Identical queries and variables reuse these files, including after API restarts.
+`Data/cache/wcl-graphql` directory for 10 days by default
+(`WarcraftLogs:GraphQlCacheTtl = "10.00:00:00"`).
+This setting uses .NET `TimeSpan` format (`d.hh:mm:ss`) with a one-minute minimum.
+Use `WarcraftLogs__GraphQlCacheTtl` for environment overrides, replacing the former
+`WarcraftLogs:GraphQlCacheTtlSeconds` setting.
+
+Cache data only when it avoids external API calls or substantial computation.
+World-data reference lists and the locally configured raid catalog are returned
+directly from server definitions, without additional memory or disk caching.
+Their small lookups, filtering, and sorting do not justify a separate cache.
+The former `WorldData:CacheTtl`, `WorldData:CleanupIntervalMinutes`, and legacy
+`Cache:DefaultTtl`/`Cache:DefaultTtlSeconds` settings are no longer used.
+Old world-data cache files are ignored and may be deleted; no new ones are written.
+
+All `/api/worlddata` requests require an `edition` query parameter. The frontend
+passes the selected edition on initial loading and reloads world data when the
+selection changes. Edition aliases are normalized:
+`midnight` maps to `retail`, `mop` to `mistsofpandaria`, and `classic` to `era`.
+Missing or unsupported editions return HTTP 400. Edition validation does not add
+edition-specific source data or filtering to the existing hardcoded reference lists.
+The raid-catalog endpoint returns one combined object grouped by edition.
+
+Identical GraphQL queries and variables reuse the GraphQL files, including after API restarts.
 An explicit refresh skips reading the cached response but saves the new response
 to disk and restarts its TTL. OAuth tokens remain in memory only.
 When Warcraft Logs returns HTTP 429, the API returns the rate-limit error immediately
@@ -33,7 +53,7 @@ of repeatedly submitting a rejected operation. GraphQL failures are not cached.
 
 HTTP error responses carry `Cache-Control: no-store`, so browsers and proxies
 do not retain failures such as rate-limit responses. This does not change the
-24-hour file cache for successful Warcraft Logs data.
+10-day file cache for successful Warcraft Logs data.
 
 Private and deleted upstream reports are distinguished from other GraphQL failures.
 Ranking metadata batches omit only inaccessible reports and retain healthy partial
@@ -46,6 +66,14 @@ availability, not new authentication requirements. This API remains public, with
 its existing unrestricted CORS policy.
 
 ### Ranking analytics
+
+Anniversary is Warcraft Logs Classic Fresh. Its Zul'Aman catalog uses WCL zone
+`1062` and the original final boss, Zul'jin, not Daakara. Zone `1059` must not be
+used for Anniversary Zul'Aman rankings. The final-boss URL uses `boss=zuljin`.
+All six bosses have explicit Classic Fresh encounter mappings (`101189` through
+`101194`). The Classic Fresh API calls encounter `101194` "Daakara"; the local
+catalog displays Zul'jin and passes the verified encounter ID rather than relying
+on that upstream name.
 
 Spec rankings now open a compact **aligned timeline workspace** by default.
 Spec Rankings uses the timeline directly, without a timeline/table view toggle.
@@ -63,14 +91,14 @@ The row shares the player time axis and zoom, and respects the cast/icon toggles
 The boss portrait appears beside the encounter name in the heading and reference
 row. Each player row also shows green phase lines and labels at that report's own
 observed transitions, including before event loading. Phase metadata is fetched
-in batches of up to 20 reports and file-cached for 24 hours; this does not fetch
+in batches of up to 20 reports and file-cached for 10 days; this does not fetch
 boss event streams for every ranking or copy the reference fight's timings.
 Phase metadata is also included in existing percentile-enrichment queries and
 reused from cached boss metadata. Separate phase batches are skipped when their
 fights already have metadata; an empty observed phase list is treated as known data, not a
 reason to request it again. Phase lines remain behind casts, buffs and row controls.
 Missing phase data is not guessed. The API bundles cached boss timelines with
-rankings; otherwise only the current reference is fetched using the same 24-hour
+rankings; otherwise only the current reference is fetched using the same 10-day
 file cache. Boss and player event queries have independent cache keys.
 
 Nek'zali phase labels are corrected once a complete boss event stream is available:
@@ -95,12 +123,12 @@ Devourer Void Metamorphosis ends have explicitly inferred markers, not synthetic
 casts. Inferred events are never included in raid-note cast exports. Unknown specs
 and non-Retail editions keep the generic event normalization. These rules apply to
 both bundled and individually requested timelines without changing raw file-cache
-keys or the 24-hour lifetime; the separate rotation analyzer retains raw cast metrics.
+keys or the 10-day lifetime; the separate rotation analyzer retains raw cast metrics.
 
 Backend regression tests use xUnit and the standard .NET test SDK.
 `Lorrgs.WarcraftLogs.Tests` covers response parsing, edition configuration,
 OAuth, HTTP retry/rate-limit behavior, concurrent request deduplication, and
-24-hour file caching across client instances. `Lorrgs.Api.Tests` covers rotation
+10-day file caching across client instances. `Lorrgs.Api.Tests` covers rotation
 pagination/scoring, cache expiry/invalidation/cleanup, raid catalog mapping,
 ranking validation/fallbacks, percentile/faction enrichment, world-data endpoint
 filtering and cache parity, timeline pagination/actor selection/buff
@@ -110,7 +138,7 @@ projects and are included in the solution. Run all backend tests with
 `dotnet test Lorrgs.slnx`, or select a project with
 `dotnet test Lorrgs.WarcraftLogs.Tests\Lorrgs.WarcraftLogs.Tests.csproj`.
 Tests use queued HTTP responses and isolated temporary caches, not live Warcraft
-Logs requests. Cache expiry tests age temporary files rather than waiting or
+Logs requests. Cache expiry tests adjust temporary file timestamps or stored write times rather than waiting or
 modifying application caches.
 
 Collect and enforce coverage using Coverlet's native MSBuild integration:
@@ -186,7 +214,7 @@ Warcraft Logs exposes a `page` argument but no supported page-size argument;
 `size` means raid size, not result count. The upstream lorrgs.io site's 50-report
 limit is applied by its own loader after fetching rankings, not sent to Warcraft
 Logs. No custom API batching or cursor layer is used here. Successful Warcraft
-Logs responses remain in the existing 24-hour file cache.
+Logs responses remain in the existing 10-day file cache.
 Ranking queries target only the selected encounter, not every boss in its raid.
 When an encounter ID is unavailable, a cached names/IDs-only lookup resolves it
 before requesting rankings. The comparison requests only the ranked player
@@ -274,7 +302,7 @@ player column beside the analyzer link. These require no event requests.
 Any loading error stops the queue,
 shows the affected row's error and offers explicit retry. Leaving the workspace
 cancels pending HTTP work. These requests use the selected edition's WCL host
-and the same 24-hour disk cache as other successful GraphQL responses.
+and the same 10-day disk cache as other successful GraphQL responses.
 The initial spec rankings response includes a `timeline` on every report whose
 complete metadata and event pages are available in the API's unexpired file cache.
 These timelines render immediately, including rows outside the top three.
@@ -333,7 +361,7 @@ Spec-specific processing (Stasis, Ascendance procs, Explosive Shot recasts, and
 Void Metamorphosis) must run before cast counts are computed; applying these
 rules to the current raw summaries without reliable spec metadata would be
 incorrect. Likewise, upstream's persisted-ranking freshness/dirty policy is
-not a replacement for this application's explicit 24-hour GraphQL file cache.
+not a replacement for this application's explicit 10-day GraphQL file cache.
 
 ## Project Structure
 
@@ -447,7 +475,7 @@ rankings rather than failing the ranking request. Timeline loading first reuses
 report-level master data when timeline metadata lacks actors or abilities. This
 recovery includes spell names and icons, not just actor identities.
 Cache-only loading never fetches missing master data; explicit loading can fetch it
-through the same 24-hour API file cache, shared across fights in a report.
+through the same 10-day API file cache, shared across fights in a report.
 Timelines missing spell metadata are not bundled as complete timelines.
 If both sources lack actors, explicit
 timeline requests report unavailable player metadata as not found. Character enrichment uses the

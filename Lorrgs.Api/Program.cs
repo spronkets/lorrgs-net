@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Lorrgs.Api;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using WclClient = Lorrgs.WarcraftLogs.WarcraftLogsClient;
@@ -17,15 +18,9 @@ builder.Services.AddOptions<RaidCatalogOptions>()
     .Bind(builder.Configuration)
     .ValidateOnStart();
 
-builder.Services.AddOptions<CacheOptions>()
-    .Bind(builder.Configuration.GetSection(CacheOptions.SectionName))
-    .ValidateOnStart();
-
 builder.Services.AddMemoryCache();
-builder.Services.AddScoped<Lorrgs.Api.Services.CacheService>();
 builder.Services.AddScoped<Lorrgs.Api.Services.RotationAnalysisService>();
 builder.Services.AddScoped<Lorrgs.Api.Services.IReportTimelineService, Lorrgs.Api.Services.ReportTimelineService>();
-builder.Services.AddHostedService<Lorrgs.Api.Services.CacheCleanupBackgroundService>();
 
 // HTTP client for WarcraftLogs API
 builder.Services.AddHttpClient<WclClient>();

@@ -15,7 +15,7 @@ public class SpecRankingData
     public int Page { get; set; } = 1;
     public bool HasMorePages { get; set; }
     public int TotalCount { get; set; }
-    public List<RankingReport> Reports { get; set; } = new();
+    public List<RankingReport> Reports { get; set; } = [];
     public DateTime Updated { get; set; }
     public bool IsDirty { get; set; }
     public double? Percentile { get; set; }
@@ -27,7 +27,7 @@ public class SpecRankingData
 public class CompRankingData
 {
     public required string BossSlug { get; set; }
-    public List<CompRankingReport> Reports { get; set; } = new();
+    public List<CompRankingReport> Reports { get; set; } = [];
     public DateTime Updated { get; set; }
 }
 
@@ -42,8 +42,8 @@ public class RankingReport
     public int Duration { get; set; } // milliseconds
     public string DurationDisplay => RankingHelpers.FormatDuration(Duration);
     public DateTime StartTime { get; set; }
-    public List<RankingFight> Fights { get; set; } = new();
-    public List<RankingPlayer> Players { get; set; } = new();
+    public List<RankingFight> Fights { get; set; } = [];
+    public List<RankingPlayer> Players { get; set; } = [];
     /// <summary>A complete timeline available in the API's unexpired file cache.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ReportTimeline? Timeline { get; set; }
@@ -59,7 +59,7 @@ public class CompRankingReport
 {
     public required string ReportId { get; set; }
     public required string Title { get; set; }
-    public List<CompRankingFight> Fights { get; set; } = new();
+    public List<CompRankingFight> Fights { get; set; } = [];
     public DateTime StartTime { get; set; }
 }
 
@@ -89,7 +89,7 @@ public class CompRankingFight
     public bool IsKill { get; set; }
     public DateTime StartTime { get; set; }
     public required CompRankingComposition Composition { get; set; }
-    public List<CompRankingPlayer> Players { get; set; } = new();
+    public List<CompRankingPlayer> Players { get; set; } = [];
 }
 
 /// <summary>
@@ -97,9 +97,9 @@ public class CompRankingFight
 /// </summary>
 public class CompRankingComposition
 {
-    public Dictionary<string, int> Specs { get; set; } = new();
-    public Dictionary<string, int> Roles { get; set; } = new();
-    public Dictionary<string, int> Classes { get; set; } = new();
+    public Dictionary<string, int> Specs { get; set; } = [];
+    public Dictionary<string, int> Roles { get; set; } = [];
+    public Dictionary<string, int> Classes { get; set; } = [];
 }
 
 /// <summary>
@@ -126,7 +126,7 @@ public class RankingPlayer
     public int SpecId { get; set; }
     public required string SpecSlug { get; set; }
     public double Performance { get; set; } // DPS or HPS value
-    public List<RankingCast> Casts { get; set; } = new();
+    public List<RankingCast> Casts { get; set; } = [];
 }
 
 /// <summary>

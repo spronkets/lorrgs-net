@@ -6,6 +6,61 @@ import { getEditionSlug } from './lib/raidCatalog';
 import { getVersionIconUrl } from './lib/selectionIcons';
 
 describe('App version mapping', () => {
+  function mockWorldData() {
+    localStorage.setItem('lorrgs-theme', 'light');
+    vi.spyOn(API, 'waitForHealthReady').mockResolvedValue(true);
+    vi.spyOn(API, 'getRaidCatalog').mockResolvedValue({ editions: [], instances: {} });
+    for (const name of [
+      'getClasses',
+      'getSpecs',
+      'getRoles',
+      'getBosses',
+      'getZones',
+      'getSpells',
+      'getTrinkets',
+      'getSeasons'
+    ] as const) {
+      vi.spyOn(API, name).mockResolvedValue([]);
+    }
+  }
+
+  it('passes the URL edition to world-data loading and reloads after edition changes', async () => {
+    mockWorldData();
+    history.replaceState({}, '', '/?edition=Anniversary');
+    render(App);
+
+    await screen.findByRole('heading', { name: 'Edition' });
+    expect(API.getBosses).toHaveBeenLastCalledWith('anniversary');
+    expect(API.getClasses).toHaveBeenLastCalledWith('anniversary');
+    await fireEvent.click(screen.getByRole('button', { name: 'Retail' }));
+    await waitFor(() => expect(API.getBosses).toHaveBeenLastCalledWith('midnight'));
+    expect(API.getClasses).toHaveBeenLastCalledWith('midnight');
+    expect(API.getSeasons).toHaveBeenLastCalledWith('midnight');
+  });
+
+  it('does not replace the current edition data with an older in-flight response', async () => {
+    mockWorldData();
+    history.replaceState({}, '', '/?edition=Anniversary');
+    let resolveOlder: (value: unknown[]) => void = () => {};
+    vi.mocked(API.getBosses).mockImplementation((edition) =>
+      edition === 'midnight'
+        ? new Promise((resolve) => {
+            resolveOlder = resolve;
+          })
+        : Promise.resolve([])
+    );
+    render(App);
+    await screen.findByRole('heading', { name: 'Edition' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Retail' }));
+    await waitFor(() => expect(API.getBosses).toHaveBeenLastCalledWith('midnight'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Era' }));
+    await waitFor(() => expect(API.getBosses).toHaveBeenLastCalledWith('era'));
+    resolveOlder([{ id: 1, name: 'Wrong edition boss', nameSlug: 'wrong', icon: '', raidId: 1 }]);
+    await fireEvent.click(screen.getByText('Tools'));
+    await fireEvent.click(screen.getByRole('button', { name: 'World Data' }));
+    await waitFor(() => expect(screen.queryByText('Wrong edition boss')).not.toBeInTheDocument());
+  });
+
   it('uses the retail catalog key and retail icon for the Retail option', () => {
     expect(getEditionSlug('Retail')).toBe('retail');
     expect(getVersionIconUrl('Retail')).toBe('/images/wow/editions/midnight.png');

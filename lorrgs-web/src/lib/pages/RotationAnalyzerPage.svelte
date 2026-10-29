@@ -3,6 +3,8 @@
   import { onMount } from 'svelte';
   import * as API from '../api';
 
+  export let edition = 'retail';
+
   let reportCode = '';
   let lookup = null;
   let selectedFightId = '';
@@ -94,7 +96,7 @@
     const entries = await Promise.all(
       spellIds.map(async (spellId) => {
         try {
-          const spell = (await API.getSpell(spellId)) as { name?: string };
+          const spell = (await API.getSpell(spellId, edition)) as { name?: string };
           const name = typeof spell?.name === 'string' ? spell.name.trim() : '';
           return [spellId, name || `Spell ${spellId}`] as const;
         } catch {

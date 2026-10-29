@@ -13,7 +13,7 @@ namespace Lorrgs.Api.Controllers;
 
 /// <summary>
 /// Provides ranking data for specs and compositions.
-/// Data is cached for 1 day by default.
+/// Data is cached for 10 days by default.
 /// This controller serves pre-computed rankings from the cache, avoiding real-time API calls.
 /// </summary>
 [ApiController]
@@ -532,7 +532,7 @@ public class RankingsController(
                 Page = requestOptions.Page,
                 Updated = DateTime.UtcNow,
                 IsDirty = false,
-                Reports = new List<RankingReport>()
+                Reports = []
             };
 
             // Faction enrichment requires realm/region data from character rankings.
@@ -699,8 +699,8 @@ public class RankingsController(
                     Percentile = rankingElem.Percentile,
                     Duration = rankingElem.Duration,
                     StartTime = UnixTimeStampToDateTime(rankingElem.StartTime),
-                    Fights = new List<RankingFight>
-                    {
+                    Fights =
+                    [
                         new RankingFight
                         {
                             FightId = reportData.FightId,
@@ -710,7 +710,7 @@ public class RankingsController(
                             StartTime = UnixTimeStampToDateTime(reportData.StartTime),
                             Percentile = rankingElem.Percentile
                         }
-                    },
+                    ],
                     Players = BuildRankingPlayers(rankingElem, primaryPlayer, activeOptions)
                 };
 
@@ -1245,7 +1245,7 @@ public class RankingsController(
             var key = BuildCharacterLookupKey(name, serverSlug, serverRegion);
             if (!lookupIndex.TryGetValue(key, out var existing))
             {
-                existing = new List<RankingPlayer>();
+                existing = [];
                 lookupIndex[key] = existing;
             }
 
@@ -1532,7 +1532,7 @@ public class RankingsController(
             {
                 BossSlug = bossSlug,
                 Updated = DateTime.UtcNow,
-                Reports = new List<CompRankingReport>()
+                Reports = []
             };
 
             // TODO: Implement comp ranking aggregation from spec rankings
@@ -1929,7 +1929,7 @@ public class RankingsController(
         bool IncludeOtherPlayers,
         bool IncludeCombatantInfo);
 
-    private bool TryFindEncounter(IReadOnlyList<WclEncounterNode> encounters, RankingQueryContext queryContext, out WclEncounterNode encounter)
+    private static bool TryFindEncounter(IReadOnlyList<WclEncounterNode> encounters, RankingQueryContext queryContext, out WclEncounterNode encounter)
     {
         if (queryContext.EncounterId > 0)
         {

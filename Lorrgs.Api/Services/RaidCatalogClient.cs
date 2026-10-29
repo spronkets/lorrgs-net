@@ -1,17 +1,12 @@
 using Lorrgs.Api.Models;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
 namespace Lorrgs.Api.Services;
 
 public class RaidCatalogClient(
     ILogger<RaidCatalogClient> logger,
-    IMemoryCache cache,
     IOptions<RaidCatalogOptions> raidCatalogOptions)
 {
-    private const string CacheKey = "raid-catalog";
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(6);
-
     private static readonly Lazy<Dictionary<string, RaidBoss>> BossByName = new(() =>
         WorldDataService.Instance.Bosses
             .Where(b => !string.IsNullOrWhiteSpace(b.Name) && !string.IsNullOrWhiteSpace(b.NameSlug))
@@ -19,21 +14,14 @@ public class RaidCatalogClient(
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase));
 
     private readonly ILogger<RaidCatalogClient> _logger = logger;
-    private readonly IMemoryCache _cache = cache;
     private readonly RaidCatalogOptions _options = raidCatalogOptions.Value;
 
     public Task<RaidCatalog> GetCatalogAsync()
     {
-        if (_cache.TryGetValue(CacheKey, out RaidCatalog? cached) && cached != null)
-        {
-            return Task.FromResult(cached);
-        }
-
         _logger.LogInformation("Building raid catalog from local world data");
 
         var catalog = BuildCatalog();
 
-        _cache.Set(CacheKey, catalog, CacheDuration);
         return Task.FromResult(catalog);
     }
 

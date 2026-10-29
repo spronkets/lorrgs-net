@@ -1,16 +1,46 @@
 using Lorrgs.Api.Services;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Configuration;
 
 namespace Lorrgs.Api.Tests;
 
 public sealed class RaidCatalogClientTests
 {
     [Fact]
+    public async Task AnniversaryZulAmanUsesClassicFreshZoneAndOriginalFinalBoss()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"))
+            .Build();
+        var options = new RaidCatalogOptions();
+        configuration.Bind(options);
+        var client = new RaidCatalogClient(NullLogger<RaidCatalogClient>.Instance, Options.Create(options));
+
+        var catalog = await client.GetCatalogAsync();
+        var raid = Assert.Single(catalog.Instances["anniversary"], raid => raid.Slug == "zulaman");
+
+        Assert.Equal(1062, raid.ZoneId);
+        Assert.Equal(
+            ["Nalorakk", "Akil'zon", "Jan'alai", "Halazzi", "Hex Lord Malacrass", "Zul'jin"],
+            raid.Bosses.Select(boss => boss.Name));
+        Assert.Equal([101190, 101189, 101191, 101192, 101193, 101194],
+            raid.Bosses.Select(boss => boss.Id));
+        Assert.Equal(["nalorakk", "akilzon", "janalai", "halazzi", "hex-lord-malacrass", "zuljin"],
+            raid.Bosses.Select(boss => boss.Slug));
+        Assert.All(raid.Bosses, boss => Assert.True(boss.Mapped));
+        foreach (var slug in new[] { "akilzon", "nalorakk", "janalai", "halazzi", "hex-lord-malacrass" })
+        {
+            var boss = Assert.Single(WorldDataService.Instance.Bosses, boss => boss.NameSlug == slug);
+            Assert.Equal($"ui-ej-boss-{slug}.png", boss.Icon);
+        }
+        Assert.Equal("achievement_boss_zuljin.jpg",
+            Assert.Single(WorldDataService.Instance.Bosses, boss => boss.NameSlug == "zuljin").Icon);
+    }
+
+    [Fact]
     public async Task GetCatalogOrdersEditionsMapsNormalizedBossNamesAndPreservesConfiguration()
     {
-        using var cache = new MemoryCache(new MemoryCacheOptions());
         var options = new RaidCatalogOptions
         {
             Editions =
@@ -27,7 +57,7 @@ public sealed class RaidCatalogClientTests
                 }
             ]
         };
-        var client = new RaidCatalogClient(NullLogger<RaidCatalogClient>.Instance, cache, Options.Create(options));
+        var client = new RaidCatalogClient(NullLogger<RaidCatalogClient>.Instance, Options.Create(options));
 
         var catalog = await client.GetCatalogAsync();
 
@@ -49,14 +79,16 @@ public sealed class RaidCatalogClientTests
         Assert.False(raid.Bosses[1].Mapped);
         Assert.Equal(0, raid.Bosses[1].Id);
         Assert.Equal("", raid.Bosses[1].Slug);
-        Assert.Same(catalog, await client.GetCatalogAsync());
+        var nextCatalog = await client.GetCatalogAsync();
+        Assert.NotSame(catalog, nextCatalog);
+        Assert.Equal(catalog.Editions.Select(edition => edition.Slug),
+            nextCatalog.Editions.Select(edition => edition.Slug));
     }
 
     [Fact]
     public async Task EmptyConfigurationProducesEmptyCatalog()
     {
-        using var cache = new MemoryCache(new MemoryCacheOptions());
-        var client = new RaidCatalogClient(NullLogger<RaidCatalogClient>.Instance, cache,
+        var client = new RaidCatalogClient(NullLogger<RaidCatalogClient>.Instance,
             Options.Create(new RaidCatalogOptions()));
         var catalog = await client.GetCatalogAsync();
         Assert.Empty(catalog.Editions);

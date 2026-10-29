@@ -35,10 +35,10 @@ public class WorldDataService
         Zones = InitializeZones();
     }
 
-    private List<WowRole> InitializeRoles()
+    private static List<WowRole> InitializeRoles()
     {
-        return new List<WowRole>
-        {
+        return
+        [
             new WowRole 
             { 
                 Id = 1, 
@@ -75,13 +75,13 @@ public class WorldDataService
                 Metric = "dps",
                 Color = "#ff80ff" 
             }
-        };
+        ];
     }
 
-    private List<WowClass> InitializeClasses()
+    private static List<WowClass> InitializeClasses()
     {
-        return new List<WowClass>
-        {
+        return
+        [
             new WowClass { Id = 1, Name = "Warrior", NameSlug = "warrior", Color = "#c79c6e", MaskId = 1 },
             new WowClass { Id = 2, Name = "Paladin", NameSlug = "paladin", Color = "#f58cba", MaskId = 2 },
             new WowClass { Id = 3, Name = "Hunter", NameSlug = "hunter", Color = "#abd473", MaskId = 4 },
@@ -95,7 +95,7 @@ public class WorldDataService
             new WowClass { Id = 11, Name = "Druid", NameSlug = "druid", Color = "#ff7d0a", MaskId = 1024 },
             new WowClass { Id = 12, Name = "Demon Hunter", NameSlug = "demon-hunter", Color = "#a335ee", MaskId = 2048 },
             new WowClass { Id = 13, Name = "Evoker", NameSlug = "evoker", Color = "#33937f", MaskId = 4096 }
-        };
+        ];
     }
 
     private List<WowSpec> InitializeSpecs()
@@ -181,11 +181,18 @@ public class WorldDataService
         return specs;
     }
 
-    private List<RaidBoss> InitializeBosses()
+    private static List<RaidBoss> InitializeBosses()
     {
-        return new List<RaidBoss>
-        {
+        return
+        [
             new RaidBoss { Id = 50609, Name = "Illidan Stormrage", NameSlug = "illidan-stormrage", Icon = "achievement_boss_illidan.jpg", RaidId = 1060 },
+            new RaidBoss { Id = 101189, Name = "Akil'zon", NameSlug = "akilzon", Icon = "ui-ej-boss-akilzon.png", RaidId = 1062 },
+            new RaidBoss { Id = 101190, Name = "Nalorakk", NameSlug = "nalorakk", Icon = "ui-ej-boss-nalorakk.png", RaidId = 1062 },
+            new RaidBoss { Id = 101191, Name = "Jan'alai", NameSlug = "janalai", Icon = "ui-ej-boss-janalai.png", RaidId = 1062 },
+            new RaidBoss { Id = 101192, Name = "Halazzi", NameSlug = "halazzi", Icon = "ui-ej-boss-halazzi.png", RaidId = 1062 },
+            new RaidBoss { Id = 101193, Name = "Hex Lord Malacrass", NameSlug = "hex-lord-malacrass", Icon = "ui-ej-boss-hex-lord-malacrass.png", RaidId = 1062 },
+            // Classic Fresh's API labels the original final encounter "Daakara".
+            new RaidBoss { Id = 101194, Name = "Zul'jin", NameSlug = "zuljin", Icon = "achievement_boss_zuljin.jpg", RaidId = 1062 },
             // The War Within - Season 1 (Nerub'ar Palace, zone 38)
             new RaidBoss { Id = 2898, Name = "Eranog", NameSlug = "eranog", Icon = "inv_achievement_raidnerubar_eranog.jpg", RaidId = 38 },
             new RaidBoss { Id = 2893, Name = "Terros", NameSlug = "terros", Icon = "inv_achievement_raidnerubar_terros.jpg", RaidId = 38 },
@@ -222,13 +229,13 @@ public class WorldDataService
             new RaidBoss { Id = 3492, Name = "Ula'tek", NameSlug = "ulatek", Icon = "inv_121_raid_achievement_ulatek.jpg", RaidId = 53 },
             new RaidBoss { Id = 3379, Name = "Nymrissa Wavecaller", NameSlug = "nymrissa-wavecaller", Icon = "achievement_boss_elitenagamale.jpg", RaidId = 53 },
             new RaidBoss { Id = 3513, Name = "Kith'ix", NameSlug = "kithix", Icon = "8214194.jpg", RaidId = 53 }
-        };
+        ];
     }
 
-    private List<Season> InitializeSeasons()
+    private static List<Season> InitializeSeasons()
     {
-        return new List<Season>
-        {
+        return
+        [
             new Season
             {
                 Id = 1,
@@ -245,13 +252,13 @@ public class WorldDataService
                 RaidIds = [53],
                 EndDate = null
             }
-        };
+        ];
     }
 
-    private List<WowSpell> InitializeSpells()
+    private static List<WowSpell> InitializeSpells()
     {
-        return new List<WowSpell>
-        {
+        return
+        [
             // Sample WoW spells - extend as needed
             new WowSpell { Id = 1, Name = "Fireball", Icon = "spell_fire_fireball", Type = "Damage" },
             new WowSpell { Id = 2, Name = "Frostbolt", Icon = "spell_frost_frostbolt", Type = "Damage" },
@@ -261,13 +268,13 @@ public class WorldDataService
             new WowSpell { Id = 6, Name = "Power Word: Radiance", Icon = "spell_holy_powerwordsolace", Type = "Heal" },
             new WowSpell { Id = 7, Name = "Devastation", Icon = "spell_mage_ignite", Type = "Damage" },
             new WowSpell { Id = 8, Name = "Sinful Delight", Icon = "spell_warlock_demonic", Type = "Damage" }
-        };
+        ];
     }
 
-    private List<WowTrinket> InitializeTrinkets()
+    private static List<WowTrinket> InitializeTrinkets()
     {
-        return new List<WowTrinket>
-        {
+        return
+        [
             // Sample WoW trinkets - extend as needed
             new WowTrinket { Id = 1, Name = "Alchemy Stone", Icon = "inv_jewelry_trinket_14", ItemLevel = 639 },
             new WowTrinket { Id = 2, Name = "Spymaster's Web", Icon = "inv_jewelry_trinket_40", ItemLevel = 639 },
@@ -275,7 +282,7 @@ public class WorldDataService
             new WowTrinket { Id = 4, Name = "Darkmoon Deck: Wither", Icon = "inv_jewelry_trinket_41", ItemLevel = 639 },
             new WowTrinket { Id = 5, Name = "Vessel of Searing Shadow", Icon = "inv_jewelry_trinket_28", ItemLevel = 639 },
             new WowTrinket { Id = 6, Name = "Broodkeeper's Legacy", Icon = "inv_jewelry_trinket_36", ItemLevel = 639 }
-        };
+        ];
     }
 
     /// <summary>
@@ -368,8 +375,8 @@ public class WorldDataService
 
     private List<RaidZone> InitializeZones()
     {
-        return new List<RaidZone>
-        {
+        return
+        [
             new RaidZone
             {
                 Id = 38,
@@ -402,6 +409,6 @@ public class WorldDataService
                 Icon = "8039569.jpg",
                 BossIds = Bosses.Where(b => b.RaidId == 53).Select(b => b.Id).ToArray()
             }
-        };
+        ];
     }
 }

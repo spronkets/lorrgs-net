@@ -45,5 +45,7 @@ const journalAliases: Record<string, string> = {
 
 export function getBossPortraitUrl(slug: string): string {
   const filename = journalAliases[slug] ?? (journalBosses.has(slug) ? slug : '');
-  return filename ? `https://wow.zamimg.com/images/wow/journal/ui-ej-boss-${filename}.png` : '';
+  return filename
+    ? `https://wow.zamimg.com/images/wow/journal/ui-ej-boss-${filename}.png`
+    : 'https://wow.zamimg.com/images/icons/boss.gif';
 }

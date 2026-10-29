@@ -30,6 +30,9 @@ public class WarcraftLogsClient(
     private const int GraphQlMaxAttempts = 3;
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> GraphQlCacheKeyLocks = new(StringComparer.Ordinal);
 
+    private TimeSpan GraphQlCacheDuration =>
+        _options.GraphQlCacheTtl < TimeSpan.FromMinutes(1) ? TimeSpan.FromMinutes(1) : _options.GraphQlCacheTtl;
+
     public async Task<string> GetClientTokenAsync(string authUrl, CancellationToken cancellationToken = default)
     {
         var tokenCacheKey = BuildTokenCacheKey(authUrl);
@@ -101,7 +104,7 @@ public class WarcraftLogsClient(
         var endpoint = _options.ResolveEndpoint(edition);
 
         var graphQlCacheKey = BuildGraphQlCacheKey(endpoint.BaseUrl, query, variables);
-        var graphQlCacheDuration = TimeSpan.FromSeconds(Math.Max(60, _options.GraphQlCacheTtlSeconds));
+        var graphQlCacheDuration = GraphQlCacheDuration;
         var cacheLock = GraphQlCacheKeyLocks.GetOrAdd(graphQlCacheKey, static _ => new SemaphoreSlim(1, 1));
         await cacheLock.WaitAsync(cancellationToken);
 
@@ -137,8 +140,7 @@ public class WarcraftLogsClient(
         await cacheLock.WaitAsync(cancellationToken);
         try
         {
-            var json = await TryReadGraphQlCacheAsync(key,
-                TimeSpan.FromSeconds(Math.Max(60, _options.GraphQlCacheTtlSeconds)));
+            var json = await TryReadGraphQlCacheAsync(key, GraphQlCacheDuration);
             cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(json)) return null;
             using var document = JsonDocument.Parse(json);

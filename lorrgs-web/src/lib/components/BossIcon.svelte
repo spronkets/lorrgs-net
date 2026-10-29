@@ -17,7 +17,13 @@
   let { slug, iconName, alt = '', size = 30 }: Props = $props();
   const gradientId = $props.id();
   const src = $derived(
-    iconName ? getWowheadCdnIconUrl(iconName, 'medium') : getBossPortraitUrl(slug)
+    iconName
+      ? iconName.startsWith('https://')
+        ? iconName
+        : iconName.startsWith('ui-ej-')
+          ? `https://wow.zamimg.com/images/wow/journal/${iconName}`
+          : getWowheadCdnIconUrl(iconName, 'medium')
+      : getBossPortraitUrl(slug)
   );
   let failedSource = $state<string | null>(null);
   let detected = $state<{

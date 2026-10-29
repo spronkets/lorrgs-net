@@ -2,17 +2,49 @@ using System.Text.Json;
 using Lorrgs.Api.Controllers;
 using Lorrgs.Api.Models;
 using Lorrgs.Api.Services;
-using Lorrgs.Api.Tests.TestSupport;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.OpenApi.Models;
+using Swashbuckle.AspNetCore.Swagger;
 
 namespace Lorrgs.Api.Tests;
 
-public sealed class WorldDataControllerTests : IDisposable
+public sealed class WorldDataControllerTests
 {
-    private readonly CacheServiceFixture fixture = new();
     private readonly WorldDataService data = WorldDataService.Instance;
-    public void Dispose() => fixture.Dispose();
+
+    [Fact]
+    public async Task SwaggerGenerationExcludesActionFilterCallbacks()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Services.AddControllers().AddApplicationPart(typeof(WorldDataController).Assembly);
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen(options =>
+            options.SwaggerDoc("v1", new OpenApiInfo { Title = "Test API", Version = "v1" }));
+        await using var app = builder.Build();
+        app.MapControllers();
+
+        var document = app.Services.GetRequiredService<ISwaggerProvider>().GetSwagger("v1");
+
+        Assert.Contains("/api/WorldData/roles", document.Paths.Keys);
+        Assert.DoesNotContain(document.Paths.Keys,
+            path => path.Contains("OnAction", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void BossLookupReturnsCurrentServerDefinition()
+    {
+        var boss = data.GetBoss("nalorakk");
+        var response = Assert.IsType<OkObjectResult>(Controller("anniversary").GetBoss("nalorakk"));
+        Assert.Same(boss, response.Value);
+        Assert.Equal("ui-ej-boss-nalorakk.png", Assert.IsType<RaidBoss>(response.Value).Icon);
+    }
 
     [Theory]
     [InlineData("roles")]
@@ -22,7 +54,7 @@ public sealed class WorldDataControllerTests : IDisposable
     [InlineData("spells")]
     [InlineData("trinkets")]
     [InlineData("seasons")]
-    public async Task CollectionEndpointsReturnOrderedCatalogsFromFreshMemoryAndFileCaches(string resource)
+    public void CollectionEndpointsReturnOrderedServerCatalogs(string resource)
     {
         var controller = Controller();
         var expected = resource switch
@@ -37,13 +69,9 @@ public sealed class WorldDataControllerTests : IDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(resource))
         };
 
-        var fresh = await Collection(controller, resource);
-        var memory = await Collection(controller, resource);
-        var file = await Collection(Controller(), resource);
-
-        AssertJson(expected, fresh);
-        AssertJson(expected, memory);
-        AssertJson(expected, file);
+        AssertJson(expected, Collection(controller, resource));
+        AssertJson(expected, Collection(controller, resource));
+        AssertJson(expected, Collection(Controller(), resource));
     }
 
     [Theory]
@@ -52,7 +80,7 @@ public sealed class WorldDataControllerTests : IDisposable
     [InlineData(null, 2)]
     [InlineData(2, 2)]
     [InlineData(-1, -1)]
-    public async Task GetSpecsAppliesCombinedFiltersAndKeepsCacheEntriesSeparate(int? role, int? wowClass)
+    public void GetSpecsAppliesCombinedFilters(int? role, int? wowClass)
     {
         var controller = Controller();
         var expected = new
@@ -61,10 +89,9 @@ public sealed class WorldDataControllerTests : IDisposable
                 (!wowClass.HasValue || spec.ClassId == wowClass)).OrderBy(spec => spec.FullName)
         };
 
-        AssertJson(expected, await controller.GetSpecs(role, wowClass));
-        AssertJson(expected, await controller.GetSpecs(role, wowClass));
-        AssertJson(expected, await Controller().GetSpecs(role, wowClass));
-        AssertJson(new { specs = data.Specs.OrderBy(spec => spec.FullName) }, await controller.GetSpecs());
+        AssertJson(expected, controller.GetSpecs(role, wowClass));
+        AssertJson(expected, Controller().GetSpecs(role, wowClass));
+        AssertJson(new { specs = data.Specs.OrderBy(spec => spec.FullName) }, controller.GetSpecs());
     }
 
     [Theory]
@@ -74,7 +101,7 @@ public sealed class WorldDataControllerTests : IDisposable
     [InlineData("season")]
     [InlineData("spell")]
     [InlineData("trinket")]
-    public async Task ItemEndpointsReturnMatchingCatalogItemAndReuseBothCaches(string resource)
+    public void ItemEndpointsReturnMatchingServerCatalogItem(string resource)
     {
         var controller = Controller();
         object expected = resource switch
@@ -88,9 +115,9 @@ public sealed class WorldDataControllerTests : IDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(resource))
         };
 
-        AssertJson(expected, await Item(controller, resource));
-        AssertJson(expected, await Item(controller, resource));
-        AssertJson(expected, await Item(Controller(), resource));
+        AssertJson(expected, Item(controller, resource));
+        AssertJson(expected, Item(controller, resource));
+        AssertJson(expected, Item(Controller(), resource));
     }
 
     [Theory]
@@ -105,17 +132,17 @@ public sealed class WorldDataControllerTests : IDisposable
     [InlineData("zone-bosses")]
     [InlineData("spec-spells")]
     [InlineData("boss-spells")]
-    public async Task UnknownCatalogItemsReturnNotFoundInsteadOfEmptySuccess(string resource)
+    public void UnknownCatalogItemsReturnNotFoundInsteadOfEmptySuccess(string resource)
     {
         var controller = Controller();
         var response = resource switch
         {
-            "class-specs" => await controller.GetClassSpecs("missing"),
-            "role-specs" => await controller.GetRoleSpecs("missing"),
-            "zone-bosses" => await controller.GetZoneBosses("missing"),
+            "class-specs" => controller.GetClassSpecs("missing"),
+            "role-specs" => controller.GetRoleSpecs("missing"),
+            "zone-bosses" => controller.GetZoneBosses("missing"),
             "spec-spells" => controller.GetSpecSpells("missing"),
             "boss-spells" => controller.GetBossSpells("missing"),
-            _ => await Item(controller, resource, missing: true)
+            _ => Item(controller, resource, missing: true)
         };
         var error = JsonSerializer.SerializeToElement(Assert.IsType<NotFoundObjectResult>(response).Value);
         Assert.Contains("not found", error.GetProperty("error").GetString(), StringComparison.OrdinalIgnoreCase);
@@ -125,7 +152,7 @@ public sealed class WorldDataControllerTests : IDisposable
     [InlineData("class-specs")]
     [InlineData("role-specs")]
     [InlineData("zone-bosses")]
-    public async Task RelationshipEndpointsReturnOnlyMatchingItemsAndPersistThem(string resource)
+    public void RelationshipEndpointsReturnOnlyMatchingItems(string resource)
     {
         var controller = Controller();
         object expected = resource switch
@@ -135,9 +162,9 @@ public sealed class WorldDataControllerTests : IDisposable
             "zone-bosses" => new { bosses = data.Bosses.Where(boss => boss.RaidId == data.Zones.First().Id) },
             _ => throw new ArgumentOutOfRangeException(nameof(resource))
         };
-        AssertJson(expected, await Relationship(controller, resource));
-        AssertJson(expected, await Relationship(controller, resource));
-        AssertJson(expected, await Relationship(Controller(), resource));
+        AssertJson(expected, Relationship(controller, resource));
+        AssertJson(expected, Relationship(controller, resource));
+        AssertJson(expected, Relationship(Controller(), resource));
     }
 
     [Fact]
@@ -148,10 +175,50 @@ public sealed class WorldDataControllerTests : IDisposable
         AssertJson(new { spells = Array.Empty<WowSpell>() }, controller.GetBossSpells(data.Bosses.First().NameSlug));
     }
 
-    private WorldDataController Controller() =>
-        new(NullLogger<WorldDataController>.Instance, fixture.CreateService());
+    [Theory]
+    [InlineData("Anniversary", "anniversary")]
+    [InlineData(" Era ", "era")]
+    [InlineData("classic", "era")]
+    [InlineData("Retail", "retail")]
+    [InlineData("midnight", "retail")]
+    [InlineData("Mists of Pandaria", "mistsofpandaria")]
+    [InlineData("mop", "mistsofpandaria")]
+    [InlineData("classic_sod", "classic_sod")]
+    public void EditionAliasesAreNormalized(string edition, string normalized)
+    {
+        var controller = Controller(edition);
+        var context = new ActionExecutingContext(
+            new ActionContext(new DefaultHttpContext(), new RouteData(), new ActionDescriptor()),
+            [], new Dictionary<string, object?>(), controller);
 
-    private static Task<IActionResult> Collection(WorldDataController controller, string resource) => resource switch
+        controller.OnActionExecuting(context);
+
+        Assert.Null(context.Result);
+        Assert.Equal(normalized, controller.Edition);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("unknown")]
+    [InlineData("../retail")]
+    public void MissingOrUnsupportedEditionsAreBadRequests(string? edition)
+    {
+        var controller = Controller(edition);
+        var context = new ActionExecutingContext(
+            new ActionContext(new DefaultHttpContext(), new RouteData(), new ActionDescriptor()),
+            [], new Dictionary<string, object?>(), controller);
+
+        controller.OnActionExecuting(context);
+
+        Assert.IsType<BadRequestObjectResult>(context.Result);
+    }
+
+    private WorldDataController Controller(string? edition = "retail") =>
+        new(NullLogger<WorldDataController>.Instance)
+        { Edition = edition };
+
+    private static IActionResult Collection(WorldDataController controller, string resource) => resource switch
     {
         "roles" => controller.GetRoles(),
         "classes" => controller.GetClasses(),
@@ -163,7 +230,7 @@ public sealed class WorldDataControllerTests : IDisposable
         _ => throw new ArgumentOutOfRangeException(nameof(resource))
     };
 
-    private Task<IActionResult> Relationship(WorldDataController controller, string resource) => resource switch
+    private IActionResult Relationship(WorldDataController controller, string resource) => resource switch
     {
         "class-specs" => controller.GetClassSpecs("paladin"),
         "role-specs" => controller.GetRoleSpecs("healer"),
@@ -171,7 +238,7 @@ public sealed class WorldDataControllerTests : IDisposable
         _ => throw new ArgumentOutOfRangeException(nameof(resource))
     };
 
-    private Task<IActionResult> Item(WorldDataController controller, string resource, bool missing = false) => resource switch
+    private IActionResult Item(WorldDataController controller, string resource, bool missing = false) => resource switch
     {
         "spec" => controller.GetSpec(missing ? "missing" : data.Specs.First().FullNameSlug),
         "boss" => controller.GetBoss(missing ? "missing" : data.Bosses.First().NameSlug),

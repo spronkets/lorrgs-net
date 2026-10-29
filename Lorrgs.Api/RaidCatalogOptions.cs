@@ -1,3 +1,5 @@
+namespace Lorrgs.Api;
+
 public sealed class RaidCatalogOptions
 {
     public List<RaidCatalogEditionSeed> Editions { get; set; } = [];

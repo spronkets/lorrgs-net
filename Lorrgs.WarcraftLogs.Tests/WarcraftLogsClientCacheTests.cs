@@ -27,9 +27,9 @@ public sealed class WarcraftLogsClientCacheTests : IDisposable
     }
 
     [Theory]
-    [InlineData(23, true)]
-    [InlineData(25, false)]
-    public async Task FileCacheRetainsResponsesForTwentyFourHours(int ageHours, bool expectedHit)
+    [InlineData(239, true)]
+    [InlineData(241, false)]
+    public async Task FileCacheRetainsResponsesForTenDays(int ageHours, bool expectedHit)
     {
         using var handler = new QueueHandler("""{"data":{"value":1}}""", """{"data":{"value":2}}""");
         var client = fixture.CreateClient(handler);
@@ -44,6 +44,26 @@ public sealed class WarcraftLogsClientCacheTests : IDisposable
 
         Assert.Equal(expectedHit ? 1 : 2, response.GetProperty("value").GetInt32());
         Assert.Equal(expectedHit ? 1 : 2, handler.GraphQlRequests);
+    }
+
+    [Fact]
+    public async Task ConfiguredTimeSpanTtlIsUsedWithOneMinuteMinimum()
+    {
+        using var handler = new QueueHandler("""{"data":{"value":1}}""");
+        var options = new Configuration.WarcraftLogsApiOptions
+        {
+            ClientId = "test", ClientSecret = "secret", BaseUrl = "https://wcl.test/api",
+            AuthUrl = "https://wcl.test/oauth/token", GraphQlCacheTtl = TimeSpan.FromSeconds(1)
+        };
+        var client = fixture.CreateClient(handler, options);
+        await client.QueryGraphQLAsync("query Age");
+        var path = Assert.Single(Directory.GetFiles(fixture.CacheDirectory, "*.json"));
+
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(-30));
+        Assert.NotNull(await client.TryQueryGraphQLFromCacheAsync("query Age"));
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(-90));
+        Assert.Null(await client.TryQueryGraphQLFromCacheAsync("query Age"));
+        Assert.Equal(1, handler.GraphQlRequests);
     }
 
     [Fact]

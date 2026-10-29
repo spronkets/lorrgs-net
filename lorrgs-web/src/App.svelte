@@ -6,6 +6,7 @@
   import CompRankingsPage from './lib/pages/CompRankingsPage.svelte';
   import WorldDataPage from './lib/pages/WorldDataPage.svelte';
   import RotationAnalyzerPage from './lib/pages/RotationAnalyzerPage.svelte';
+  import { getApiEditionSlug, getRaidsForEdition } from './lib/raidCatalog';
 
   let currentPage = 'home';
   let worldData = {
@@ -26,6 +27,8 @@
   let error = '';
   let theme = 'light';
   let hasHydratedQuery = false;
+  let selectedVersion = '';
+  let worldDataRequest = 0;
   let toolsMenu: HTMLDetailsElement;
 
   function openTool(page: string) {
@@ -60,6 +63,8 @@
   function initializeSelectionsFromQuery() {
     const params = new URLSearchParams(window.location.search);
     const requestedPage = params.get(PAGE_QUERY_KEY);
+    const queryEdition = params.get('edition') || '';
+    if (getApiEditionSlug(queryEdition)) selectedVersion = queryEdition;
 
     if (requestedPage && APP_PAGES.has(requestedPage)) {
       currentPage = requestedPage;
@@ -80,26 +85,33 @@
   }
 
   async function loadWorldData() {
+    const request = ++worldDataRequest;
     try {
       const apiHealthy = await API.waitForHealthReady();
       if (!apiHealthy) {
         throw new Error('API is not ready yet (health endpoint did not return healthy).');
       }
 
-      const initialRaidCatalog = await API.getRaidCatalog().catch(() => ({
-        editions: [],
-        instances: {}
-      }));
+      const initialRaidCatalog = await API.getRaidCatalog();
+      if (request !== worldDataRequest) return;
+      if (!selectedVersion) {
+        selectedVersion =
+          ['Anniversary', 'Mists of Pandaria', 'Era', 'Retail'].find(
+            (version) => getRaidsForEdition(initialRaidCatalog, version).length > 0
+          ) || 'Anniversary';
+      }
+      const version = selectedVersion;
+      const edition = getApiEditionSlug(version);
 
       const [classes, specs, roles, bosses, zones, spells, trinkets, seasons] = await Promise.all([
-        API.getClasses().catch(() => ({})),
-        API.getSpecs().catch(() => ({ specs: [] })),
-        API.getRoles().catch(() => ({ roles: [] })),
-        API.getBosses().catch(() => ({ bosses: [] })),
-        API.getZones().catch(() => ({ zones: [] })),
-        API.getSpells().catch(() => ({ spells: [] })),
-        API.getTrinkets().catch(() => ({ trinkets: [] })),
-        API.getSeasons().catch(() => ({ seasons: [] }))
+        API.getClasses(edition),
+        API.getSpecs(edition),
+        API.getRoles(edition),
+        API.getBosses(edition),
+        API.getZones(edition),
+        API.getSpells(edition),
+        API.getTrinkets(edition),
+        API.getSeasons(edition)
       ]);
 
       const data = {
@@ -113,14 +125,16 @@
         seasons: API.normalizeApiCollection(seasons, 'seasons')
       };
 
+      if (request !== worldDataRequest) return;
       worldData = data;
       raidCatalog = initialRaidCatalog;
       error = '';
     } catch (err) {
+      if (request !== worldDataRequest) return;
       error = err instanceof Error ? err.message : 'Unknown error';
       console.error('Failed to load world data:', err);
     } finally {
-      loading = false;
+      if (request === worldDataRequest) loading = false;
     }
   }
 
@@ -134,6 +148,11 @@
   $: if (typeof window !== 'undefined' && hasHydratedQuery) {
     void currentPage;
     syncPageQueryParam();
+  }
+
+  function changeEdition(version: string) {
+    selectedVersion = version;
+    loadWorldData();
   }
 </script>
 
@@ -221,13 +240,18 @@
       <div class="loading">Loading...</div>
     {:else}
       {#if currentPage === 'home'}
-        <HomePage {worldData} {raidCatalog} />
+        <HomePage
+          {worldData}
+          {raidCatalog}
+          {selectedVersion}
+          on:editionChange={(event) => changeEdition(event.detail.version)}
+        />
       {:else if currentPage === 'comp'}
         <CompRankingsPage {worldData} />
       {:else if currentPage === 'worlddata'}
         <WorldDataPage {worldData} />
       {:else if currentPage === 'rotation'}
-        <RotationAnalyzerPage />
+        <RotationAnalyzerPage edition={getApiEditionSlug(selectedVersion)} />
       {/if}
     {/if}
   </main>
@@ -235,16 +259,15 @@
     <p>
       LorrgsNET is a personal, unofficial adaptation of
       <a href="https://lorrgs.io/" target="_blank" rel="noreferrer">lorrgs.io</a>, with its Python
-      API ported to .NET and its frontend rebuilt from scratch in Svelte.
-      Combat data is retrieved from <a href="https://www.warcraftlogs.com/" target="_blank" rel="noreferrer"
-        >Warcraft Logs</a
-      >, and item and ability tooltips are provided by
-      <a href="https://www.wowhead.com/" target="_blank" rel="noreferrer">Wowhead</a>.
-      World of Warcraft images and game artwork are copyright Blizzard Entertainment, Inc.
-      World of Warcraft, Warcraft, and Blizzard Entertainment are trademarks or registered
-      trademarks of Blizzard Entertainment, Inc. in the U.S. and/or other countries.
-      LorrgsNET is not affiliated with or endorsed by lorrgs.io, Warcraft Logs, Wowhead, or
-      Blizzard Entertainment.
+      API ported to .NET and its frontend rebuilt from scratch in Svelte. Combat data is retrieved
+      from
+      <a href="https://www.warcraftlogs.com/" target="_blank" rel="noreferrer">Warcraft Logs</a>,
+      and item and ability tooltips are provided by
+      <a href="https://www.wowhead.com/" target="_blank" rel="noreferrer">Wowhead</a>. World of
+      Warcraft images and game artwork are copyright Blizzard Entertainment, Inc. World of Warcraft,
+      Warcraft, and Blizzard Entertainment are trademarks or registered trademarks of Blizzard
+      Entertainment, Inc. in the U.S. and/or other countries. LorrgsNET is not affiliated with or
+      endorsed by lorrgs.io, Warcraft Logs, Wowhead, or Blizzard Entertainment.
     </p>
   </footer>
 </div>
