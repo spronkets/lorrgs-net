@@ -1,7 +1,7 @@
 <script lang="ts">
   import { SvelteSet } from 'svelte/reactivity';
-  import type { ReportTimeline } from '../api';
-  import type { InspectedSpell } from '../timelineTypes';
+  import type { ReportTimeline } from '../models/ReportTimeline';
+  import type { InspectedSpell } from '../models/InspectedSpell';
   import { classSpellPresets, matchesClassSpellPreset } from '../spellClassification';
   import {
     isPowerWindow,

@@ -2,14 +2,11 @@
   import { maska } from 'maska/svelte';
   import { killTimeMask } from '../killTimeMask';
   import Alert from './Alert.svelte';
-  import {
-    getRankingFilterError,
-    toKillTimeInput,
-    selectRankingReports,
-    type RankingFilters,
-    type RankingSort
-  } from '../rankingUtils';
-  import type { RankingReport, SpecRankingData } from '../api';
+  import { getRankingFilterError, toKillTimeInput, selectRankingReports } from '../rankingUtils';
+  import type { RankingFilters } from '../models/rankings/RankingFilters';
+  import type { RankingSort } from '../models/rankings/RankingSort';
+  import type { RankingReport } from '../models/RankingReport';
+  import type { SpecRankingData } from '../models/SpecRankingData';
   import RankingsTimeline from './RankingsTimeline.svelte';
 
   export let rankings: SpecRankingData | null = null;

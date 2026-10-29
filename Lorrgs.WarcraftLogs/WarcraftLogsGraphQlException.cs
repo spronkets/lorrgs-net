@@ -2,26 +2,6 @@ using System.Text.Json;
 
 namespace Lorrgs.WarcraftLogs;
 
-/// <summary>One error reported by the Warcraft Logs GraphQL API.</summary>
-public sealed record WarcraftLogsGraphQlError(
-    string? Message,
-    IReadOnlyList<JsonElement> Path,
-    JsonElement Details,
-    WarcraftLogsReportFailureKind? ReportFailure)
-{
-    public string? ReportAlias => Path
-        .Where(segment => segment.ValueKind == JsonValueKind.String)
-        .Select(segment => segment.GetString())
-        .FirstOrDefault(segment => segment is not null &&
-            segment.Length > 1 && segment[0] == 'r' && segment[1..].All(char.IsAsciiDigit));
-}
-
-public enum WarcraftLogsReportFailureKind
-{
-    Private,
-    NotFound
-}
-
 /// <summary>Indicates that Warcraft Logs rejected a GraphQL operation.</summary>
 public class WarcraftLogsGraphQlException : InvalidOperationException
 {
@@ -56,15 +36,3 @@ public class WarcraftLogsGraphQlException : InvalidOperationException
         return new WarcraftLogsGraphQlException(message, errors, partialData);
     }
 }
-
-public sealed class WarcraftLogsReportPrivateException(
-    string message,
-    IReadOnlyList<WarcraftLogsGraphQlError>? errors = null,
-    JsonElement? partialData = null)
-    : WarcraftLogsGraphQlException(message, errors, partialData);
-
-public sealed class WarcraftLogsReportNotFoundException(
-    string message,
-    IReadOnlyList<WarcraftLogsGraphQlError>? errors = null,
-    JsonElement? partialData = null)
-    : WarcraftLogsGraphQlException(message, errors, partialData);

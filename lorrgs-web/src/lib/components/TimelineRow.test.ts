@@ -27,12 +27,63 @@ function props() {
 }
 
 describe('TimelineRow', () => {
+  it('handles incomplete player metadata without inventing a class, date, or analyzer link', async () => {
+    const input = props();
+    const { container, rerender } = render(TimelineRow, {
+      ...input,
+      report: {
+        ...input.report,
+        reportId: '',
+        players: [],
+        fights: [],
+        startTime: 'invalid',
+        percentile: null
+      }
+    });
+    expect(screen.getByRole('link', { name: 'Unknown player' })).toBeInTheDocument();
+    expect(screen.getByText('0 (N/A)')).toBeInTheDocument();
+    expect(container.querySelector('.player-spec-icon')).toBeNull();
+    expect(container.querySelector('.report-time')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Open report analyzer' })).not.toBeInTheDocument();
+    await rerender({
+      ...input,
+      report: {
+        ...input.report,
+        players: [
+          {
+            ...input.report.players![0],
+            specSlug: 'unknown',
+            guildName: 'Raid Guild',
+            serverRegion: 'EU'
+          }
+        ]
+      }
+    });
+    expect(screen.getByText(/EU.*Raid Guild/)).toBeInTheDocument();
+    expect(container.querySelector('.player-spec-icon')).toBeNull();
+  });
+
+  it('delegates reference selection and disables the active reference', async () => {
+    const input = props();
+    const onreference = vi.fn();
+    const { rerender } = render(TimelineRow, { ...input, onreference });
+    const button = screen.getByRole('button', { name: 'Use as boss reference' });
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    await fireEvent.click(button);
+    expect(onreference).toHaveBeenCalledWith(input.report);
+    await rerender({ ...input, onreference, isReference: true });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+  });
   it('shows role parse percentiles instead of row numbers in composition mode', async () => {
     const input = props();
     const { container, rerender } = render(TimelineRow, {
       ...input,
       compositionMode: true,
-      report: { ...input.report, players: [{ ...input.report.players![0], performance: 2116, parsePercentile: 99 }] }
+      report: {
+        ...input.report,
+        players: [{ ...input.report.players![0], performance: 2116, parsePercentile: 99 }]
+      }
     });
     expect(screen.getByText('2,116 (Top 1%)')).toBeInTheDocument();
     expect(container.querySelector('.rank')).toBeNull();

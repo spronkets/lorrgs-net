@@ -1,3 +1,5 @@
+import * as WorldDataApi from './lib/worldDataApi';
+import * as HttpApi from './lib/common/http/apiClient';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
@@ -8,7 +10,7 @@ import { getVersionIconUrl } from './lib/selectionIcons';
 describe('App version mapping', () => {
   function mockWorldData() {
     localStorage.setItem('lorrgs-theme', 'light');
-    vi.spyOn(API, 'waitForHealthReady').mockResolvedValue(true);
+    vi.spyOn(HttpApi, 'waitForHealthReady').mockResolvedValue(true);
     vi.spyOn(API, 'getRaidCatalog').mockResolvedValue({ editions: [], instances: {} });
     for (const name of [
       'getClasses',
@@ -20,7 +22,7 @@ describe('App version mapping', () => {
       'getTrinkets',
       'getSeasons'
     ] as const) {
-      vi.spyOn(API, name).mockResolvedValue([]);
+      vi.spyOn(WorldDataApi, name).mockResolvedValue([]);
     }
   }
 
@@ -30,19 +32,19 @@ describe('App version mapping', () => {
     render(App);
 
     await screen.findByRole('heading', { name: 'Edition' });
-    expect(API.getBosses).toHaveBeenLastCalledWith('anniversary');
-    expect(API.getClasses).toHaveBeenLastCalledWith('anniversary');
+    expect(WorldDataApi.getBosses).toHaveBeenLastCalledWith('anniversary');
+    expect(WorldDataApi.getClasses).toHaveBeenLastCalledWith('anniversary');
     await fireEvent.click(screen.getByRole('button', { name: 'Retail' }));
-    await waitFor(() => expect(API.getBosses).toHaveBeenLastCalledWith('midnight'));
-    expect(API.getClasses).toHaveBeenLastCalledWith('midnight');
-    expect(API.getSeasons).toHaveBeenLastCalledWith('midnight');
+    await waitFor(() => expect(WorldDataApi.getBosses).toHaveBeenLastCalledWith('midnight'));
+    expect(WorldDataApi.getClasses).toHaveBeenLastCalledWith('midnight');
+    expect(WorldDataApi.getSeasons).toHaveBeenLastCalledWith('midnight');
   });
 
   it('does not replace the current edition data with an older in-flight response', async () => {
     mockWorldData();
     history.replaceState({}, '', '/?edition=Anniversary');
     let resolveOlder: (value: unknown[]) => void = () => {};
-    vi.mocked(API.getBosses).mockImplementation((edition) =>
+    vi.mocked(WorldDataApi.getBosses).mockImplementation((edition) =>
       edition === 'midnight'
         ? new Promise((resolve) => {
             resolveOlder = resolve;
@@ -52,9 +54,9 @@ describe('App version mapping', () => {
     render(App);
     await screen.findByRole('heading', { name: 'Edition' });
     await fireEvent.click(screen.getByRole('button', { name: 'Retail' }));
-    await waitFor(() => expect(API.getBosses).toHaveBeenLastCalledWith('midnight'));
+    await waitFor(() => expect(WorldDataApi.getBosses).toHaveBeenLastCalledWith('midnight'));
     await fireEvent.click(screen.getByRole('button', { name: 'Era' }));
-    await waitFor(() => expect(API.getBosses).toHaveBeenLastCalledWith('era'));
+    await waitFor(() => expect(WorldDataApi.getBosses).toHaveBeenLastCalledWith('era'));
     resolveOlder([{ id: 1, name: 'Wrong edition boss', nameSlug: 'wrong', icon: '', raidId: 1 }]);
     await fireEvent.click(screen.getByText('Tools'));
     await fireEvent.click(screen.getByRole('button', { name: 'World Data' }));
@@ -64,6 +66,58 @@ describe('App version mapping', () => {
   it('uses the retail catalog key and retail icon for the Retail option', () => {
     expect(getEditionSlug('Retail')).toBe('retail');
     expect(getVersionIconUrl('Retail')).toBe('/images/wow/editions/midnight.png');
+  });
+
+  it.each([true, false])(
+    'uses the system theme when no saved preference exists (dark=%s)',
+    async (dark) => {
+      mockWorldData();
+      localStorage.removeItem('lorrgs-theme');
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => ({ matches: dark }))
+      );
+      render(App);
+      await screen.findByRole('heading', { name: 'Compare raid cooldowns' });
+      await fireEvent.click(
+        screen.getByRole('button', { name: dark ? 'Switch to light mode' : 'Switch to dark mode' })
+      );
+      expect(localStorage.getItem('lorrgs-theme')).toBe(dark ? 'light' : 'dark');
+    }
+  );
+
+  it.each([new Error('Catalog unavailable'), 'Invalid response'])(
+    'surfaces startup failures: %s',
+    async (failure) => {
+      mockWorldData();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(API.getRaidCatalog).mockRejectedValue(failure);
+      render(App);
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        failure instanceof Error ? failure.message : 'Unknown error'
+      );
+      expect(console.error).toHaveBeenCalledWith('Failed to load world data:', failure);
+    }
+  );
+
+  it('does not request catalogs when the API fails its readiness check', async () => {
+    mockWorldData();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(HttpApi.waitForHealthReady).mockResolvedValue(false);
+    render(App);
+    expect(await screen.findByRole('alert')).toHaveTextContent('API is not ready yet');
+    expect(API.getRaidCatalog).not.toHaveBeenCalled();
+  });
+
+  it('opens the analyzer through Tools and honors direct world-data navigation', async () => {
+    mockWorldData();
+    history.replaceState({}, '', '/?page=worlddata&edition=Anniversary');
+    render(App);
+    await screen.findByRole('heading', { name: /World Data/i });
+    await fireEvent.click(screen.getByText('Tools'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Rotation Analyzer' }));
+    expect(await screen.findByRole('heading', { name: 'Rotation Analyzer' })).toBeInTheDocument();
+    expect(new URLSearchParams(location.search).get('page')).toBe('rotation');
   });
 
   it('launches separate ranking flows from home with the shared encounter selection', async () => {
@@ -95,9 +149,9 @@ describe('App version mapping', () => {
     });
     history.replaceState({}, '', '/?edition=Anniversary&raid=blacktemple&boss=illidan');
     render(App);
-    const landing = (await screen.findByRole('heading', { name: 'Compare raid cooldowns' })).closest(
-      'section'
-    )!;
+    const landing = (
+      await screen.findByRole('heading', { name: 'Compare raid cooldowns' })
+    ).closest('section')!;
     expect(API.getCompRankings).not.toHaveBeenCalled();
     await fireEvent.click(within(landing).getByRole('button', { name: 'Comp Rankings' }));
     await screen.findByRole('button', { name: 'Search compositions' });
@@ -130,16 +184,18 @@ describe('App version mapping', () => {
       ).getByRole('button', { name: 'Spec Rankings' })
     );
     expect(new URLSearchParams(location.search).get('page')).toBe('spec');
-    expect(screen.queryByRole('heading', { name: 'Compare raid cooldowns' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Compare raid cooldowns' })
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Illidan');
   });
 
   it('requires an encounter on the launcher but keeps toolbar ranking links available', async () => {
     mockWorldData();
     render(App);
-    const landing = (await screen.findByRole('heading', { name: 'Compare raid cooldowns' })).closest(
-      'section'
-    )!;
+    const landing = (
+      await screen.findByRole('heading', { name: 'Compare raid cooldowns' })
+    ).closest('section')!;
     expect(within(landing).getByRole('heading', { name: 'What is this?' })).toBeInTheDocument();
     expect(
       within(landing).getByRole('heading', { name: 'Disclaimer: use timings as a reference' })
@@ -160,7 +216,9 @@ describe('App version mapping', () => {
   });
 
   it('keeps navigation compact, closes Tools on selection and separates theme from the brand', async () => {
-    vi.spyOn(API, 'waitForHealthReady').mockImplementation(() => new Promise<boolean>(() => {}));
+    vi.spyOn(HttpApi, 'waitForHealthReady').mockImplementation(
+      () => new Promise<boolean>(() => {})
+    );
     localStorage.setItem('lorrgs-theme', 'light');
     render(App);
     const nav = screen.getByRole('navigation', { name: 'Main navigation' });

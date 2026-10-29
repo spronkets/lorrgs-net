@@ -1,0 +1,11 @@
+@host = http://localhost:5247
+
+# Built from configured editions/raids and static World Data; no upstream WCL calls.
+# This endpoint has no route parameters, query parameters or request body.
+# It does not require edition: one response contains all configured editions.
+# Response: 200 with editions and instances grouped by edition slug.
+# Boss entries include id, name, slug and mapped; unmapped bosses retain their names.
+
+### Complete configured raid catalog
+GET {{host}}/api/raid-catalog
+Accept: application/json

@@ -1,29 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  buildApiUrl,
-  get,
-  send,
-  getReportTimeline,
-  getBossTimeline,
-  getSpecRankings,
-  getCompRankings,
-  getRoles,
-  getClasses,
-  getSpecs,
-  getBosses,
-  getZones,
-  getSpells,
-  getTrinkets,
-  getSeasons,
-  getSeason,
-  getZone,
-  getZoneBosses,
-  getBoss,
-  getSpell,
-  getTrinket,
-  normalizeApiCollection,
-  normalizeApiPayload
-} from './api';
+import { getReportTimeline, getBossTimeline, getSpecRankings, getCompRankings } from './api';
 import { rows, response } from './testing/timelineFixtures';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -66,58 +42,7 @@ describe('api utilities', () => {
     expect(options.timeoutMs).toBeUndefined();
     expect(parsed.searchParams.has('limit')).toBe(false);
   });
-  it('passes edition on every world-data collection and individual request', async () => {
-    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
-    vi.stubGlobal('fetch', fetch);
-    for (const edition of ['anniversary', 'era', 'midnight', 'mop']) {
-      for (const collection of [
-        getRoles,
-        getClasses,
-        getSpecs,
-        getBosses,
-        getZones,
-        getSpells,
-        getTrinkets,
-        getSeasons
-      ])
-        await collection(edition);
-      await getBoss('zuljin', edition);
-      await getZone('zulaman', edition);
-      await getZoneBosses('zulaman', edition);
-      await getSeason('season', edition);
-      await getSpell(1, edition);
-      await getTrinket(1, edition);
-      for (const [url] of fetch.mock.calls.slice(-14)) {
-        expect(new URL(String(url), 'http://localhost').searchParams.get('edition')).toBe(edition);
-      }
-    }
-    expect(fetch).toHaveBeenCalledTimes(56);
-  });
 
-  it('rejects empty world-data editions before sending a request', async () => {
-    const fetch = vi.fn();
-    vi.stubGlobal('fetch', fetch);
-    await expect(getRoles('')).rejects.toThrow('edition is required');
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it.each(['get', 'send'] as const)(
-    'shows a friendly rate-limit message for %s without retrying',
-    async (method) => {
-      const fetch = vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ error: 'Raw upstream detail', traceId: 'private' }), {
-          status: 429,
-          statusText: 'Too Many Requests',
-          headers: { 'content-type': 'application/json' }
-        })
-      );
-      vi.stubGlobal('fetch', fetch);
-      await expect(method === 'get' ? get('/rankings') : send('/rankings', {})).rejects.toThrow(
-        "Warcraft Logs needs a breather. We've hit its request limit, so please try again later."
-      );
-      expect(fetch).toHaveBeenCalledTimes(1);
-    }
-  );
   it('requests the selected fight boss reference from the API without browser caching', async () => {
     const fetch = vi
       .fn()
@@ -170,10 +95,6 @@ describe('api utilities', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('builds URLs relative to the configured API base', () => {
-    expect(buildApiUrl('/specs')).toMatch(/\/specs$/);
-  });
-
   it('shows upstream report availability details from Problem Details responses', async () => {
     vi.stubGlobal(
       'fetch',
@@ -188,24 +109,5 @@ describe('api utilities', () => {
     await expect(getReportTimeline(rows[0].report, 'retail')).rejects.toThrow(
       'This Warcraft Logs report is private or inaccessible.'
     );
-  });
-
-  it('normalizes object payloads into arrays for the UI', () => {
-    const payload = {
-      first: { id: 1, name: 'Alpha' },
-      second: { id: 2, name: 'Beta' }
-    };
-    expect(normalizeApiPayload(payload)).toEqual([
-      { id: 1, name: 'Alpha' },
-      { id: 2, name: 'Beta' }
-    ]);
-  });
-
-  it('normalizes collection payloads from either object maps or wrapped arrays', () => {
-    expect(normalizeApiCollection({ classes: [{ id: 1 }] }, 'classes')).toEqual([{ id: 1 }]);
-    expect(normalizeApiCollection({ first: { id: 1 }, second: { id: 2 } })).toEqual([
-      { id: 1 },
-      { id: 2 }
-    ]);
   });
 });

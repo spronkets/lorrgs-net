@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getBossTimeline, getReportTimeline, type ReportTimeline } from '../api';
+import { getBossTimeline, getReportTimeline } from '../api';
+import type { ReportTimeline } from '../models/ReportTimeline';
 import { bossResponse, rows, response } from '../testing/timelineFixtures';
 import RankingsTimeline from './RankingsTimeline.svelte';
 import { TIMELINE_ZOOM_LEVELS } from '../timelineUtils';

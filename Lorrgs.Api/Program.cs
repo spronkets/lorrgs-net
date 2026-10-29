@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using Lorrgs.Api;
+using Lorrgs.Api.Features.RaidCatalog;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
-using WclClient = Lorrgs.WarcraftLogs.WarcraftLogsClient;
 using WclOptions = Lorrgs.WarcraftLogs.Configuration.WarcraftLogsApiOptions;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,16 +19,9 @@ builder.Services.AddOptions<RaidCatalogOptions>()
     .ValidateOnStart();
 
 builder.Services.AddMemoryCache();
-builder.Services.AddScoped<Lorrgs.Api.Services.RotationAnalysisService>();
-builder.Services.AddScoped<Lorrgs.Api.Services.IReportTimelineService, Lorrgs.Api.Services.ReportTimelineService>();
-builder.Services.AddScoped<Lorrgs.Api.Services.ICompRankingService, Lorrgs.Api.Services.CompRankingService>();
-
-// HTTP client for WarcraftLogs API
-builder.Services.AddHttpClient<WclClient>();
-builder.Services.AddScoped<Lorrgs.Api.Services.RaidCatalogClient>();
+builder.Services.AddApiFeatures();
 builder.Services.AddHealthChecks();
 
-builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -66,6 +59,10 @@ app.Use(async (context, next) =>
     await next(context);
 });
 
+app.UseCors("lorrgs-web");
+app.MapHealthChecks("/health");
+app.MapApi();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -75,10 +72,6 @@ if (app.Environment.IsDevelopment())
         options.RoutePrefix = "swagger";
     });
 }
-
-app.UseCors("lorrgs-web");
-app.MapHealthChecks("/health");
-app.MapControllers();
 
 app.Lifetime.ApplicationStarted.Register(() =>
 {

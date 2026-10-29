@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import RankingsList from './RankingsList.svelte';
-import type { SpecRankingData } from '../api';
+import type { SpecRankingData } from '../models/SpecRankingData';
 
 const rankings: SpecRankingData = {
   specSlug: 'retribution-paladin',

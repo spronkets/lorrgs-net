@@ -9,9 +9,9 @@ import {
   parseKillTime,
   toKillTimeInput,
   selectRankingReports,
-  summarizeRankingReports,
-  type RankingFilters
+  summarizeRankingReports
 } from './rankingUtils';
+import type { RankingFilters } from './models/rankings/RankingFilters';
 
 const filters: RankingFilters = {
   region: '',

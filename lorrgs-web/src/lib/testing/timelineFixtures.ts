@@ -1,4 +1,6 @@
-import type { BossTimeline, RankingReport, ReportTimeline } from '../api';
+import type { BossTimeline } from '../models/BossTimeline';
+import type { RankingReport } from '../models/RankingReport';
+import type { ReportTimeline } from '../models/ReportTimeline';
 
 export const rows = Array.from({ length: 5 }, (_, index) => ({
   rank: index + 1,

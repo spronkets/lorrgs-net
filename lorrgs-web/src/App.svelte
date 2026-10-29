@@ -1,12 +1,15 @@
 <script lang="ts">
+  import * as WorldDataApi from './lib/worldDataApi';
+  import * as HttpApi from './lib/common/http/apiClient';
+
   import Alert from './lib/components/Alert.svelte';
   import { onMount } from 'svelte';
   import * as API from './lib/api';
-  import HomePage from './lib/pages/HomePage.svelte';
-  import LandingPage from './lib/pages/LandingPage.svelte';
-  import CompRankingsPage from './lib/pages/CompRankingsPage.svelte';
-  import WorldDataPage from './lib/pages/WorldDataPage.svelte';
-  import RotationAnalyzerPage from './lib/pages/RotationAnalyzerPage.svelte';
+  import HomePage from './pages/HomePage.svelte';
+  import LandingPage from './pages/LandingPage.svelte';
+  import CompRankingsPage from './pages/CompRankingsPage.svelte';
+  import WorldDataPage from './pages/WorldDataPage.svelte';
+  import RotationAnalyzerPage from './pages/RotationAnalyzerPage.svelte';
   import { getApiEditionSlug, getRaidsForEdition } from './lib/raidCatalog';
 
   let currentPage = 'home';
@@ -108,7 +111,7 @@
   async function loadWorldData() {
     const request = ++worldDataRequest;
     try {
-      const apiHealthy = await API.waitForHealthReady();
+      const apiHealthy = await HttpApi.waitForHealthReady();
       if (!apiHealthy) {
         throw new Error('API is not ready yet (health endpoint did not return healthy).');
       }
@@ -125,25 +128,25 @@
       const edition = getApiEditionSlug(version);
 
       const [classes, specs, roles, bosses, zones, spells, trinkets, seasons] = await Promise.all([
-        API.getClasses(edition),
-        API.getSpecs(edition),
-        API.getRoles(edition),
-        API.getBosses(edition),
-        API.getZones(edition),
-        API.getSpells(edition),
-        API.getTrinkets(edition),
-        API.getSeasons(edition)
+        WorldDataApi.getClasses(edition),
+        WorldDataApi.getSpecs(edition),
+        WorldDataApi.getRoles(edition),
+        WorldDataApi.getBosses(edition),
+        WorldDataApi.getZones(edition),
+        WorldDataApi.getSpells(edition),
+        WorldDataApi.getTrinkets(edition),
+        WorldDataApi.getSeasons(edition)
       ]);
 
       const data = {
-        classes: API.normalizeApiCollection(classes, 'classes'),
-        specs: API.normalizeApiCollection(specs, 'specs'),
-        roles: API.normalizeApiCollection(roles, 'roles'),
-        bosses: API.normalizeApiCollection(bosses, 'bosses'),
-        zones: API.normalizeApiCollection(zones, 'zones'),
-        spells: API.normalizeApiCollection(spells, 'spells'),
-        trinkets: API.normalizeApiCollection(trinkets, 'trinkets'),
-        seasons: API.normalizeApiCollection(seasons, 'seasons')
+        classes: HttpApi.normalizeApiCollection(classes, 'classes'),
+        specs: HttpApi.normalizeApiCollection(specs, 'specs'),
+        roles: HttpApi.normalizeApiCollection(roles, 'roles'),
+        bosses: HttpApi.normalizeApiCollection(bosses, 'bosses'),
+        zones: HttpApi.normalizeApiCollection(zones, 'zones'),
+        spells: HttpApi.normalizeApiCollection(spells, 'spells'),
+        trinkets: HttpApi.normalizeApiCollection(trinkets, 'trinkets'),
+        seasons: HttpApi.normalizeApiCollection(seasons, 'seasons')
       };
 
       if (request !== worldDataRequest) return;
@@ -269,12 +272,7 @@
           oneditionchange={changeEdition}
         />
       {:else if currentPage === 'spec'}
-        <HomePage
-          {worldData}
-          {raidCatalog}
-          {selectedVersion}
-          oneditionchange={changeEdition}
-        />
+        <HomePage {worldData} {raidCatalog} {selectedVersion} oneditionchange={changeEdition} />
       {:else if currentPage === 'comp'}
         <CompRankingsPage
           {worldData}

@@ -1,55 +1,9 @@
-export type RaidEdition = {
-  slug: string;
-  name: string;
-  order: number;
-  public: boolean;
-};
-
-export type RaidInstance = {
-  raidSize?: string | null;
-  zoneId: number;
-  slug: string;
-  name: string;
-  edition: string;
-  phase: number;
-  bosses?: RaidBossOption[];
-  public: boolean;
-};
-
-export type RaidPhaseGroup = {
-  key: string;
-  label: string;
-  phase: number | null;
-  raids: RaidInstance[];
-};
-
-export type RaidCatalog = {
-  editions: RaidEdition[];
-  instances: Record<string, RaidInstance[]>;
-};
-
-export type RaidBossOption = {
-  id?: number;
-  name: string;
-  slug: string;
-  mapped: boolean;
-};
-
-export type WowClassLike = {
-  id: number;
-  name?: string;
-  nameSlug?: string;
-};
-
-export type WowSpecLike = {
-  id: number;
-  name?: string;
-  nameSlug?: string;
-  fullName?: string;
-  fullNameSlug?: string;
-  classId: number;
-  roleId?: number;
-};
+import type { RaidInstance } from './models/RaidInstance';
+import type { RaidPhaseGroup } from './models/RaidPhaseGroup';
+import type { RaidCatalog } from './models/RaidCatalog';
+import type { RaidBossOption } from './models/RaidBossOption';
+import type { WowClassLike } from './models/WowClassLike';
+import type { WowSpecLike } from './models/WowSpecLike';
 
 const versionToEditionSlug: Record<string, string> = {
   Anniversary: 'anniversary',

@@ -1,5 +1,6 @@
 import { SvelteMap } from 'svelte/reactivity';
-import { getCompRankingDetails, type RankingReport } from './api';
+import { getCompRankingDetails } from './api';
+import type { RankingReport } from './models/RankingReport';
 
 export function compKey(report: RankingReport): string {
   return `${report.reportId}:${report.fights?.[0]?.fightId ?? 0}`;

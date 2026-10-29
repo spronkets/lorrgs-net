@@ -1,0 +1,59 @@
+@baseUrl = http://localhost:5247
+@reportCode = N8v2dBGMZX6wrfaA
+@fightId = 106
+@sourceId = 7
+@playerName = REPLACE_PLAYER
+
+# Application API requests; live loads require WCL credentials and consume quota.
+# Replace sample report/fight/player identities with a visible ranking row.
+# Both endpoints require an ASCII alphanumeric report code <= 32 chars and fightId > 0.
+# edition defaults to retail; supported values are retail, anniversary, mistsofpandaria, era.
+# Unlike WorldData/CompRankings, edition aliases and classic_sod are NOT accepted here.
+# Player timeline requires sourceId > 0 OR a nonblank playerName; optional specId
+# enables specialization-specific corrections. Boss timeline needs no player selection.
+# Responses: 200, 400, 403, 404, 429, 502; errors use Problem Details.
+# These endpoints have no refresh parameter; explicit loading uses existing WCL cache behavior.
+
+### Replace the sample report code, fight and name with a visible ranking row.
+GET {{baseUrl}}/api/warcraftlogs/reports/{{reportCode}}/timeline?fightId={{fightId}}&playerName={{playerName}}&edition=anniversary
+Accept: application/json
+
+### Known actor ID instead of a name; optional specId enables Retail specialization corrections.
+GET {{baseUrl}}/api/warcraftlogs/reports/{{reportCode}}/timeline?fightId={{fightId}}&sourceId={{sourceId}}&edition=retail&specId=264
+Accept: application/json
+
+### All supported player query parameters; select a consistent actor/name pair
+GET {{baseUrl}}/api/warcraftlogs/reports/{{reportCode}}/timeline?fightId={{fightId}}&sourceId={{sourceId}}&playerName={{playerName}}&edition=retail&specId=264
+Accept: application/json
+
+### Omitted edition defaults to retail
+GET {{baseUrl}}/api/warcraftlogs/reports/{{reportCode}}/timeline?fightId={{fightId}}&sourceId={{sourceId}}
+Accept: application/json
+
+### Real enemy casts and observed phase transitions for the reference fight
+GET {{baseUrl}}/api/warcraftlogs/reports/{{reportCode}}/timeline/boss?fightId={{fightId}}&edition=anniversary
+Accept: application/json
+
+### Boss timeline with default retail edition
+GET {{baseUrl}}/api/warcraftlogs/reports/{{reportCode}}/timeline/boss?fightId={{fightId}}
+Accept: application/json
+
+### Invalid identity is rejected without contacting Warcraft Logs (400)
+GET {{baseUrl}}/api/warcraftlogs/reports/invalid/timeline?fightId=0&edition=anniversary
+Accept: application/problem+json
+
+### Missing player selection: 400
+GET {{baseUrl}}/api/warcraftlogs/reports/{{reportCode}}/timeline?fightId={{fightId}}
+Accept: application/problem+json
+
+### Aliased edition is rejected for timelines: 400
+GET {{baseUrl}}/api/warcraftlogs/reports/{{reportCode}}/timeline/boss?fightId={{fightId}}&edition=midnight
+Accept: application/problem+json
+
+### Replace code with an actual private report to exercise 403
+GET {{baseUrl}}/api/warcraftlogs/reports/REPLACEPRIVATEREPORT/timeline?fightId=1&playerName={{playerName}}&edition=retail
+Accept: application/problem+json
+
+### Replace code with a deleted/nonexistent report to exercise 404
+GET {{baseUrl}}/api/warcraftlogs/reports/REPLACEMISSINGREPORT/timeline?fightId=1&playerName={{playerName}}&edition=retail
+Accept: application/problem+json

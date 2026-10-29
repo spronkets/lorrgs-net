@@ -17,12 +17,12 @@
   <div class="edition-select-wrap" aria-label="Edition selection">
     <select
       class="edition-select"
-      value={selectedVersion}
+      value={'' + selectedVersion}
       on:change={(event) => onSelect((event.currentTarget as HTMLSelectElement).value)}
     >
       <option value="">{placeholder}</option>
       {#each versions as version (version)}
-        <option value={version}>{version}</option>
+        <option value={'' + version}>{version}</option>
       {/each}
     </select>
   </div>

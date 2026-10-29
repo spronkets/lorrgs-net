@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ReportTimeline } from './api';
+import type { ReportTimeline } from './models/ReportTimeline';
 import {
   eventLanes,
   castIntervals,

@@ -4,7 +4,9 @@
   import { timelineErrorSummary } from '../timelineError';
   import TimelinePhases from './TimelinePhases.svelte';
   import BossIcon from './BossIcon.svelte';
-  import { getBossTimeline, type BossTimeline, type RankingReport } from '../api';
+  import { getBossTimeline } from '../api';
+  import type { BossTimeline } from '../models/BossTimeline';
+  import type { RankingReport } from '../models/RankingReport';
   import { getRankingReportLink } from '../rankingUtils';
   import { spellIconUrl, timelineTime } from '../timelineUtils';
 

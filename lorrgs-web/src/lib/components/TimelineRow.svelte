@@ -4,8 +4,10 @@
   import { getSpecIconUrl } from '../wowAssets';
   import { timelineErrorSummary } from '../timelineError';
   import TimelinePhases from './TimelinePhases.svelte';
-  import type { RankingReport, ReportTimeline } from '../api';
-  import type { InspectedSpell, TimelineMagnification } from '../timelineTypes';
+  import type { RankingReport } from '../models/RankingReport';
+  import type { ReportTimeline } from '../models/ReportTimeline';
+  import type { InspectedSpell } from '../models/InspectedSpell';
+  import type { TimelineMagnification } from '../models/TimelineMagnification';
   import {
     getTopPercentLabel,
     getRankingReportLink,

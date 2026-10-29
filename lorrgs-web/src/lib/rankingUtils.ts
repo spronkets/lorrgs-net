@@ -1,24 +1,6 @@
-export type RankingPlayer = {
-  performance?: number | null;
-  serverRegion?: string | null;
-};
-
-export type RankingReport = {
-  percentile?: number | null;
-  players?: RankingPlayer[];
-  duration?: number | null;
-  startTime?: string | null;
-};
-
-export type RankingFilters = {
-  region: string;
-  minDuration: string;
-  maxDuration: string;
-  fromDate: string;
-  toDate: string;
-};
-
-export type RankingSort = 'rank' | 'performance' | 'duration' | 'date';
+import type { RankingReport } from './models/rankings/RankingReport';
+import type { RankingFilters } from './models/rankings/RankingFilters';
+import type { RankingSort } from './models/rankings/RankingSort';
 
 export function parseKillTime(value: string): number | null {
   const trimmed = value.trim();

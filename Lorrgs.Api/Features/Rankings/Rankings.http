@@ -1,0 +1,86 @@
+@host = http://localhost:5247
+@edition = anniversary
+@specSlug = retribution-paladin
+@bossSlug = illidan-stormrage
+@zoneId = 1060
+@encounterId = 50609
+@className = Paladin
+@specName = Retribution
+
+# These requests call the application API. Live rankings require WCL credentials.
+# GET spec/{specSlug}/{bossSlug} and its /info variant share all query parameters.
+# Required context: nonblank edition, zoneId > 0, className, specName, explicit metric.
+# encounterId is optional; the service resolves an omitted encounter using static/upstream data.
+# Defaults: refresh=false, difficulty=mythic, includeCombatantInfo=false, includeOtherPlayers=true.
+# difficulty accepts lfr, normal, heroic, mythic; difficultyId explicitly overrides it.
+# Optional: page, partition, bracket, size (raid size, NOT result count),
+# serverRegion, serverSlug, filter, hardModeLevel, externalBuffs.
+# hardModeLevel: Any, Highest, NormalMode, Level0-Level4 (aliases are also accepted).
+# externalBuffs: Any, Require, Exclude (aliases are also accepted).
+# The service always requests combatant metadata for faction enrichment.
+# GET responses: 200, 400, 404, 429, 500; error bodies contain "error".
+# Complete cached timelines are bundled without downloading uncached player events.
+# PATCH spec/dirty accepts the same context/options except refresh, plus dirty=true.
+# It acknowledges refresh state; it does not fetch rankings or persist a dirty flag.
+# Both POST queue routes are placeholders, not running background jobs.
+# Their taskId is not trackable: no task-status endpoint is implemented.
+
+### Full rankings and complete cached timelines
+GET {{host}}/api/rankings/spec/{{specSlug}}/{{bossSlug}}?edition={{edition}}&zoneId={{zoneId}}&encounterId={{encounterId}}&className={{className}}&specName={{specName}}&difficulty=normal&metric=dps
+Accept: application/json
+
+### Info-only rankings; reports are omitted from the returned collection
+GET {{host}}/api/rankings/spec/{{specSlug}}/{{bossSlug}}/info?edition={{edition}}&zoneId={{zoneId}}&encounterId={{encounterId}}&className={{className}}&specName={{specName}}&difficulty=normal&metric=dps
+Accept: application/json
+
+### All supported GET query parameters
+GET {{host}}/api/rankings/spec/{{specSlug}}/{{bossSlug}}?edition={{edition}}&refresh=false&difficulty=normal&metric=dps&zoneId={{zoneId}}&encounterId={{encounterId}}&className={{className}}&specName={{specName}}&difficultyId=3&page=1&partition=1&bracket=1&size=25&serverRegion=US&serverSlug=area-52&filter=&hardModeLevel=Any&externalBuffs=Exclude&includeCombatantInfo=true&includeOtherPlayers=true
+Accept: application/json
+
+### Info variant with every supported GET query parameter
+GET {{host}}/api/rankings/spec/{{specSlug}}/{{bossSlug}}/info?edition={{edition}}&refresh=false&difficulty=normal&metric=dps&zoneId={{zoneId}}&encounterId={{encounterId}}&className={{className}}&specName={{specName}}&difficultyId=3&page=1&partition=1&bracket=1&size=25&serverRegion=US&serverSlug=area-52&filter=&hardModeLevel=Any&externalBuffs=Exclude&includeCombatantInfo=false&includeOtherPlayers=false
+Accept: application/json
+
+### Explicitly bypass upstream response cache
+GET {{host}}/api/rankings/spec/{{specSlug}}/{{bossSlug}}?edition={{edition}}&zoneId={{zoneId}}&encounterId={{encounterId}}&className={{className}}&specName={{specName}}&difficulty=normal&metric=dps&refresh=true
+Accept: application/json
+
+### Refresh acknowledgement with every supported PATCH parameter
+PATCH {{host}}/api/rankings/spec/dirty?specSlug={{specSlug}}&bossSlug={{bossSlug}}&edition={{edition}}&difficulty=normal&metric=dps&zoneId={{zoneId}}&encounterId={{encounterId}}&className={{className}}&specName={{specName}}&difficultyId=3&page=1&partition=1&bracket=1&size=25&serverRegion=US&serverSlug=area-52&filter=&hardModeLevel=Any&externalBuffs=Exclude&includeCombatantInfo=false&includeOtherPlayers=true&dirty=true
+Accept: application/json
+
+### Clean acknowledgement
+PATCH {{host}}/api/rankings/spec/dirty?specSlug={{specSlug}}&bossSlug={{bossSlug}}&edition={{edition}}&zoneId={{zoneId}}&className={{className}}&specName={{specName}}&difficulty=normal&metric=dps&dirty=false
+Accept: application/json
+
+### Spec queue placeholder defaults: all/all/all/all, limit=50, clear=false
+POST {{host}}/api/rankings/spec/queue
+Accept: application/json
+
+### Spec queue placeholder with all supported parameters
+POST {{host}}/api/rankings/spec/queue?specSlug={{specSlug}}&bossSlug={{bossSlug}}&difficulty=normal&metric=dps&limit=10&clear=true
+Accept: application/json
+
+### Composition queue placeholder defaults: bossSlug=all, limit=50, clear=false
+POST {{host}}/api/rankings/comp/queue
+Accept: application/json
+
+### Composition queue placeholder with all supported parameters
+POST {{host}}/api/rankings/comp/queue?bossSlug={{bossSlug}}&limit=10&clear=true
+Accept: application/json
+
+### Missing required context: 400 without an upstream call
+GET {{host}}/api/rankings/spec/{{specSlug}}/{{bossSlug}}
+Accept: application/json
+
+### Invalid metric: 400
+GET {{host}}/api/rankings/spec/{{specSlug}}/{{bossSlug}}/info?edition={{edition}}&zoneId={{zoneId}}&className={{className}}&specName={{specName}}&metric=unsupported
+Accept: application/json
+
+### Invalid page: 400
+GET {{host}}/api/rankings/spec/{{specSlug}}/{{bossSlug}}?edition={{edition}}&zoneId={{zoneId}}&className={{className}}&specName={{specName}}&metric=dps&page=0
+Accept: application/json
+
+### Missing PATCH context: 400
+PATCH {{host}}/api/rankings/spec/dirty
+Accept: application/json

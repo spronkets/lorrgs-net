@@ -16,7 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="GraphQL\**\*.graphql" />
     <InternalsVisibleTo Include="Lorrgs.Api.Tests" />
   </ItemGroup>
 

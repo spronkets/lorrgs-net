@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { waitFor } from '@testing-library/svelte';
 import { TimelineLoader } from './timelineLoader.svelte';
-import { getReportTimeline, type ReportTimeline } from './api';
+import { getReportTimeline } from './api';
+import type { ReportTimeline } from './models/ReportTimeline';
 import { rows, response } from './testing/timelineFixtures';
 import { timelineKey } from './timelineUtils';
 

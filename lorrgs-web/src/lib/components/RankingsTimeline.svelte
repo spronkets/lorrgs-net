@@ -8,8 +8,11 @@
   import TimelineRow from './TimelineRow.svelte';
   import BossTimelineRow from './BossTimelineRow.svelte';
   import { TimelineLoader } from '../timelineLoader.svelte';
-  import type { InspectedSpell, TimelineMagnification } from '../timelineTypes';
-  import type { BossTimeline, RankingReport, ReportTimeline } from '../api';
+  import type { InspectedSpell } from '../models/InspectedSpell';
+  import type { TimelineMagnification } from '../models/TimelineMagnification';
+  import type { BossTimeline } from '../models/BossTimeline';
+  import type { RankingReport } from '../models/RankingReport';
+  import type { ReportTimeline } from '../models/ReportTimeline';
   import {
     TIMELINE_ZOOM_LEVELS,
     canLoadTimeline,

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-import type { CompRankingData, RankingReport } from '../api';
+import type { CompRankingData } from '../models/CompRankingData';
+import type { RankingReport } from '../models/RankingReport';
 import { getCompRankingDetails, getReportTimeline } from '../api';
 import CompRankingsResults from './CompRankingsResults.svelte';
 
@@ -87,7 +88,9 @@ it('sorts by ascending execution rank, keeping missing ranks last and ties stabl
   });
   await waitFor(() => {
     const headings = [...container.querySelectorAll('article > .heading h3')];
-    expect(headings.slice(0, 4).map((heading) => heading.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+    expect(
+      headings.slice(0, 4).map((heading) => heading.textContent?.replace(/\s+/g, ' ').trim())
+    ).toEqual([
       '#2 Kill 2 (Top 1%)',
       '#2 Kill 3 (Top 1%)',
       '#8 Kill 1 (Top 1%)',
@@ -99,7 +102,8 @@ it('sorts by ascending execution rank, keeping missing ranks last and ties stabl
   expect(within(first).getByText('Speed').nextElementSibling).toHaveTextContent('#5 (Top 5%)');
   expect(within(first).queryByText('Execution')).not.toBeInTheDocument();
   expect(within(first).getByText('Speed').parentElement).toHaveAttribute(
-    'title', 'Speed ranking out of 100 ranked kills'
+    'title',
+    'Speed ranking out of 100 ranked kills'
   );
 });
 
@@ -264,4 +268,146 @@ it('forwards refresh only for the requested initial and individual detail reques
     expect(refresh).toBe(true);
     expect(signal).toBeInstanceOf(AbortSignal);
   }
+});
+
+it('applies inclusive duration bounds and both composition filters to inspected details', async () => {
+  const selectedSummaries = summaries.slice(0, 4).map((summary, index) => ({
+    ...summary,
+    title: `Filtered kill ${index + 1}`,
+    duration: index === 1 ? 180000 : index === 2 ? 220000 : 200000
+  }));
+  vi.mocked(getCompRankingDetails).mockImplementation(async (summary) => {
+    if (summary.reportId === 'Report1' || summary.reportId === 'Report2') {
+      return detail(summary);
+    }
+    return {
+      ...detail(summary),
+      fights: [
+        {
+          ...summary.fights![0],
+          composition: {
+            roles: { tank: 1 },
+            specs: { 'holy-paladin': 1 },
+            classes: { paladin: 1 }
+          }
+        }
+      ]
+    };
+  });
+  const { container } = render(CompRankingsResults, {
+    rankings: { ...rankings, reports: selectedSummaries },
+    edition: 'anniversary',
+    worldData: {},
+    filters: {
+      roles: ['heal.eq.1'],
+      specs: ['holy-paladin.eq.1'],
+      minSeconds: 190,
+      maxSeconds: 210
+    }
+  });
+
+  await waitFor(() => expect(getCompRankingDetails).toHaveBeenCalledTimes(3));
+  const pendingNonmatch = [...container.querySelectorAll('article')].find((article) =>
+    article.textContent?.includes('Filtered kill 4')
+  )!;
+  await fireEvent.click(
+    within(pendingNonmatch as HTMLElement).getByRole('button', { name: 'Load kill details' })
+  );
+  await waitFor(() => expect(getCompRankingDetails).toHaveBeenCalledTimes(4));
+  await waitFor(() => expect(container.querySelectorAll('article')).toHaveLength(1));
+  expect(container.querySelector('article')).toHaveTextContent('Filtered kill 1');
+  expect(container.querySelector('article')).not.toHaveTextContent('Filtered kill 4');
+});
+
+it('derives roster roles from world data and filters the expanded roster', async () => {
+  const summary = summaries[0];
+  vi.mocked(getCompRankingDetails).mockImplementation(async (item) => {
+    const report = detail(item);
+    const makePlayer = (
+      name: string,
+      specSlug: string,
+      parsePercentile?: number,
+      roleCode?: string
+    ) => ({
+      ...report.players![0],
+      name,
+      specSlug,
+      parsePercentile,
+      roleCode,
+      timeline: {
+        reportCode: item.reportId,
+        fightId: item.fights![0].fightId,
+        sourceId: 7,
+        playerName: name,
+        duration: item.duration,
+        isComplete: true,
+        spells: [],
+        events: []
+      }
+    });
+    report.players = [
+      makePlayer('Zed', 'holy-paladin', 90),
+      makePlayer('Ada', 'holy-paladin', 90),
+      makePlayer('No role', 'unknown-spec'),
+      makePlayer('Tank', 'unknown-spec', 95, 'tank')
+    ];
+    report.bossTimeline = {
+      reportCode: report.reportId,
+      fightId: report.fights![0].fightId,
+      name: 'Boss',
+      duration: report.duration,
+      isComplete: true,
+      spells: [],
+      events: [],
+      phases: []
+    };
+    report.fights![0].execution = { rank: 0, best: 0, totalParses: 0, rankPercent: null };
+    return report;
+  });
+  const { container } = render(CompRankingsResults, {
+    rankings: { ...rankings, reports: [summary] },
+    edition: 'anniversary',
+    worldData: {
+      roles: [
+        { id: 1, code: 'tank', name: 'Tanks' },
+        { id: 2, code: 'heal', name: 'Healers' }
+      ],
+      specs: [
+        {
+          id: 65,
+          nameSlug: 'holy',
+          fullNameSlug: 'holy-paladin',
+          fullName: 'Holy Paladin',
+          classId: 2,
+          roleId: 2
+        }
+      ],
+      classes: [{ id: 2, nameSlug: 'paladin', color: '#f48cba' }]
+    }
+  });
+
+  const row = container.querySelector('article')!;
+  await waitFor(() => expect(row).toHaveTextContent('Roster & cooldown timelines (4 players)'));
+  const details = row.querySelector('details')!;
+  details.open = true;
+  await fireEvent(details, new Event('toggle'));
+  await within(row).findByRole('region', { name: 'Cooldown comparison timelines' });
+  expect(within(row).getByRole('heading', { name: 'Healers' })).toBeInTheDocument();
+  await fireEvent.click(within(row).getByRole('button', { name: 'Healers' }));
+  expect(within(row).getByRole('button', { name: 'Healers' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  expect(within(row).getByRole('region', { name: 'Healers' })).toBeInTheDocument();
+  expect(within(row).getByRole('region', { name: 'Healers' })).toHaveTextContent('Ada');
+  expect(within(row).getByRole('region', { name: 'Healers' })).toHaveTextContent('Zed');
+});
+
+it('explains when a page has no kills to inspect', () => {
+  render(CompRankingsResults, {
+    rankings: { ...rankings, reports: [], totalCount: 0 },
+    edition: 'anniversary',
+    worldData: {}
+  });
+  expect(screen.getByText('No inspected kills match these filters on this page.')).toBeVisible();
 });

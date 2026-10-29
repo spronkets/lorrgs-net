@@ -1,4 +1,7 @@
-import type { RankingReport, ReportTimeline, TimelineEvent, TimelineSpell } from './api';
+import type { RankingReport } from './models/RankingReport';
+import type { ReportTimeline } from './models/ReportTimeline';
+import type { TimelineEvent } from './models/TimelineEvent';
+import type { TimelineSpell } from './models/TimelineSpell';
 
 export const TIMELINE_ZOOM_LEVELS = [100, 200, 400, 800] as const;
 

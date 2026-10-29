@@ -1,11 +1,12 @@
 using System.Net;
 using System.Text.Json;
-using Lorrgs.Api.Controllers;
-using Lorrgs.Api.Models;
-using Lorrgs.Api.Services;
+using Lorrgs.Api.Features.CompRankings.GetCompRanking;
+using Lorrgs.Api.Features.CompRankings.GetDetails;
+using Lorrgs.Api.Features.WorldData;
 using Lorrgs.Tests.TestSupport;
 using Lorrgs.WarcraftLogs;
-using Microsoft.AspNetCore.Mvc;
+using Lorrgs.WarcraftLogs.Models;
+using Lorrgs.WarcraftLogs.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Lorrgs.Api.Tests;
@@ -41,7 +42,8 @@ public sealed class CompRankingsTests : IDisposable
         using var handler = new QueueHandler(Rankings(Enumerable.Range(1, 50).Reverse().ToArray()));
         var result = (await Service(handler).LoadAsync(Search() with
         {
-            Roles = [CompCountFilter.Parse("heal.eq.0")], MinSeconds = 600
+            Roles = [CompCountFilter.Parse("heal.eq.0")],
+            MinSeconds = 600
         }, default))!;
         Assert.Equal(50, result.Reports.Count);
         Assert.All(result.Reports, report =>
@@ -148,9 +150,8 @@ public sealed class CompRankingsTests : IDisposable
     public async Task InvalidSearchDoesNotInvokeUpstream(string edition, int encounter, int page, int min, int max, string? role)
     {
         using var handler = new QueueHandler();
-        var result = await Controller(handler).GetCompRanking("boss", edition, encounter, page: page,
-            minSeconds: min, maxSeconds: max, roles: role is null ? null : [role]);
-        Assert.Equal(400, Assert.IsType<ObjectResult>(result).StatusCode);
+        var result = await Handlers(handler).Ranking.Handle(new GetCompRankingRequest("boss", edition, encounter, Page: page, MinSeconds: min, MaxSeconds: max, Roles: role is null ? null : [role]));
+        Assert.Equal(400, HttpResultAssertions.Read(result).StatusCode);
         Assert.Equal(0, handler.GraphQlRequests);
     }
 
@@ -160,10 +161,10 @@ public sealed class CompRankingsTests : IDisposable
     public async Task RateLimitsPropagateWithoutRequestingOtherKills(bool details)
     {
         using var handler = new QueueHandler { GraphQlFailure = new HttpRequestException("limited", null, HttpStatusCode.TooManyRequests) };
-        var controller = Controller(handler);
-        var response = details ? await controller.GetDetails("ReportA", 1, "anniversary") :
-            await controller.GetCompRanking("boss", "anniversary", 50609);
-        Assert.Equal(429, Assert.IsType<ObjectResult>(response).StatusCode);
+        var handlers = Handlers(handler);
+        var response = details ? await handlers.Details.Handle(new GetDetailsRequest("ReportA", 1, "anniversary")) :
+            await handlers.Ranking.Handle(new GetCompRankingRequest("boss", "anniversary", 50609));
+        Assert.Equal(429, HttpResultAssertions.Read(response).StatusCode);
         Assert.Equal(1, handler.GraphQlRequests);
     }
 
@@ -174,7 +175,7 @@ public sealed class CompRankingsTests : IDisposable
         using var cts = new CancellationTokenSource();
         cts.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            Controller(handler).GetDetails("ReportA", 1, "anniversary", cancellationToken: cts.Token));
+            Handlers(handler).Details.Handle(new GetDetailsRequest("ReportA", 1, "anniversary"), cts.Token));
     }
 
     [Theory]
@@ -187,8 +188,8 @@ public sealed class CompRankingsTests : IDisposable
         {
             errors = new[] { new { message, path = new[] { "reportData", "report" } } }
         }));
-        var response = await Controller(handler).GetDetails("ReportA", 1, "anniversary");
-        Assert.Equal(status, Assert.IsType<ObjectResult>(response).StatusCode);
+        var response = await Handlers(handler).Details.Handle(new GetDetailsRequest("ReportA", 1, "anniversary"));
+        Assert.Equal(status, HttpResultAssertions.Read(response).StatusCode);
         Assert.Equal(1, handler.GraphQlRequests);
     }
 
@@ -196,7 +197,7 @@ public sealed class CompRankingsTests : IDisposable
     public async Task MissingFightIsNotAnEmptyComposition()
     {
         using var handler = new QueueHandler(Roster(2));
-        Assert.Equal(404, Assert.IsType<ObjectResult>(await Controller(handler).GetDetails("ReportA", 1, "anniversary")).StatusCode);
+        Assert.Equal(404, HttpResultAssertions.Read(await Handlers(handler).Details.Handle(new GetDetailsRequest("ReportA", 1, "anniversary"))).StatusCode);
     }
 
     [Fact]
@@ -218,7 +219,7 @@ public sealed class CompRankingsTests : IDisposable
             new() { Name = "Damage", ClassId = 2, SpecSlug = "retribution-paladin", RoleCode = "mdps" },
             new() { Name = "Missing", ClassId = 2, SpecSlug = "holy-paladin", RoleCode = "heal" }
         };
-        CompRankingService.ApplyParsePercentiles(players, metadata.RootElement, 7);
+        Service(new QueueHandler()).ApplyParsePercentiles(players, metadata.RootElement, 7);
         Assert.Equal(93, players[0].ParsePercentile);
         Assert.Equal(2116, players[0].Performance);
         Assert.Equal(88.5, players[1].ParsePercentile);
@@ -230,35 +231,71 @@ public sealed class CompRankingsTests : IDisposable
     public void UnknownEditionSpecsKeepTheirRosterRole()
     {
         using var json = JsonDocument.Parse("""{"data":{"playerDetails":{"healers":[{"id":7,"name":"Druid","type":"Druid","specs":[{"spec":"Dreamstate"}]}]}}}""");
-        var player = Assert.Single(CompRankingService.ParseRoster(json.RootElement));
+        var player = Assert.Single(Service(new QueueHandler()).ParseRoster(json.RootElement));
         Assert.Equal("dreamstate-druid", player.SpecSlug);
         Assert.Equal("heal", player.RoleCode);
     }
 
     private CompRankingService Service(QueueHandler handler) =>
-        new(fixture.CreateClient(handler), new RecordingTimeline(), NullLogger<CompRankingService>.Instance);
-    private CompRankingsController Controller(QueueHandler handler) =>
-        new(Service(handler), NullLogger<CompRankingsController>.Instance);
+        new(fixture.CreateClient(handler), new RecordingTimeline(), NullLogger<CompRankingService>.Instance, new WarcraftReferenceData(WorldDataService.Instance));
+    private (GetCompRankingHandler Ranking, GetDetailsHandler Details) Handlers(QueueHandler handler)
+    {
+        var service = Service(handler);
+        return (new(service, NullLogger<GetCompRankingHandler>.Instance),
+            new(service, NullLogger<GetDetailsHandler>.Instance));
+    }
     private static CompRankingSearch Search() => new("illidan", "anniversary", 50609, 3, 1, 0, 0, [], [], false);
     private static string Rankings(params int[] ids) => JsonSerializer.Serialize(new
     {
-        data = new { worldData = new { encounter = new { name = "Illidan", fightRankings = new {
-            hasMorePages = true, rankings = ids.Select(id => new {
-                report = new { code = $"Report{id}", fightID = id }, duration = 200000 + id,
-                deaths = 0, damageTaken = id * 100, startTime = 1793030400000L
-            }).ToArray()
-        } } } }
+        data = new
+        {
+            worldData = new
+            {
+                encounter = new
+                {
+                    name = "Illidan",
+                    fightRankings = new
+                    {
+                        hasMorePages = true,
+                        rankings = ids.Select(id => new
+                        {
+                            report = new { code = $"Report{id}", fightID = id },
+                            duration = 200000 + id,
+                            deaths = 0,
+                            damageTaken = id * 100,
+                            startTime = 1793030400000L
+                        }).ToArray()
+                    }
+                }
+            }
+        }
     });
     private static string Roster(int id) => JsonSerializer.Serialize(new
     {
-        data = new { reportData = new { report = new {
-            title = "Guild kill",
-            table = new { data = new { playerDetails = new { healers = new[] {
+        data = new
+        {
+            reportData = new
+            {
+                report = new
+                {
+                    title = "Guild kill",
+                    table = new
+                    {
+                        data = new
+                        {
+                            playerDetails = new
+                            {
+                                healers = new[] {
                 new { id = 7, name = "Healer", type = "Paladin", specs = new[] { new { spec = "Holy" } } }
-            } } } },
-            fights = new[] { new { id, name = "Illidan", encounterID = 50609, startTime = 1000, endTime = 201000,
+            }
+                            }
+                        }
+                    },
+                    fights = new[] { new { id, name = "Illidan", encounterID = 50609, startTime = 1000, endTime = 201000,
                 phaseTransitions = Array.Empty<object>() } }
-        } } }
+                }
+            }
+        }
     });
     private sealed class RecordingTimeline : IReportTimelineService
     {

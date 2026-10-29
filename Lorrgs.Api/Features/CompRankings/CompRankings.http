@@ -1,0 +1,119 @@
+@host = http://localhost:5247
+@edition = anniversary
+@bossSlug = illidan-stormrage
+@encounterId = 50609
+@difficultyId = 3
+@reportCode = nB13CZbPKgD4J8rz
+@fightId = 30
+
+# Replace reportCode/fightId with a visible kill returned by the summary search.
+# These requests call this application's API, not WCL directly.
+# Live requests require configured WCL credentials and may consume upstream quota.
+#
+# Search: GET /api/rankings/comp/{bossSlug}
+# Required query context: edition, encounterId (> 0).
+# Optional: difficultyId=5 (1-5), page=1 (1-100), refresh=false,
+# repeated role/spec filters, killtime_min=0 and killtime_max=0 (seconds).
+# Kill-time bounds: 0-86400; max=0 is unbounded, otherwise max must be >= min.
+# Up to 100 combined role/spec expressions; role keys: tank, heal, mdps, rdps.
+# Expressions: key.eq|lt|gt|lte|gte.count, count 0-100; key.count implies eq.
+# Supported editions: anniversary, era, retail, mistsofpandaria, classic_sod.
+# Aliases: classic -> era, midnight -> retail, mop or mists of pandaria -> mistsofpandaria.
+# Summaries stay complete: filters are validated, not applied to uninspected rosters.
+# Search responses: 200, 400, 404, 429, 502; errors use Problem Details.
+#
+# Details: GET /api/rankings/comp/reports/{code}/fights/{fightId}
+# Required: ASCII alphanumeric report code (up to 32 chars), fightId > 0, edition.
+# Optional: refresh=false. Loads roster, composition, phases and timelines.
+# Detail responses: 200, 400, 403 (private/archived), 404, 429, 502.
+# Private/missing reports and upstream errors depend on the selected report/WCL state.
+
+### Complete execution-ranked summary page (up to 50 kills); no roster/detail requests
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}&difficultyId={{difficultyId}}
+Accept: application/json
+
+### Minimal search: defaults to difficultyId=5, page=1, refresh=false, no filters
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}
+Accept: application/json
+
+### Every search parameter, including repeated role/spec filters
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}&difficultyId={{difficultyId}}&page=1&refresh=false&role=tank.eq.2&role=heal.gte.3&spec=holy-paladin.eq.0&spec=retribution-paladin.lte.2&killtime_min=120&killtime_max=600
+Accept: application/json
+
+### Other count comparisons and implicit equality; composition stays pending until inspected
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}&difficultyId={{difficultyId}}&role=tank.2&role=mdps.gt.0&role=rdps.lt.20
+Accept: application/json
+
+### Minimum-only kill time; killtime_max=0 leaves the upper bound unrestricted
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}&difficultyId={{difficultyId}}&killtime_min=120&killtime_max=0
+Accept: application/json
+
+### Next upstream summary page
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}&difficultyId={{difficultyId}}&page=2
+Accept: application/json
+
+### Refresh summary query only; details have an independent refresh parameter
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}&difficultyId={{difficultyId}}&refresh=true
+Accept: application/json
+
+### Inspect exactly one fight: actual roster, composition, observed phases, cached boss reference
+GET {{host}}/api/rankings/comp/reports/{{reportCode}}/fights/{{fightId}}?edition={{edition}}
+Accept: application/json
+
+### Refresh only the requested fight, not other rows
+GET {{host}}/api/rankings/comp/reports/{{reportCode}}/fights/{{fightId}}?edition={{edition}}&refresh=true
+Accept: application/json
+
+### Related legacy queue route: 200 placeholder acknowledgement, NOT a running background job
+# Registered by Rankings; defaults are bossSlug=all, limit=50, clear=false.
+# The returned taskId is a placeholder; no task-status endpoint is implemented.
+POST {{host}}/api/rankings/comp/queue
+Accept: application/json
+
+### Queue placeholder with all supported parameters; still does not enqueue work
+POST {{host}}/api/rankings/comp/queue?bossSlug={{bossSlug}}&limit=10&clear=true
+Accept: application/json
+
+### Invalid expression: 400 Problem Details, without an upstream call
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}&role=heal.invalid.2
+Accept: application/problem+json
+
+### Unsupported role key: 400 Problem Details
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}&role=dps.eq.2
+Accept: application/problem+json
+
+### Out-of-range count: 400 Problem Details
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}&spec=holy-paladin.eq.101
+Accept: application/problem+json
+
+### Reversed kill-time bounds: 400 Problem Details
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}&killtime_min=600&killtime_max=120
+Accept: application/problem+json
+
+### Invalid difficulty: 400 Problem Details
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}&difficultyId=6
+Accept: application/problem+json
+
+### Invalid page: 400 Problem Details
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}&page=101
+Accept: application/problem+json
+
+### Unsupported edition: 400 Problem Details
+GET {{host}}/api/rankings/comp/{{bossSlug}}?edition=unsupported&encounterId={{encounterId}}
+Accept: application/problem+json
+
+### Invalid detail context: 400 Problem Details
+GET {{host}}/api/rankings/comp/reports/{{reportCode}}/fights/0?edition={{edition}}
+Accept: application/problem+json
+
+### Invalid report-code characters: 400 Problem Details
+GET {{host}}/api/rankings/comp/reports/invalid-code/fights/{{fightId}}?edition={{edition}}
+Accept: application/problem+json
+
+### Missing detail edition: 400 Problem Details
+GET {{host}}/api/rankings/comp/reports/{{reportCode}}/fights/{{fightId}}
+Accept: application/problem+json
+
+### Missing required edition/encounter context: 400 Problem Details
+GET {{host}}/api/rankings/comp/{{bossSlug}}
+Accept: application/problem+json

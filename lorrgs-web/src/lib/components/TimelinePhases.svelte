@@ -1,6 +1,6 @@
 <script lang="ts">
   import { timelineTime } from '../timelineUtils';
-  import type { TimelinePhase } from '../api';
+  import type { TimelinePhase } from '../models/TimelinePhase';
   type Props = { phases: TimelinePhase[]; axisDuration: number };
   let { phases, axisDuration }: Props = $props();
 </script>

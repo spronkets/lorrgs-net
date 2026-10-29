@@ -1,0 +1,87 @@
+@host = http://localhost:5247
+@reportCode = N8v2dBGMZX6wrfaA
+@fightId = 106
+@sourceId = 7
+@playerName = REPLACE_PLAYER
+
+# These requests call the application API; none accepts an edition parameter.
+# Seasons, rankings and report summary are existing static/sample responses.
+# Rankings accepts optional season (default "current").
+# Lookup and analysis require configured WCL credentials and consume upstream quota.
+# Replace fightId/sourceId/playerName with identities visible in the selected report.
+# Lookup: 200, 400, 429, 500. The report code is trimmed before the WCL call.
+# Analysis: 200, 400, 404, 429, 500. Errors contain "error"; 500 also includes "detail".
+# Analysis requires reportCode. Optional fightId/sourceId/playerName select the subject;
+# omitted selections use the service's default fight/actor resolution.
+# Optional parsePercentile and itemLevel affect scoring; eventLimit defaults to 5000
+# and is clamped to 100-10000 by the service.
+
+### Static season listing
+GET {{host}}/api/warcraftlogs/seasons
+Accept: application/json
+
+### Sample rankings with default season
+GET {{host}}/api/warcraftlogs/rankings
+Accept: application/json
+
+### Sample rankings with selected season
+GET {{host}}/api/warcraftlogs/rankings?season=season-1
+Accept: application/json
+
+### Sample report summary; this is NOT the live metadata lookup
+GET {{host}}/api/warcraftlogs/reports/{{reportCode}}
+Accept: application/json
+
+### Live report metadata
+GET {{host}}/api/warcraftlogs/reports/{{reportCode}}/lookup
+Accept: application/json
+
+### Analyze by actor ID with every supported body field
+POST {{host}}/api/warcraftlogs/rotation/analyze
+Accept: application/json
+Content-Type: application/json
+
+{
+  "reportCode": "{{reportCode}}",
+  "fightId": {{fightId}},
+  "sourceId": {{sourceId}},
+  "playerName": "{{playerName}}",
+  "parsePercentile": 95,
+  "itemLevel": 490,
+  "eventLimit": 5000
+}
+
+### Analyze by player name instead of actor ID
+POST {{host}}/api/warcraftlogs/rotation/analyze
+Accept: application/json
+Content-Type: application/json
+
+{
+  "reportCode": "{{reportCode}}",
+  "fightId": {{fightId}},
+  "playerName": "{{playerName}}"
+}
+
+### Minimal analysis using default subject resolution
+POST {{host}}/api/warcraftlogs/rotation/analyze
+Accept: application/json
+Content-Type: application/json
+
+{
+  "reportCode": "{{reportCode}}"
+}
+
+### Blank report code: 400 without an upstream call
+POST {{host}}/api/warcraftlogs/rotation/analyze
+Accept: application/json
+Content-Type: application/json
+
+{
+  "reportCode": " "
+}
+
+### Missing required reportCode property: 400 during body binding
+POST {{host}}/api/warcraftlogs/rotation/analyze
+Content-Type: application/json
+
+{}

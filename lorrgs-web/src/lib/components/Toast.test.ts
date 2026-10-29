@@ -5,6 +5,13 @@ import Toast from './Toast.svelte';
 afterEach(() => vi.useRealTimers());
 
 describe('Toast', () => {
+  it('does not schedule dismissal for an empty message', async () => {
+    vi.useFakeTimers();
+    const onclose = vi.fn();
+    render(Toast, { message: '', onclose });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(onclose).not.toHaveBeenCalled();
+  });
   it('announces success and dismisses through its icon button', async () => {
     const onclose = vi.fn();
     render(Toast, { message: 'Copied casts.', onclose });

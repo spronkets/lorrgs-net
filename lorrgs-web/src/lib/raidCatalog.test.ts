@@ -7,9 +7,9 @@ import {
   getEditionSlug,
   getRaidBossOptions,
   getRaidsForEdition,
-  groupRaidsByPhase,
-  type RaidCatalog
+  groupRaidsByPhase
 } from './raidCatalog';
+import type { RaidCatalog } from './models/RaidCatalog';
 import { getVersionIconUrl } from './selectionIcons';
 
 const sampleCatalog: RaidCatalog = {

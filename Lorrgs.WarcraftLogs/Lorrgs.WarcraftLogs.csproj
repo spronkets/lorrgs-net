@@ -13,4 +13,10 @@
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="GraphQL\**\*.graphql" />
+    <InternalsVisibleTo Include="Lorrgs.WarcraftLogs.Tests" />
+    <InternalsVisibleTo Include="Lorrgs.Api.Tests" />
+  </ItemGroup>
+
 </Project>

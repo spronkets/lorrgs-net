@@ -95,4 +95,51 @@ describe('copy note editor', () => {
     expect(oncopied).not.toHaveBeenCalled();
     expect(screen.getByRole('textbox', { name: 'Note preview' })).toBeVisible();
   });
+
+  it('uses the matching boss timeline, falls back to the report player, and shows unavailable spec tags', async () => {
+    const reportWithoutSpecPlayer = {
+      ...report,
+      players: [
+        {
+          name: 'Player0',
+          playerId: 7,
+          classId: 2,
+          specId: 65,
+          specSlug: 'other-spec',
+          performance: 100
+        }
+      ],
+      bossTimeline: {
+        fightId: report.fights![0].fightId,
+        phases: [{ id: 2, timestamp: 0 }]
+      }
+    };
+    const timeline = { ...props.timeline, playerName: 'Player0' };
+    const { unmount } = render(CopyNoteDialog, {
+      ...props,
+      report: reportWithoutSpecPlayer,
+      timeline,
+      bossName: ''
+    });
+
+    expect(screen.getByText('Player0 · Boss')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Phase-relative timers' })).toBeDisabled();
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Target' }), {
+      target: { value: 'spec' }
+    });
+    expect(screen.getByRole('textbox', { name: 'Spec tag' })).toHaveValue('spec:PALADIN:1');
+    await fireEvent.click(screen.getByRole('button', { name: 'NSRT' }));
+    expect(screen.getByRole('textbox', { name: 'Spec tag' })).toHaveValue('65');
+
+    unmount();
+    render(CopyNoteDialog, {
+      ...props,
+      report: { ...report, players: [] },
+      timeline: { ...props.timeline, playerName: 'Unlisted player' }
+    });
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Target' }), {
+      target: { value: 'spec' }
+    });
+    expect(screen.getByRole('textbox', { name: 'Spec tag' })).toHaveValue('Unavailable');
+  });
 });

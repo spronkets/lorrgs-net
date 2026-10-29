@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { InspectedSpell, TimelineMagnification } from '../timelineTypes';
+  import type { InspectedSpell } from '../models/InspectedSpell';
+  import type { TimelineMagnification } from '../models/TimelineMagnification';
   import {
     visibleTimelineEvents,
     spellAppearance,

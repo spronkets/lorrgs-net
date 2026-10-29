@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { RankingReport, ReportTimeline } from './api';
-import { buildRaidNote, specNoteTag, type RaidNoteOptions } from './raidNote';
+import type { RankingReport } from './models/RankingReport';
+import type { ReportTimeline } from './models/ReportTimeline';
+import { buildRaidNote, specNoteTag } from './raidNote';
+import type { RaidNoteOptions } from './models/RaidNoteOptions';
 import { rows, response, bossResponse } from './testing/timelineFixtures';
 
 const report: RankingReport = {

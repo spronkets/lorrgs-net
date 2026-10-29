@@ -1,5 +1,7 @@
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-import { getReportTimeline, type RankingReport, type ReportTimeline } from './api';
+import { getReportTimeline } from './api';
+import type { RankingReport } from './models/RankingReport';
+import type { ReportTimeline } from './models/ReportTimeline';
 import { canLoadTimeline, timelineKey } from './timelineUtils';
 
 export class TimelineLoader {

@@ -1,5 +1,8 @@
 <script lang="ts">
-  import type { CompRankingData, RankingReport, WorldDataSnapshot } from '../api';
+  import type { CompRankingFilters } from '../models/CompRankingFilters';
+  import type { CompRankingData } from '../models/CompRankingData';
+  import type { RankingReport } from '../models/RankingReport';
+  import type { WorldDataSnapshot } from '../models/WorldDataSnapshot';
   import RankingsTimeline from './RankingsTimeline.svelte';
   import { getBlizzardClassColor } from '../classColors';
   import { timelineTime } from '../timelineUtils';
@@ -9,13 +12,12 @@
   import { onMount } from 'svelte';
   import { CompDetailLoader, compKey, matchesCompExpressions } from '../compDetailLoader.svelte';
   import { untrack } from 'svelte';
-  type Filters = { roles: string[]; specs: string[]; minSeconds: number; maxSeconds: number };
   type Props = {
     rankings: CompRankingData;
     worldData: WorldDataSnapshot;
     edition: string;
     bossIconName?: string;
-    filters?: Filters;
+    filters?: CompRankingFilters;
     refresh?: boolean;
   };
   let {
@@ -129,7 +131,8 @@
           <h3>
             {Number.isFinite(executionRank(summary))
               ? `#${executionRank(summary)}`
-              : 'Rank unavailable'} {report.title}
+              : 'Rank unavailable'}
+            {report.title}
             {#if fight?.execution?.rankPercent != null}
               ({getTopPercentLabel(fight.execution.rankPercent)})
             {/if}

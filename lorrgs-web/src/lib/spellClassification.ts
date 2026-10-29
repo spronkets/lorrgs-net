@@ -1,17 +1,10 @@
-import type { TimelineSpell } from './api';
+import type { SpellPreset } from './models/SpellPreset';
+import type { ClassSpellPreset } from './models/ClassSpellPreset';
+import type { TimelineSpell } from './models/TimelineSpell';
 import { getClassSpellRoles } from './wowAssets';
 import { isPowerWindow, spellIconUrl } from './timelineUtils';
 
 export const spellPresets = ['Everything', 'Damage', 'Tank', 'Healing', 'Consumables'] as const;
-export type SpellPreset = (typeof spellPresets)[number];
-
-export type ClassSpellPreset = {
-  key: string;
-  label: string;
-  role: SpellPreset;
-  spec?: string;
-  icon: string;
-};
 
 export function classSpellPresets(
   classId: number,

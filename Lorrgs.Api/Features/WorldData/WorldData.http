@@ -1,0 +1,96 @@
+@Lorrgs.Api_HostAddress = http://localhost:5247
+
+# Static reference endpoints; no WCL credentials or upstream calls are required.
+# Every endpoint requires edition: anniversary, era, retail, mistsofpandaria, classic_sod.
+# Aliases: classic -> era, midnight -> retail, mop or mists of pandaria -> mistsofpandaria.
+# Validation does not make the static lists edition-specific.
+# GetSpecs also accepts optional integer roleId and classId filters.
+# Responses: 200, 400 for missing/unsupported edition, 404 for unknown single resources.
+
+### Bosses
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/bosses?edition=anniversary
+Accept: application/json
+
+### Roles
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/roles?edition=retail
+Accept: application/json
+
+### Classes
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/classes?edition=retail
+Accept: application/json
+
+### Specs with optional filters
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/specs?edition=retail&roleId=2&classId=2
+Accept: application/json
+
+### Spec
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/specs/frost-mage?edition=retail
+Accept: application/json
+
+### Class specs
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/classes/paladin/specs?edition=retail
+Accept: application/json
+
+### Role specs
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/roles/healer/specs?edition=retail
+Accept: application/json
+
+### Boss
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/bosses/nalorakk?edition=anniversary
+Accept: application/json
+
+### Zones
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/zones?edition=retail
+Accept: application/json
+
+### Zone
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/zones/nerubar-palace?edition=retail
+Accept: application/json
+
+### Zone bosses
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/zones/nerubar-palace/bosses?edition=retail
+Accept: application/json
+
+### Spell
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/spells/1?edition=retail
+Accept: application/json
+
+### Trinket
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/trinkets/1?edition=retail
+Accept: application/json
+
+### Spec spells
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/specs/frost-mage/spells?edition=retail
+Accept: application/json
+
+### Boss spells
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/bosses/nalorakk/spells?edition=anniversary
+Accept: application/json
+
+### Spells
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/spells?edition=retail
+Accept: application/json
+
+### Trinkets
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/trinkets?edition=retail
+Accept: application/json
+
+### Seasons
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/seasons?edition=retail
+Accept: application/json
+
+### Season
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/seasons/tww-s1?edition=retail
+Accept: application/json
+
+### Unknown boss returns 404
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/bosses/missing?edition=retail
+Accept: application/json
+
+### Missing edition returns 400
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/bosses
+Accept: application/json
+
+### Unsupported edition returns 400
+GET {{Lorrgs.Api_HostAddress}}/api/worlddata/specs?edition=unsupported
+Accept: application/json

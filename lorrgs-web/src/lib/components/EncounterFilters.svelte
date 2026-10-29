@@ -1,11 +1,7 @@
 <script lang="ts">
-  import type { WorldDataSnapshot } from '../api';
-  import {
-    getRaidBossOptions,
-    getRaidsForEdition,
-    groupRaidsByPhase,
-    type RaidCatalog
-  } from '../raidCatalog';
+  import type { WorldDataSnapshot } from '../models/WorldDataSnapshot';
+  import { getRaidBossOptions, getRaidsForEdition, groupRaidsByPhase } from '../raidCatalog';
+  import type { RaidCatalog } from '../models/RaidCatalog';
   import { getVersionIconUrl } from '../selectionIcons';
   import EditionSelector from './EditionSelector.svelte';
   import RaidBossSelectors from './RaidBossSelectors.svelte';
@@ -35,12 +31,7 @@
 
 <section class="encounter-filters" aria-label="Encounter selection">
   <h3>Edition</h3>
-  <EditionSelector
-    {versions}
-    {selectedVersion}
-    {getVersionIconUrl}
-    onselect={selectVersion}
-  />
+  <EditionSelector {versions} {selectedVersion} {getVersionIconUrl} onselect={selectVersion} />
   <RaidBossSelectors
     raidPhaseGroups={groupRaidsByPhase(raids)}
     {bosses}

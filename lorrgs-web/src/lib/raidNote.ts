@@ -1,16 +1,7 @@
-import type { RankingReport, ReportTimeline } from './api';
-
-export type NoteFormat = 'mrt' | 'nsrt';
-export type NoteTarget = 'name' | 'spec';
-export type RaidNoteOptions = {
-  format: NoteFormat;
-  target: NoteTarget;
-  playerName: string;
-  dynamic: boolean;
-  difficulty: string;
-  bossName: string;
-  specSlug: string;
-};
+import type { NoteFormat } from './models/NoteFormat';
+import type { RaidNoteOptions } from './models/RaidNoteOptions';
+import type { RankingReport } from './models/RankingReport';
+import type { ReportTimeline } from './models/ReportTimeline';
 
 const specGroups = [
   ['warrior', 71, 72, 73],

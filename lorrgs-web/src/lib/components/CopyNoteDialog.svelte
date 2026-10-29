@@ -1,8 +1,11 @@
 <script lang="ts">
   import Alert from './Alert.svelte';
   import { onMount } from 'svelte';
-  import type { RankingReport, ReportTimeline } from '../api';
-  import { buildRaidNote, specNoteTag, type NoteFormat, type NoteTarget } from '../raidNote';
+  import type { RankingReport } from '../models/RankingReport';
+  import type { ReportTimeline } from '../models/ReportTimeline';
+  import { buildRaidNote, specNoteTag } from '../raidNote';
+  import type { NoteFormat } from '../models/NoteFormat';
+  import type { NoteTarget } from '../models/NoteTarget';
 
   type Props = {
     timeline: ReportTimeline;

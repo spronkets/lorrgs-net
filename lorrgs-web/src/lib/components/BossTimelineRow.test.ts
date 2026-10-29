@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import BossTimelineRow from './BossTimelineRow.svelte';
-import { getBossTimeline, type BossTimeline } from '../api';
+import { getBossTimeline } from '../api';
+import type { BossTimeline } from '../models/BossTimeline';
 import { bossResponse, rows } from '../testing/timelineFixtures';
 
 vi.mock('../api', () => ({ getBossTimeline: vi.fn() }));
