@@ -2,6 +2,7 @@ using Lorrgs.Api.Models;
 using Lorrgs.Api.Services;
 using Lorrgs.Tests.TestSupport;
 using Lorrgs.WarcraftLogs;
+using Lorrgs.WarcraftLogs.Configuration;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -55,6 +56,190 @@ public sealed class ReportTimelineServiceTests : IDisposable
         {
             new(1, 0, null, "cast"), new(1, 10000, null, "cast")
         }, ReportTimelineService.NormalizeEvents(events, 7, 1000, 11000, true));
+    }
+
+    [Fact]
+    public async Task CompleteReportCacheRemovesCoveredPlayerPagesButPreservesOtherReports()
+    {
+        var metadata = """
+            {"data":{"reportData":{"report":{
+              "fights":[{"id":1,"startTime":1000,"endTime":11000,"enemyNPCs":[],"phaseTransitions":[]}],
+              "masterData":{"actors":[{"id":7,"name":"Player"}],"abilities":[]}
+            }}}}
+            """;
+        var firstPage = EventPage("""[{"type":"cast","timestamp":2000,"sourceID":7,"abilityGameID":1}]""", 3000);
+        var lastPage = EventPage("""[{"type":"cast","timestamp":4000,"sourceID":7,"abilityGameID":2}]""");
+        using var handler = new QueueHandler(
+            TimelineMetadata(), firstPage, lastPage,
+            TimelineMetadata(), lastPage,
+            metadata, firstPage, lastPage);
+        var client = fixture.CreateClient(handler);
+        var service = new ReportTimelineService(client, NullLogger<ReportTimelineService>.Instance);
+        var original = await service.LoadAsync("report", 1, 7, "Player", "anniversary", default);
+        await service.LoadAsync("unrelated", 1, 7, "Player", "anniversary", default);
+        var report = Report("report", 1);
+        report.Players = [new RankingPlayer { PlayerId = 7, Name = "Player", SpecSlug = "unknown" }];
+        await service.PopulateRosterTimelinesAsync(report, "anniversary", false, default);
+        foreach (var cursor in new[] { 1000d, 3000d })
+        {
+            var removed = await client.TryQueryGraphQLFromCacheAsync(
+                GraphQlResourceLoader.Load("Timeline.Events.graphql"),
+                new
+                {
+                    code = "report", fightIds = new[] { 1 }, startTime = cursor, endTime = 11000d,
+                    filter = "(source.name='Player' AND type='cast') OR (target.name='Player' AND type IN ('applybuff','refreshbuff','removebuff','death'))"
+                }, "anniversary");
+            Assert.Null(removed);
+        }
+        var reused = await service.TryLoadCachedAsync("report", 1, 7, "Player", "anniversary", default);
+        Assert.Equal(original.Events, reused!.Events);
+        Assert.NotNull(await service.TryLoadCachedAsync("unrelated", 1, 7, "Player", "anniversary", default));
+        Assert.Equal(8, handler.GraphQlRequests);
+    }
+
+    [Fact]
+    public async Task FailedReportDownloadPreservesIndividualPlayerCache()
+    {
+        var metadata = """
+            {"data":{"reportData":{"report":{
+              "fights":[{"id":1,"startTime":1000,"endTime":11000,"enemyNPCs":[],"phaseTransitions":[]}],
+              "masterData":{"actors":[{"id":7,"name":"Player"}],"abilities":[]}
+            }}}}
+            """;
+        using var handler = new QueueHandler(TimelineMetadata(), EventPage("[]"), metadata,
+            EventPage("[]", 2000), EventPage("[]", 2000));
+        var service = CreateService(handler);
+        await service.LoadAsync("report", 1, 7, "Player", "anniversary", default);
+        var report = Report("report", 1);
+        report.Players = [new RankingPlayer { PlayerId = 7, Name = "Player", SpecSlug = "unknown" }];
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.PopulateRosterTimelinesAsync(report, "anniversary", false, default));
+        Assert.NotNull(await service.TryLoadCachedAsync("report", 1, 7, "Player", "anniversary", default));
+        Assert.Equal(5, handler.GraphQlRequests);
+    }
+
+    [Fact]
+    public async Task RosterTimelinesShareEveryReportFightAndAllEventPagesWithoutPlayerRequests()
+    {
+        var metadata = """
+            {"data":{"reportData":{"report":{
+              "fights":[
+                {"id":1,"startTime":1000,"endTime":5000,"enemyNPCs":[{"id":99}],"phaseTransitions":[]},
+                {"id":2,"startTime":6000,"endTime":11000,"enemyNPCs":[{"id":99}],"phaseTransitions":[]}
+              ],
+              "masterData":{"actors":[{"id":7,"name":"Player"},{"id":8,"name":"Other"}],
+                "abilities":[{"gameID":1,"name":"Strike"},{"gameID":2,"name":"Boss cast"}]}
+            }}}}
+            """;
+        var pages = new[]
+        {
+            EventPage("""[{"type":"cast","timestamp":2000,"sourceID":7,"abilityGameID":1}]""", 3000),
+            EventPage("""[{"type":"cast","timestamp":4000,"sourceID":8,"abilityGameID":1}]""", 6000),
+            EventPage("""[{"type":"cast","timestamp":7000,"sourceID":7,"abilityGameID":1}]""", 8000),
+            EventPage("""[{"type":"cast","timestamp":9000,"sourceID":8,"abilityGameID":1},{"type":"cast","timestamp":10000,"sourceID":99,"abilityGameID":2}]""")
+        };
+        using var handler = new QueueHandler(new[] { metadata }.Concat(pages)
+            .Concat(new[] { metadata }).Concat(pages).ToArray());
+        var service = CreateService(handler);
+        RankingReport RosterReport(int fightId) => new()
+        {
+            ReportId = "report", Title = "Raid",
+            Fights = [new RankingFight { FightId = fightId, Name = "Boss" }],
+            Players =
+            [
+                new RankingPlayer { PlayerId = 7, Name = "Player", SpecSlug = "unknown" },
+                new RankingPlayer { PlayerId = 8, Name = "Other", SpecSlug = "unknown" }
+            ]
+        };
+        var first = RosterReport(1);
+        await service.PopulateRosterTimelinesAsync(first, "anniversary", false, default);
+        Assert.Equal(5, handler.GraphQlRequests);
+        Assert.All(first.Players, player => Assert.True(player.Timeline!.IsComplete));
+        Assert.Equal(1000, Assert.Single(first.Players[0].Timeline!.Events).Timestamp);
+        Assert.Equal(3000, Assert.Single(first.Players[1].Timeline!.Events).Timestamp);
+        var variables = handler.Requests[1].GetProperty("variables");
+        Assert.Equal(new[] { 1, 2 }, variables.GetProperty("fightIds").EnumerateArray().Select(id => id.GetInt32()));
+        Assert.Equal(11000, variables.GetProperty("endTime").GetDouble());
+
+        var second = RosterReport(2);
+        await service.PopulateRosterTimelinesAsync(second, "anniversary", false, default);
+        Assert.Equal(5, handler.GraphQlRequests);
+        Assert.Equal(1000, Assert.Single(second.Players[0].Timeline!.Events).Timestamp);
+        Assert.Equal(3000, Assert.Single(second.Players[1].Timeline!.Events).Timestamp);
+        Assert.Equal(4000, Assert.Single(second.BossTimeline!.Events).Timestamp);
+
+        // A new service instance must reuse the persisted report cache, not process-local state.
+        var specService = new ReportTimelineService(fixture.CreateClient(handler, new WarcraftLogsApiOptions
+        {
+            BaseUrl = "https://wcl.test/api", AuthUrl = "https://wcl.test/oauth/token",
+            ClientId = "test-client", ClientSecret = "test-secret",
+            EditionEndpoints = new()
+            {
+                ["retail"] = new() { BaseUrl = "https://wcl.test/retail", AuthUrl = "https://wcl.test/oauth/token" }
+            }
+        }), NullLogger<ReportTimelineService>.Instance);
+        var specTimeline = await specService.LoadAsync("report", 2, 8, "Other", "anniversary", default);
+        var cachedTimeline = await specService.TryLoadCachedAsync("report", 2, 8, "Other", "anniversary", default);
+        Assert.Equal(second.Players[1].Timeline!.Events, specTimeline.Events);
+        Assert.Equal(specTimeline.Events, cachedTimeline!.Events);
+        var boss = await specService.LoadBossAsync("report", 2, "anniversary", false, default);
+        Assert.Equal(second.BossTimeline.Events, boss!.Events);
+        var phaseReport = Report("report", 2);
+        await specService.PopulateFightPhasesAsync([phaseReport], "anniversary", default);
+        Assert.NotNull(phaseReport.Fights[0].Phases);
+        Assert.Equal(5, handler.GraphQlRequests);
+        Assert.Null(await specService.TryLoadCachedAsync("report", 2, 8, "Other", "retail", default));
+        Assert.Null(await specService.TryLoadCachedAsync("report", 2, 8, "Wrong", "anniversary", default));
+        Assert.Equal(5, handler.GraphQlRequests);
+
+        await service.PopulateRosterTimelinesAsync(second, "anniversary", true, default);
+        Assert.Equal(10, handler.GraphQlRequests);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MissingOrExpiredReportEventPageFallsBackWithoutFetchingReportPages(bool expired)
+    {
+        var responses = new List<string>
+        {
+            TimelineMetadata(),
+            EventPage("""[{"type":"cast","timestamp":2000,"sourceID":7,"abilityGameID":1}]""", 3000)
+        };
+        if (expired)
+            responses.Add(EventPage("""[{"type":"cast","timestamp":3500,"sourceID":7,"abilityGameID":77777}]"""));
+        responses.Add(EventPage("""[{"type":"cast","timestamp":4000,"sourceID":7,"abilityGameID":2}]"""));
+        using var handler = new QueueHandler(responses.ToArray());
+        var client = fixture.CreateClient(handler);
+        await client.QueryGraphQLAsync(GraphQlResourceLoader.Load("Timeline.ReportMetadata.graphql"),
+            new { code = "report" }, "anniversary");
+        await client.QueryGraphQLAsync(GraphQlResourceLoader.Load("Timeline.Events.graphql"),
+            new
+            {
+                code = "report", fightIds = new[] { 1 }, startTime = 1000d, endTime = 11000d,
+                filter = "type IN ('cast','applybuff','refreshbuff','removebuff','death')"
+            }, "anniversary");
+        if (expired)
+        {
+            await client.QueryGraphQLAsync(GraphQlResourceLoader.Load("Timeline.Events.graphql"),
+                new
+                {
+                    code = "report", fightIds = new[] { 1 }, startTime = 3000d, endTime = 11000d,
+                    filter = "type IN ('cast','applybuff','refreshbuff','removebuff','death')"
+                }, "anniversary");
+            var cachedPage = Assert.Single(Directory.GetFiles(fixture.CacheDirectory),
+                path => File.ReadAllText(path).Contains("77777", StringComparison.Ordinal));
+            File.SetLastWriteTimeUtc(cachedPage, DateTime.UtcNow.AddDays(-11));
+        }
+        var seededRequests = expired ? 3 : 2;
+        var service = new ReportTimelineService(client, NullLogger<ReportTimelineService>.Instance);
+        Assert.Null(await service.TryLoadCachedAsync("report", 1, 7, "Player", "anniversary", default));
+        Assert.Equal(seededRequests, handler.GraphQlRequests);
+        var result = await service.LoadAsync("report", 1, 7, "Player", "anniversary", default);
+        Assert.Equal(seededRequests + 1, handler.GraphQlRequests);
+        Assert.True(result.IsComplete);
+        Assert.Equal(2, Assert.Single(result.Events).SpellId);
+        Assert.Contains("source.name='Player'", handler.Requests[^1].GetProperty("variables").GetProperty("filter").GetString());
     }
 
     [Fact]

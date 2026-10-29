@@ -142,8 +142,12 @@
   </Alert>
 </dialog>
 
-<style>
+<style lang="scss">
+  @use '../styles/selection-tokens' as selectionTokens;
+
   dialog {
+    @include selectionTokens.apply-selection-tokens;
+
     width: min(760px, calc(100vw - 32px));
     max-height: calc(100vh - 48px);
     overflow: auto;
@@ -201,8 +205,6 @@
     font-size: 12px;
   }
   button,
-  input,
-  select,
   textarea {
     font: inherit;
     color: inherit;
@@ -210,6 +212,12 @@
     border-radius: 3px;
     background: var(--panel);
     padding: 6px 8px;
+  }
+  input:not([type='checkbox']) {
+    @include selectionTokens.selection-control;
+  }
+  select {
+    @include selectionTokens.selection-dropdown;
   }
   button {
     cursor: pointer;
@@ -223,8 +231,6 @@
     cursor: default;
   }
   button:focus-visible,
-  input:focus-visible,
-  select:focus-visible,
   textarea:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;

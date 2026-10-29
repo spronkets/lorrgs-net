@@ -129,7 +129,9 @@
   {/if}
 </div>
 
-<style>
+<style lang="scss">
+  @use '../styles/selection-tokens' as selectionTokens;
+
   .boss-selector {
     position: relative;
     min-width: 0;
@@ -145,26 +147,16 @@
     font-weight: 600;
   }
   .trigger {
+    @include selectionTokens.selection-control;
+
     display: flex;
     align-items: center;
     gap: 10px;
     width: 100%;
     text-align: left;
-    min-height: 42px;
-    padding: 6px 10px;
-    border: 1px solid var(--select-border);
-    border-radius: var(--radius-md, 0.58rem);
-    background: var(--select-bg);
-    color: var(--select-text);
-    font-size: var(--control-font-size, 0.95rem);
+    padding-block: 6px;
     cursor: pointer;
   }
-  .trigger:disabled {
-    background: var(--disabled-bg);
-    color: var(--disabled-text);
-    cursor: not-allowed;
-  }
-  .trigger:focus-visible,
   .options:focus-visible {
     outline: 2px solid var(--select-focus-border);
     outline-offset: 2px;

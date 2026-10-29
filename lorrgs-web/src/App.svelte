@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import * as API from './lib/api';
   import HomePage from './lib/pages/HomePage.svelte';
+  import LandingPage from './lib/pages/LandingPage.svelte';
   import CompRankingsPage from './lib/pages/CompRankingsPage.svelte';
   import WorldDataPage from './lib/pages/WorldDataPage.svelte';
   import RotationAnalyzerPage from './lib/pages/RotationAnalyzerPage.svelte';
@@ -38,7 +39,7 @@
 
   const THEME_STORAGE_KEY = 'lorrgs-theme';
   const PAGE_QUERY_KEY = 'page';
-  const APP_PAGES = new Set(['home', 'comp', 'worlddata', 'rotation']);
+  const APP_PAGES = new Set(['home', 'spec', 'comp', 'worlddata', 'rotation']);
 
   function applyTheme(nextTheme) {
     theme = nextTheme === 'dark' ? 'dark' : 'light';
@@ -68,7 +69,27 @@
 
     if (requestedPage && APP_PAGES.has(requestedPage)) {
       currentPage = requestedPage;
+    } else if (params.get('spec') && !params.get('spec')?.includes('.')) {
+      currentPage = 'spec';
     }
+  }
+
+  function openRankings(mode: 'spec' | 'comp') {
+    const url = new URL(window.location.href);
+    url.searchParams.set(PAGE_QUERY_KEY, mode);
+    if (mode === 'spec') {
+      const spec = url.searchParams.get('spec');
+      url.searchParams.delete('spec');
+      url.searchParams.delete('role');
+      if (spec && !spec.includes('.')) url.searchParams.set('spec', spec);
+    } else {
+      url.searchParams.delete('compPage');
+      const specs = url.searchParams.getAll('spec').filter((spec) => spec.includes('.'));
+      url.searchParams.delete('spec');
+      specs.forEach((spec) => url.searchParams.append('spec', spec));
+    }
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    currentPage = mode;
   }
 
   function syncPageQueryParam() {
@@ -177,16 +198,16 @@
         LorrgsNET
       </button>
       <button
-        class:active={currentPage === 'home'}
-        aria-current={currentPage === 'home' ? 'page' : undefined}
-        on:click={() => (currentPage = 'home')}
+        class:active={currentPage === 'spec'}
+        aria-current={currentPage === 'spec' ? 'page' : undefined}
+        on:click={() => openRankings('spec')}
       >
         Spec Rankings
       </button>
       <button
         class:active={currentPage === 'comp'}
         aria-current={currentPage === 'comp' ? 'page' : undefined}
-        on:click={() => (currentPage = 'comp')}
+        on:click={() => openRankings('comp')}
       >
         Comp Rankings
       </button>
@@ -240,14 +261,27 @@
       <div class="loading">Loading...</div>
     {:else}
       {#if currentPage === 'home'}
+        <LandingPage
+          {worldData}
+          {raidCatalog}
+          {selectedVersion}
+          onnavigate={openRankings}
+          oneditionchange={changeEdition}
+        />
+      {:else if currentPage === 'spec'}
         <HomePage
           {worldData}
           {raidCatalog}
           {selectedVersion}
-          on:editionChange={(event) => changeEdition(event.detail.version)}
+          oneditionchange={changeEdition}
         />
       {:else if currentPage === 'comp'}
-        <CompRankingsPage {worldData} />
+        <CompRankingsPage
+          {worldData}
+          {raidCatalog}
+          {selectedVersion}
+          oneditionchange={changeEdition}
+        />
       {:else if currentPage === 'worlddata'}
         <WorldDataPage {worldData} />
       {:else if currentPage === 'rotation'}

@@ -21,6 +21,7 @@ builder.Services.AddOptions<RaidCatalogOptions>()
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<Lorrgs.Api.Services.RotationAnalysisService>();
 builder.Services.AddScoped<Lorrgs.Api.Services.IReportTimelineService, Lorrgs.Api.Services.ReportTimelineService>();
+builder.Services.AddScoped<Lorrgs.Api.Services.ICompRankingService, Lorrgs.Api.Services.CompRankingService>();
 
 // HTTP client for WarcraftLogs API
 builder.Services.AddHttpClient<WclClient>();

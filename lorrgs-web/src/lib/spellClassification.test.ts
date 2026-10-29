@@ -7,6 +7,27 @@ import {
 } from './spellClassification';
 
 describe('spell classification', () => {
+  it('uses cross-class raid cooldowns without changing spec-ranking presets', () => {
+    const presets = classSpellPresets(0, 'anniversary', true);
+    expect(presets.map((preset) => preset.label)).toEqual([
+      'Everything',
+      'Raid cooldowns',
+      'Healing',
+      'Tank',
+      'Consumables'
+    ]);
+    const raid = presets.find((preset) => preset.key === 'RaidCooldowns')!;
+    for (const [id, name] of [
+      [31821, 'Aura Mastery'],
+      [97462, 'Rallying Cry'],
+      [1, 'Tranquility (Rank 5)']
+    ] as const)
+      expect(matchesClassSpellPreset({ id, name, icon: null }, raid, 0)).toBe(true);
+    expect(matchesClassSpellPreset({ id: 1, name: 'Flash Heal', icon: null }, raid, 0)).toBe(false);
+    expect(
+      classSpellPresets(2, 'anniversary').some((preset) => preset.key === 'RaidCooldowns')
+    ).toBe(false);
+  });
   it('selects role-based spell presets without calling unknown buffs damage abilities', () => {
     const spell = (id: number, name: string) => ({ id, name, icon: null });
     expect(matchesSpellPreset(spell(2825, 'Bloodlust'), 'Damage')).toBe(true);

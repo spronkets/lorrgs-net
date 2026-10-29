@@ -1,5 +1,7 @@
 <script lang="ts">
   import Alert from './Alert.svelte';
+  import { getBlizzardClassColor, getBlizzardClassColors } from '../classColors';
+  import { getSpecIconUrl } from '../wowAssets';
   import { timelineErrorSummary } from '../timelineError';
   import TimelinePhases from './TimelinePhases.svelte';
   import type { RankingReport, ReportTimeline } from '../api';
@@ -22,6 +24,7 @@
     visibleTimelineEvents
   } from '../timelineUtils';
   type Props = {
+    compositionMode?: boolean;
     report: RankingReport;
     rank: number;
     edition: string;
@@ -47,6 +50,7 @@
     isReference?: boolean;
   };
   let {
+    compositionMode = false,
     report,
     rank,
     edition,
@@ -72,6 +76,14 @@
     isReference = false
   }: Props = $props();
   const endTime = $derived(fightDuration(report, timeline));
+  const playerClass = $derived(
+    Object.keys(getBlizzardClassColors()).find((slug) =>
+      report.players?.[0]?.specSlug.endsWith(`-${slug}`)
+    )
+  );
+  const playerSpec = $derived(
+    playerClass ? report.players?.[0]?.specSlug.slice(0, -(playerClass.length + 1)) : ''
+  );
   const endLabel = $derived(
     `${report.fights?.[0]?.isKill ? 'Kill' : 'Fight end'} · ${timelineTime(endTime)}`
   );
@@ -101,7 +113,7 @@
 <div class="player-row" style={`min-height: ${height}px`}>
   <div class="identity">
     <div class="player-heading">
-      <span class="rank">{rank}.</span>
+      {#if !compositionMode}<span class="rank">{rank}.</span>{/if}
       <a
         class="player-report-link"
         href={getRankingReportLink(report, edition)}
@@ -109,7 +121,17 @@
         rel="noopener"
         title="Open this player's fight in Warcraft Logs in a new tab."
       >
-        <span>{timeline?.playerName || report.players?.[0]?.name || 'Unknown player'}</span>
+        {#if playerClass && playerSpec}
+          <img
+            class="player-spec-icon"
+            src={getSpecIconUrl(playerClass, playerSpec)}
+            alt=""
+            title={report.players?.[0]?.specSlug}
+          />
+        {/if}
+        <span style:color={playerClass ? getBlizzardClassColor(playerClass) : undefined}
+          >{timeline?.playerName || report.players?.[0]?.name || 'Unknown player'}</span
+        >
         <svg
           width="11"
           height="11"
@@ -123,9 +145,15 @@
         </svg>
       </a>
       <span class="player-performance">
-        {(report.players?.[0]?.performance ?? 0).toLocaleString(undefined, {
-          maximumFractionDigits: 0
-        })} ({getTopPercentLabel(report.percentile)})
+        {#if compositionMode && report.players?.[0]?.parsePercentile == null}
+          Parse unavailable
+        {:else}
+          {(report.players?.[0]?.performance ?? 0).toLocaleString(undefined, {
+            maximumFractionDigits: 0
+          })} ({getTopPercentLabel(
+            compositionMode ? report.players?.[0]?.parsePercentile : report.percentile
+          )})
+        {/if}
       </span>
     </div>
     <div class="player-details">
@@ -470,6 +498,12 @@
     gap: 5px;
     font-size: 13px;
     font-weight: 600;
+  }
+  .player-spec-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    border-radius: 3px;
   }
   a {
     color: var(--accent);

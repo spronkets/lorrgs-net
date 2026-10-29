@@ -699,6 +699,8 @@ public sealed class RankingsControllerTests : IDisposable
 
     private sealed class RecordingTimelineService : IReportTimelineService
     {
+        public Task PopulateRosterTimelinesAsync(RankingReport report, string edition, bool refresh, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
         public int PhaseLoads { get; private set; }
         public int BossLoads { get; private set; }
         public ReportTimeline? Player { get; init; }

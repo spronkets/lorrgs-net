@@ -6,6 +6,7 @@ export type RaidEdition = {
 };
 
 export type RaidInstance = {
+  raidSize?: string | null;
   zoneId: number;
   slug: string;
   name: string;

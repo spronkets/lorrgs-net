@@ -25,6 +25,7 @@
     bossIconName?: string;
     difficulty?: string;
     specSlug?: string;
+    compositionMode?: boolean;
   };
   let {
     reports = [],
@@ -33,7 +34,8 @@
     bossSlug = '',
     bossIconName,
     difficulty = 'mythic',
-    specSlug = ''
+    specSlug = '',
+    compositionMode = false
   }: Props = $props();
   const loader = new TimelineLoader(() => edition);
   let hidden = $state<Set<number>>(new Set());
@@ -48,6 +50,26 @@
   }
   const referenceReport = $derived(
     reports.find(({ report }) => timelineKey(report) === referenceKey)?.report ?? reports[0]?.report
+  );
+  function roleGroup(report: RankingReport) {
+    const role = report.players?.[0]?.roleCode;
+    return role === 'tank'
+      ? 'Tanks'
+      : role === 'heal'
+        ? 'Healers'
+        : role === 'mdps' || role === 'rdps'
+          ? 'DPS'
+          : 'Unknown role';
+  }
+  const timelineGroups = $derived(
+    compositionMode
+      ? ['Tanks', 'Healers', 'DPS', 'Unknown role']
+          .map((name) => ({
+            name,
+            rows: reports.filter(({ report }) => roleGroup(report) === name)
+          }))
+          .filter((group) => group.rows.length > 0)
+      : [{ name: '', rows: reports }]
   );
   let zoom = $state<number>(TIMELINE_ZOOM_LEVELS[0]);
   let showIcons = $state(true);
@@ -65,7 +87,9 @@
     if (separateSpells || zoom === TIMELINE_ZOOM_LEVELS.at(-1)) magnifier = null;
   });
   const timelines = $derived([...loader.loaded.values()]);
-  const selectedClassId = $derived(classId || reports[0]?.report.players?.[0]?.classId || 0);
+  const selectedClassId = $derived(
+    compositionMode ? 0 : classId || reports[0]?.report.players?.[0]?.classId || 0
+  );
   const castSpellIds = $derived(
     new Set(
       timelines.flatMap((timeline) =>
@@ -218,7 +242,14 @@
       ready</span
     >
   </div>
-  <SpellSelection {timelines} classId={selectedClassId} {edition} bind:hidden bind:inspected />
+  <SpellSelection
+    {timelines}
+    classId={selectedClassId}
+    {edition}
+    {compositionMode}
+    bind:hidden
+    bind:inspected
+  />
   {#if loader.stopped}
     <Alert variant="warning">
       Timeline loading is paused. Remaining reports haven't been requested. Use Retry or Resume
@@ -246,7 +277,7 @@
   <p class="mobile-timeline-hint">
     Full fight fits at 100%. Increase Zoom to inspect crowded casts.
   </p>
-  <div class="timeline-panel">
+  <div class="timeline-panel" class:composition-panel={compositionMode}>
     <div class="spell-inspector" aria-live="polite" aria-atomic="true">
       {#if inspected}
         <span class="color-key" style={`background: ${inspected.color}`}></span>
@@ -270,76 +301,143 @@
     >
       <div
         class="timeline-grid"
+        class:grouped-grid={compositionMode}
         style={`--timeline-zoom: ${zoom}; --timeline-viewport-width: ${viewportWidth ? `${viewportWidth}px` : '100%'}`}
       >
-        <div class="axis-row">
-          <div class="identity axis-label">Player / elapsed time</div>
-          <div class="axis">
-            {#each labelTicks as tick (tick)}
-              <span
-                class:end-label={tick === axisDuration}
-                style={`left: ${(tick / axisDuration) * 100}%`}>{timelineTime(tick)}</span
-              >
-            {/each}
+        {#snippet timeAxis(label = 'Player')}
+          <div class="axis-row">
+            <div class="identity axis-label">{label}</div>
+            <div class="axis">
+              {#each labelTicks as tick (tick)}
+                <span
+                  class:end-label={tick === axisDuration}
+                  style={`left: ${(tick / axisDuration) * 100}%`}>{timelineTime(tick)}</span
+                >
+              {/each}
+            </div>
           </div>
-        </div>
-        {#if referenceReport && canLoadTimeline(referenceReport)}
-          <BossTimelineRow
-            {bossSlug}
-            {bossIconName}
-            report={referenceReport}
-            onloaded={(timeline) => {
-              const matches = reports.filter(
-                ({ report }) =>
-                  report.reportId === timeline.reportCode &&
-                  report.fights?.[0]?.fightId === timeline.fightId
-              );
-              for (const { report } of matches) bossReferences[timelineKey(report)] = timeline;
-            }}
-            {edition}
-            {axisDuration}
-            {ticks}
-            {showIcons}
-            {showCasts}
-          />
-        {/if}
-        {#each reports as { report, rank } (timelineKey(report))}
-          <TimelineRow
-            report={reportWithReference(report)}
-            isReference={referenceReport !== undefined &&
-              timelineKey(report) === timelineKey(referenceReport)}
-            onreference={(selected) => (referenceKey = timelineKey(selected))}
-            {rank}
-            {edition}
-            timeline={loader.loaded.get(timelineKey(report))}
-            {axisDuration}
-            {ticks}
-            {hidden}
-            {castSpellIds}
-            {zoom}
-            {showIcons}
-            {showCasts}
-            {showBuffs}
-            {showDeaths}
-            {separateSpells}
-            loading={loader.loadingKey === timelineKey(report)}
-            batchLoading={loader.batchLoading}
-            error={loader.errors.get(timelineKey(report))}
-            bind:inspected
-            bind:magnifier
-            onload={(report) => loader.loadOne(report)}
-            oncopy={(timeline) =>
-              (noteSelection = { timeline, report: reportWithReference(report) })}
-          />
+        {/snippet}
+        {#snippet bossRow()}
+          {#if referenceReport && canLoadTimeline(referenceReport)}
+            <BossTimelineRow
+              {bossSlug}
+              {bossIconName}
+              report={referenceReport}
+              onloaded={(timeline) => {
+                const matches = reports.filter(
+                  ({ report }) =>
+                    report.reportId === timeline.reportCode &&
+                    report.fights?.[0]?.fightId === timeline.fightId
+                );
+                for (const { report } of matches) bossReferences[timelineKey(report)] = timeline;
+              }}
+              {edition}
+              {axisDuration}
+              {ticks}
+              {showIcons}
+              {showCasts}
+            />
+          {/if}
+        {/snippet}
+        {#if compositionMode}
+          <div class="role-timelines">
+            {@render timeAxis('Boss')}
+            {@render bossRow()}
+          </div>
         {:else}
-          <Alert>No loaded reports match these filters.</Alert>
+          {@render timeAxis()}
+          {@render bossRow()}
+        {/if}
+        {#each timelineGroups as group (group.name)}
+          {#snippet groupRows()}
+            {#each group.rows as { report, rank } (timelineKey(report))}
+              <TimelineRow
+                {compositionMode}
+                report={reportWithReference(report)}
+                isReference={referenceReport !== undefined &&
+                  timelineKey(report) === timelineKey(referenceReport)}
+                onreference={compositionMode
+                  ? undefined
+                  : (selected) => (referenceKey = timelineKey(selected))}
+                {rank}
+                {edition}
+                timeline={loader.loaded.get(timelineKey(report))}
+                {axisDuration}
+                {ticks}
+                {hidden}
+                {castSpellIds}
+                {zoom}
+                {showIcons}
+                {showCasts}
+                {showBuffs}
+                {showDeaths}
+                {separateSpells}
+                loading={loader.loadingKey === timelineKey(report)}
+                batchLoading={loader.batchLoading}
+                error={loader.errors.get(timelineKey(report))}
+                bind:inspected
+                bind:magnifier
+                onload={(report) => loader.loadOne(report)}
+                oncopy={(timeline) =>
+                  (noteSelection = { timeline, report: reportWithReference(report) })}
+              />
+            {/each}
+          {/snippet}
+          {#if compositionMode}
+            <section aria-label={group.name}>
+              <h3 class="role-group">{group.name}</h3>
+              <div class="role-timelines">
+                {@render timeAxis()}
+                {@render groupRows()}
+              </div>
+            </section>
+          {:else}
+            {@render groupRows()}
+          {/if}
         {/each}
+        {#if !reports.length}<Alert>No loaded reports match these filters.</Alert>{/if}
       </div>
     </div>
   </div>
 </section>
 
-<style>
+<style lang="scss">
+  @use '../styles/selection-tokens' as selectionTokens;
+
+  .workspace {
+    @include selectionTokens.apply-selection-tokens;
+  }
+
+  .role-timelines {
+    border: 1px solid var(--line);
+    border-radius: 0.4rem;
+    background: var(--panel);
+  }
+  .grouped-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    padding-bottom: 1px;
+  }
+  .composition-panel .timeline-scroll {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .composition-panel .spell-inspector {
+    margin-bottom: 0.8rem;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0.4rem;
+  }
+  .role-group {
+    position: sticky;
+    left: 0;
+    box-sizing: border-box;
+    width: var(--timeline-viewport-width);
+    margin: 0 0 0.6rem;
+    padding: 0;
+    font-size: 0.95rem;
+  }
   .workspace {
     --panel: #f4f6f8;
     --line: #bdc9d4;
@@ -471,10 +569,11 @@
     align-items: center;
   }
   .zoom {
+    @include selectionTokens.selection-label;
+
     display: grid;
   }
-  button,
-  select {
+  button {
     color: var(--text);
     background: var(--panel);
     border: 1px solid var(--line);
@@ -482,6 +581,9 @@
     padding: 5px 8px;
     font: inherit;
     font-size: 12px;
+  }
+  select {
+    @include selectionTokens.selection-dropdown;
   }
   button {
     cursor: pointer;

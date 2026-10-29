@@ -258,6 +258,23 @@ public class WarcraftLogsClient(
         return result;
     }
 
+    public async Task RemoveGraphQlCacheEntryAsync(string query, object variables, string edition,
+        CancellationToken cancellationToken)
+    {
+        var endpoint = _options.ResolveEndpoint(edition);
+        var key = BuildGraphQlCacheKey(endpoint.BaseUrl, query, variables);
+        var cacheLock = GraphQlCacheKeyLocks.GetOrAdd(key, static _ => new SemaphoreSlim(1, 1));
+        await cacheLock.WaitAsync(cancellationToken);
+        try
+        {
+            File.Delete(BuildGraphQlCacheFilePath(key));
+        }
+        finally
+        {
+            cacheLock.Release();
+        }
+    }
+
     public void ClearCache()
     {
         var authUrls = _options.EditionEndpoints.Values

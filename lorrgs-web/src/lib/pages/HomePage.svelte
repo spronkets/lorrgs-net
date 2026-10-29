@@ -1,6 +1,6 @@
 <script lang="ts">
   import Alert from '../components/Alert.svelte';
-  import { createEventDispatcher, onMount, tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import * as API from '../api';
   import {
     type SpecRankingData,
@@ -9,9 +9,8 @@
     type WowRole,
     type WowSpec
   } from '../api';
-  import { getVersionIconUrl, getZoneIconUrl } from '../selectionIcons';
-  import EditionSelector from '../components/EditionSelector.svelte';
-  import RaidBossSelectors from '../components/RaidBossSelectors.svelte';
+  import EncounterFilters from '../components/EncounterFilters.svelte';
+  import RankingPageHeader from '../components/RankingPageHeader.svelte';
   import RankingsList from '../components/RankingsList.svelte';
   import BossIcon from '../components/BossIcon.svelte';
   import { getBlizzardClassColor } from '../classColors';
@@ -21,8 +20,7 @@
     getAvailableSpecsForVersion,
     type RaidCatalog,
     getRaidBossOptions,
-    getRaidsForEdition,
-    groupRaidsByPhase
+    getRaidsForEdition
   } from '../raidCatalog';
 
   export let worldData: WorldDataSnapshot = {
@@ -36,7 +34,7 @@
   };
 
   export let selectedVersion = '';
-  const dispatch = createEventDispatcher<{ editionChange: { version: string } }>();
+  export let oneditionchange: ((_version: string) => void) | undefined = undefined;
   let selectedRaid = '';
   let selectedBoss = '';
   let selectedSpec = '';
@@ -51,7 +49,6 @@
   const versions = versionOrder;
 
   $: raids = getRaidsForEdition(raidCatalog, selectedVersion);
-  $: raidPhaseGroups = groupRaidsByPhase(raids);
   $: if (!selectedVersion && versions.length) {
     selectedVersion =
       versions.find((version) => getRaidsForEdition(raidCatalog, version).length > 0) ||
@@ -76,32 +73,14 @@
     selectedBoss = '';
   }
 
-  function onVersionChange() {
-    selectedRaid = '';
-    selectedBoss = '';
-  }
-
-  function selectVersion(version: string) {
-    if (selectedVersion === version) return;
-    selectedVersion = version;
-    onVersionChange();
-    dispatch('editionChange', { version });
-  }
-
   // Group specs by roleId, then map to role objects
   $: versionSpecs = getAvailableSpecsForVersion(worldData.specs || [], selectedVersion);
   $: classesById = new Map((worldData.classes || []).map((cls) => [Number(cls.id), cls]));
   $: rolesById = new Map((worldData.roles || []).map((role) => [Number(role.id), role]));
-  $: activeSpecs = versionSpecs.length;
-  $: activeBossCount = bosses.filter((boss) => boss.mapped).length;
-  $: raidCount = raids.length;
   $: selectedSpecMeta = versionSpecs.find((spec) => spec.fullNameSlug === selectedSpec);
   $: selectedClassMeta = selectedSpecMeta ? getSpecClass(selectedSpecMeta) : null;
   $: selectedBossMeta = bosses.find((boss) => boss.slug === selectedBoss);
   $: selectedWorldBoss = (worldData.bosses || []).find((boss) => boss.nameSlug === selectedBoss);
-  $: selectedWorldZone = (worldData.zones || []).find(
-    (zone) => zone.id === selectedRaidOption?.zoneId || zone.slug === selectedRaid
-  );
   $: selectedEditionSlug = getApiEditionSlug(selectedVersion);
   $: supportsDifficulty = selectedVersion === 'Retail' || selectedVersion === 'Mists of Pandaria';
   $: selectedMetric = selectedSpecMeta ? resolveMetricForSpec(selectedSpecMeta) : 'dps';
@@ -318,26 +297,10 @@
 </script>
 
 <div class="home-page" class:comparison-open={isSelectionCollapsed}>
-  {#if !isSelectionCollapsed}
-    <div class="summary-grid">
-      <article class="summary-card">
-        <p class="label">Active Raids</p>
-        <p class="value">{raidCount}</p>
-        <p class="hint">Across {selectedVersion || 'selected timeline'} catalog</p>
-      </article>
-      <article class="summary-card">
-        <p class="label">Supported Bosses</p>
-        <p class="value">{activeBossCount}</p>
-        <p class="hint">Ready for ranking pulls</p>
-      </article>
-      <article class="summary-card">
-        <p class="label">Playable Specs</p>
-        <p class="value">{activeSpecs}</p>
-        <p class="hint">Edition-filtered specialization list</p>
-      </article>
-    </div>
-  {/if}
-
+  <RankingPageHeader
+    title="Spec Rankings"
+    description="Compare cooldown usage across ranked players of a chosen specialization."
+  />
   {#if isSelectionCollapsed && selectedSpecMeta && selectedBoss}
     <div class="selection-collapsed" style="--class-accent: {getSpecClassColor(selectedSpecMeta)}">
       <p class="label">Current Selection</p>
@@ -378,30 +341,14 @@
       >
     </div>
   {:else}
-    <div class="selector-section selector-block">
-      <h3>Edition</h3>
-      <EditionSelector
-        {versions}
-        {selectedVersion}
-        {getVersionIconUrl}
-        on:select={(event) => selectVersion(event.detail.version)}
-      />
-    </div>
-
-    <div class="selector-section selector-controls">
-      <RaidBossSelectors
-        {raidPhaseGroups}
-        bosses={bossOptions}
-        raidIconUrl={selectedWorldZone?.icon ? getZoneIconUrl(selectedWorldZone.icon) : ''}
-        bind:selectedRaid
-        bind:selectedBoss
-        raidLabel="Raid"
-        bossLabel="Boss"
-        raidPlaceholder="— choose a raid —"
-        bossPlaceholder="— choose a boss —"
-      />
-    </div>
-
+    <EncounterFilters
+      {worldData}
+      {raidCatalog}
+      bind:selectedVersion
+      bind:selectedRaid
+      bind:selectedBoss
+      {oneditionchange}
+    />
     {#each specsByRole as { role, specs } (role.id)}
       <div class="role-section">
         <h3 class="role-header">
@@ -499,51 +446,6 @@
     font-size: 12px;
   }
 
-  .summary-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: var(--space-5);
-    margin-bottom: var(--selector-block-gap);
-  }
-
-  .summary-card {
-    background: var(--summary-bg);
-    border: 1px solid var(--summary-border);
-    border-radius: var(--radius-xl);
-    padding: var(--space-5) var(--space-6);
-    box-shadow: var(--summary-shadow);
-  }
-
-  .summary-card .label {
-    margin: 0;
-    font-size: 0.76rem;
-    text-transform: uppercase;
-    letter-spacing: 0.09em;
-    color: var(--summary-label);
-    font-weight: 700;
-  }
-
-  .summary-card .value {
-    margin: 0.15rem 0;
-    font-size: 1.65rem;
-    font-weight: 700;
-    color: var(--summary-value);
-  }
-
-  .summary-card .hint {
-    margin: 0;
-    font-size: 0.84rem;
-    color: var(--summary-hint);
-  }
-
-  .selector-section {
-    margin-bottom: var(--space-8);
-  }
-
-  .selector-controls {
-    margin-bottom: var(--selector-block-gap);
-  }
-
   .ranking-size-control {
     margin-bottom: var(--space-5);
     display: flex;
@@ -593,34 +495,6 @@
     border-color: var(--select-focus-border);
     box-shadow: var(--select-focus-ring);
     background-color: var(--select-hover-bg);
-  }
-
-  .selector-controls :global(.raid-boss-row) {
-    width: 100%;
-  }
-
-  .selector-block h3 {
-    font-size: 1rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin: 0 0 var(--space-4);
-    padding-bottom: 0;
-    border-bottom: none;
-    color: inherit;
-  }
-
-  .selector-controls :global(label) {
-    color: inherit;
-    gap: var(--space-3);
-  }
-
-  .selector-controls :global(label > span) {
-    font-size: 1rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: inherit;
   }
 
   .role-section {

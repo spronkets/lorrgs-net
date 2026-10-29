@@ -1,0 +1,19 @@
+query CompRoster($code: String!, $fightIds: [Int!]!) {
+  reportData {
+    report(code: $code) {
+      title
+      startTime
+      table(dataType: Summary, fightIDs: $fightIds)
+      damageRankings: rankings(fightIDs: $fightIds, playerMetric: dps)
+      healingRankings: rankings(fightIDs: $fightIds, playerMetric: hps)
+      fights(fightIDs: $fightIds) {
+        id
+        encounterID
+        name
+        startTime
+        endTime
+        phaseTransitions { id startTime }
+      }
+    }
+  }
+}

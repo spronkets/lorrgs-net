@@ -67,6 +67,99 @@ its existing unrestricted CORS policy.
 
 ### Ranking analytics
 
+The home page selects an edition and raid/boss, then routes to the separate
+Spec Rankings or Comp Rankings flow. Both flows also remain accessible from the
+application bar. All three pages use the same encounter-filter component.
+The selected encounter is carried into either flow; spec rankings offer
+specialization choices and comp rankings offer composition and kill-time filters.
+Composition search uses compact icon-based role and specialization count controls
+with comparison operators and full accessible labels. Blank counts are unrestricted;
+zero explicitly excludes an entry. The responsive grid stacks on narrow phones,
+and filter expressions remain shareable in the URL.
+Search and filter inputs share the encounter selectors' styling across ranking
+filters, spell search, timeline zoom, analyzer inputs, and note options.
+
+**Comp Rankings** searches Warcraft Logs encounter `fightRankings(metric: execution)`
+for the selected edition, raid, boss, and difficulty,
+only after clicking Search when entering from the launcher or navigation. Shared
+search URLs containing `compPage` restore results automatically.
+Inspected report fights include Warcraft Logs raid-level `speed` and `execution`
+rankings: `rank`, `best`, `totalParses`, and `rankPercent`. Unavailable rankings
+remain null; these are not calculated from individual player parses.
+Composition result rows sort by ascending execution rank as details load; kills
+without a rank remain last in their original order.
+Rows show guild, server, and region when supplied by Warcraft Logs, with speed
+and execution displayed as rank (Top percentage), with total ranked kills in
+tooltips. Raid sizes are
+catalog metadata shown in raid selection, not per-kill statistics; Anniversary
+raids have their fixed 10- or 25-player sizes configured.
+It returns the complete
+summary page, with kills ordered by deaths, damage taken, then duration. All repeated `role` and `spec`
+filters must match; comparisons are `eq`, `lt`, `gt`, `lte`, or `gte`, including
+zero counts for absent roles/specs. Kill-time bounds use Maska-masked `m:ss` duration fields
+(seconds in the API); existing links using seconds remain supported. Searches, filters, and page selection have
+shareable URLs with browser back/forward restoration.
+
+The API fetches **one full upstream page of up to 50 kill summaries** with one
+GraphQL query. There is no results limit; all summaries and upstream pagination
+are preserved. The frontend inspects only the **first three kills initially**,
+requesting their actual Summary-table rosters and composition separately, together
+with report-wide fight metadata and cooldown events (including other bosses and wipes).
+Every other kill has its own **Load kill details** action; clicking it requests
+that kill's composition and loads its report-wide timeline data. There is no bulk
+"load next three" action for kill details.
+
+Composition filters are evaluated only for inspected rosters. Uninspected kills
+remain visible as **Composition pending**, never falsely excluded as non-matches.
+The match/pending counts make a partially inspected search explicit. The initial
+three are not backfilled to find three matches. Duration bounds can be applied
+immediately to summaries. The summary API validates filter syntax but intentionally
+does not discard summaries using filters; API consumers must inspect details before
+applying composition filters. A page with no inspected matches is not exhaustive:
+inspect remaining rows or use Next page when available.
+
+Private/deleted/archived reports remain as summary rows with explanatory per-row
+errors and retry actions. Any detail failure (including HTTP 429) pauses automatic
+loading immediately; it never silently requests replacement kills. Cancellation,
+edition changes and navigation abort outstanding work. Refresh bypasses WCL
+GraphQL file-cache reads for the summary page and individually requested details.
+No separate composition, roster, catalog, or world-data cache is introduced.
+
+Expand a result's **Roster & cooldown timelines** to use the same aligned
+player/boss timeline workspace as Spec Rankings: observed phases, spell controls,
+zoom, references, analyzer links, loading/retry controls, and note export.
+The composition workspace starts on **Everything**, matching Spec Rankings;
+the cross-class **Raid cooldowns** preset is available as an optional filter.
+Roster timelines are grouped into Tanks, Healers, and DPS, sorted by parse
+percentile within each group rather than numbered as arbitrary ranks. Percentiles
+come from Warcraft Logs report rankings (HPS for healers, DPS for tanks and damage
+dealers); missing parses are shown as unavailable, not zero.
+Each role has its own timeline section and time axis, with shared workspace controls.
+Player regions come from the roster or ranking metadata. Guild names use batched,
+cached Warcraft Logs character lookups and are displayed only when membership is
+unambiguous; a report's guild is not assumed to be every player's guild.
+Everything/Healing/Tank/Consumables remain available. Loading kill details retrieves
+all pages of casts, buffs and deaths across the report once through the existing
+GraphQL file cache. Each roster player's selected-fight timeline and the boss
+reference are derived from that shared stream, so expanding the result or switching
+roster roles does not require separate player loads. Other fights from the same
+report reuse the cached metadata and event pages. This is not a download of raw
+damage/healing events, which the cooldown workspace does not use.
+Spec Rankings also checks this report-wide cache before requesting player events:
+complete cached coverage supplies player timelines, boss references, and fight
+phases without additional Warcraft Logs calls. Missing or expired event pages
+fall back to the existing player-specific loader rather than downloading the
+entire report automatically. Cache-only enrichment never makes upstream requests
+and never treats partial report coverage as a complete timeline.
+After verifying that the complete report-wide metadata and event pages were
+persisted successfully, composition loading deletes covered player-specific event
+cache pages for that report. Other reports and endpoint/edition caches are untouched;
+failed or incomplete report downloads retain the individual caches.
+Unknown edition-specific specs remain in rosters
+with their upstream spec name and role instead of being silently dropped.
+The existing hardcoded raid/spec catalog's mapping limitations still apply.
+See `Lorrgs.Api/CompRankings.http` for API examples and validation failures.
+
 Anniversary is Warcraft Logs Classic Fresh. Its Zul'Aman catalog uses WCL zone
 `1062` and the original final boss, Zul'jin, not Daakara. Zone `1059` must not be
 used for Anniversary Zul'Aman rankings. The final-boss URL uses `boss=zuljin`.
@@ -326,7 +419,7 @@ when the event stream is complete. Unknown prepull application times are not
 invented. Example requests are in [Timeline.http](Lorrgs.Api/Timeline.http).
 
 Both views support region, kill-time, and date-range filters, plus
-performance, kill-time, and date sorting. Kill times accept seconds or `m:ss`;
+performance, kill-time, and date sorting. Kill-time fields use `m:ss` durations;
 date ranges include the whole final day in the browser's local timezone.
 Original ranks are preserved when filtering and sorting. Summary statistics
 (best performance and median kill time) describe only the loaded, filtered

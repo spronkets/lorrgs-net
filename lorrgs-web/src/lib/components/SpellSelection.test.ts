@@ -4,6 +4,26 @@ import SpellSelection from './SpellSelection.svelte';
 import { rows, response } from '../testing/timelineFixtures';
 
 describe('SpellSelection', () => {
+  it('defaults to Everything for composition timelines', async () => {
+    render(SpellSelection, {
+      timelines: [response(rows[0].report)],
+      classId: 0,
+      edition: 'anniversary',
+      compositionMode: true
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Everything' })).toHaveAttribute(
+        'aria-pressed', 'true'
+      );
+      expect(screen.getByRole('button', { name: 'Avenging Wrath' })).toHaveAttribute(
+        'aria-pressed', 'true'
+      );
+    });
+    expect(screen.getByRole('button', { name: 'Raid cooldowns' })).toHaveAttribute(
+      'aria-pressed', 'false'
+    );
+  });
+
   it('clears spells explicitly and stays cleared when clicked again', async () => {
     render(SpellSelection, {
       timelines: [response(rows[0].report)],

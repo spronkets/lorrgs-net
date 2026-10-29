@@ -27,7 +27,11 @@ public class SpecRankingData
 public class CompRankingData
 {
     public required string BossSlug { get; set; }
-    public List<CompRankingReport> Reports { get; set; } = [];
+    public List<RankingReport> Reports { get; set; } = [];
+    public string Difficulty { get; set; } = "";
+    public int Page { get; set; } = 1;
+    public bool HasMorePages { get; set; }
+    public int TotalCount { get; set; }
     public DateTime Updated { get; set; }
 }
 
@@ -36,6 +40,9 @@ public class CompRankingData
 /// </summary>
 public class RankingReport
 {
+    public string? GuildName { get; set; }
+    public string? ServerName { get; set; }
+    public string? ServerRegion { get; set; }
     public required string ReportId { get; set; }
     public required string Title { get; set; }
     public double? Percentile { get; set; }
@@ -68,6 +75,14 @@ public class CompRankingReport
 /// </summary>
 public class RankingFight
 {
+    public RaidFightRanking? Speed { get; set; }
+    public RaidFightRanking? Execution { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompRankingComposition? Composition { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Deaths { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? DamageTaken { get; set; }
     public int EncounterId { get; set; }
     public IReadOnlyList<TimelinePhase>? Phases { get; set; }
     public int FightId { get; set; }
@@ -77,6 +92,9 @@ public class RankingFight
     public DateTime StartTime { get; set; }
     public double? Percentile { get; set; }
 }
+
+/// <summary>Warcraft Logs raid-level ranking for a fight's speed or execution.</summary>
+public sealed record RaidFightRanking(int? Rank, int? Best, int? TotalParses, double? RankPercent);
 
 /// <summary>
 /// A single fight within a comp ranking report, includes composition info.
@@ -107,6 +125,14 @@ public class CompRankingComposition
 /// </summary>
 public class RankingPlayer
 {
+    /// <summary>Warcraft Logs parse percentile for the player's role-appropriate metric.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? ParsePercentile { get; set; }
+    /// <summary>The player's complete timeline loaded with composition kill details.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ReportTimeline? Timeline { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RoleCode { get; set; }
     public int PlayerId { get; set; }
     public required string Name { get; set; }
     public string? GuildName { get; set; }

@@ -27,6 +27,44 @@ function props() {
 }
 
 describe('TimelineRow', () => {
+  it('shows role parse percentiles instead of row numbers in composition mode', async () => {
+    const input = props();
+    const { container, rerender } = render(TimelineRow, {
+      ...input,
+      compositionMode: true,
+      report: { ...input.report, players: [{ ...input.report.players![0], performance: 2116, parsePercentile: 99 }] }
+    });
+    expect(screen.getByText('2,116 (Top 1%)')).toBeInTheDocument();
+    expect(container.querySelector('.rank')).toBeNull();
+    await rerender({ ...input, compositionMode: true });
+    expect(screen.getByText('Parse unavailable')).toBeInTheDocument();
+  });
+
+  it('colors player names by class and updates when the player changes', async () => {
+    const input = props();
+    const report = {
+      ...input.report,
+      players: [{ ...input.report.players![0], name: 'Paladin', specSlug: 'holy-paladin' }]
+    };
+    const { container, rerender } = render(TimelineRow, { ...input, report });
+    expect(screen.getByText('Paladin')).toHaveStyle({ color: '#F48CBA' });
+    const icon = container.querySelector('.player-spec-icon')!;
+    expect(icon).toHaveAttribute('src', '/images/wow/specs/paladin-holy.jpg');
+    expect(icon.nextElementSibling).toHaveTextContent('Paladin');
+    await rerender({
+      ...input,
+      report: {
+        ...report,
+        players: [{ ...report.players[0], name: 'Mage', specSlug: 'fire-mage' }]
+      }
+    });
+    expect(screen.getByText('Mage')).toHaveStyle({ color: '#3FC7EB' });
+    expect(container.querySelector('.player-spec-icon')).toHaveAttribute(
+      'src',
+      '/images/wow/specs/mage-fire.jpg'
+    );
+  });
+
   it('labels inferred markers without presenting them as observed player casts', async () => {
     const input = props();
     render(TimelineRow, {

@@ -335,39 +335,6 @@ public class RankingsController(
     }
 
     /// <summary>
-    /// Get composition rankings for a specific boss.
-    /// Shows optimal group setups with specs and roles.
-    /// Supports filtering by role and spec.
-    /// </summary>
-    [HttpGet("comp/{bossSlug}")]
-    public async Task<IActionResult> GetCompRanking(
-        string bossSlug,
-        [FromQuery] int limit = 20,
-        [FromQuery] bool refresh = false,
-        [FromQuery(Name = "role")] string[]? roles = null,
-        [FromQuery(Name = "spec")] string[]? specs = null)
-    {
-        _logger.LogInformation("Fetching comp ranking: {BossSlug} (limit={Limit})", bossSlug, limit);
-
-        try
-        {
-            var ranking = await FetchCompRankingFromWCL(bossSlug, limit, roles, specs);
-
-            if (ranking == null)
-            {
-                return NotFound(new { error = "Comp ranking not found" });
-            }
-
-            return Ok(ranking);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching comp ranking {BossSlug} limit={Limit}", bossSlug, limit);
-            return StatusCode(500, new { error = "Failed to fetch comp ranking" });
-        }
-    }
-
-    /// <summary>
     /// Queue a background job to update spec rankings.
     /// Returns immediately with a task ID for tracking progress.
     /// </summary>
@@ -1512,45 +1479,6 @@ public class RankingsController(
         string ServerSlug,
         string ServerRegion,
         string Key);
-
-    /// <summary>
-    /// Fetch comp ranking data from WarcraftLogs GraphQL API.
-    /// Note: Comp rankings are derived from multiple spec rankings, so this is a placeholder
-    /// that aggregates data from cached spec rankings or returns empty for now.
-    /// Full implementation will require building composition data from individual parses.
-    /// </summary>
-    private async Task<CompRankingData?> FetchCompRankingFromWCL(
-        string bossSlug, int limit, string[]? roles, string[]? specs)
-    {
-        _logger.LogDebug("Querying WarcraftLogs API for comp ranking: {BossSlug}", bossSlug);
-
-        try
-        {
-            // Composition rankings are computed from individual spec rankings
-            // For now, return empty structure - real implementation will aggregate spec data
-            var ranking = new CompRankingData
-            {
-                BossSlug = bossSlug,
-                Updated = DateTime.UtcNow,
-                Reports = []
-            };
-
-            // TODO: Implement comp ranking aggregation from spec rankings
-            // This would require:
-            // 1. Query all available specs
-            // 2. Fetch top reports for each spec
-            // 3. Aggregate composition data (which specs were used together)
-            // 4. Filter by role/spec if provided
-            // 5. Return top {limit} compositions
-
-            return ranking;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching comp ranking from WarcraftLogs API");
-            return null;
-        }
-    }
 
     /// <summary>
     /// Convert Unix timestamp to DateTime UTC.

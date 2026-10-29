@@ -6,6 +6,7 @@ import {
   getReportTimeline,
   getBossTimeline,
   getSpecRankings,
+  getCompRankings,
   getRoles,
   getClasses,
   getSpecs,
@@ -28,6 +29,43 @@ import { rows, response } from './testing/timelineFixtures';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('api utilities', () => {
+  it('sends complete composition context, repeated comparisons, pagination and refresh', async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ reports: [] }) });
+    vi.stubGlobal('fetch', fetch);
+    const controller = new AbortController();
+    await getCompRankings(
+      'boss slug',
+      ['heal.gte.2', 'tank.lte.2'],
+      ['holy-paladin.eq.0'],
+      'anniversary',
+      {
+        encounterId: 50609,
+        difficultyId: 3,
+        page: 2,
+        minSeconds: 120,
+        maxSeconds: 600,
+        refresh: true
+      },
+      controller.signal
+    );
+    const [url, options] = fetch.mock.calls[0];
+    const parsed = new URL(String(url), 'http://localhost');
+    expect(parsed.pathname).toBe('/api/rankings/comp/boss%20slug');
+    expect(parsed.searchParams.getAll('role')).toEqual(['heal.gte.2', 'tank.lte.2']);
+    expect(parsed.searchParams.getAll('spec')).toEqual(['holy-paladin.eq.0']);
+    expect(Object.fromEntries(parsed.searchParams)).toMatchObject({
+      edition: 'anniversary',
+      encounterId: '50609',
+      difficultyId: '3',
+      page: '2',
+      killtime_min: '120',
+      killtime_max: '600',
+      refresh: 'true'
+    });
+    expect(options.signal).toBeInstanceOf(AbortSignal);
+    expect(options.timeoutMs).toBeUndefined();
+    expect(parsed.searchParams.has('limit')).toBe(false);
+  });
   it('passes edition on every world-data collection and individual request', async () => {
     const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
     vi.stubGlobal('fetch', fetch);

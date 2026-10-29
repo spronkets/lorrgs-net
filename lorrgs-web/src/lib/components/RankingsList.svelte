@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { maska } from 'maska/svelte';
+  import { killTimeMask } from '../killTimeMask';
   import Alert from './Alert.svelte';
   import {
     getRankingFilterError,
+    toKillTimeInput,
     selectRankingReports,
     type RankingFilters,
     type RankingSort
@@ -50,15 +53,21 @@
         <legend>Kill time</legend>
         <input
           aria-label="Minimum kill time"
+          use:maska={killTimeMask}
+          type="text"
+          placeholder="m:ss"
           bind:value={filters.minDuration}
-          placeholder="Min m:ss"
+          on:blur={() => (filters.minDuration = toKillTimeInput(filters.minDuration))}
           class="kill-time"
         />
         <span aria-hidden="true">–</span>
         <input
           aria-label="Maximum kill time"
+          use:maska={killTimeMask}
+          type="text"
+          placeholder="m:ss"
           bind:value={filters.maxDuration}
-          placeholder="Max m:ss"
+          on:blur={() => (filters.maxDuration = toKillTimeInput(filters.maxDuration))}
           class="kill-time"
         />
       </fieldset>
@@ -100,7 +109,13 @@
   {/key}
 </div>
 
-<style>
+<style lang="scss">
+  @use '../styles/selection-tokens' as selectionTokens;
+
+  .rankings-list {
+    @include selectionTokens.apply-selection-tokens;
+  }
+
   @media (max-width: 600px) {
     .analytics .analytics-filters {
       display: grid;
@@ -129,10 +144,6 @@
     }
     .analytics .advanced-filters[open] {
       grid-column: 1 / -1;
-    }
-    .analytics .filter-group input,
-    .analytics .advanced-options select {
-      min-height: 38px;
     }
     .analytics .advanced-filters summary {
       min-height: 38px;
@@ -163,7 +174,8 @@
     min-width: 0;
   }
   .filter-group legend {
-    font-size: 11px;
+    @include selectionTokens.selection-label;
+
     margin-bottom: 3px;
   }
   .filter-group button[aria-pressed='true'] {
@@ -193,7 +205,7 @@
     outline-color: #a4b8cb;
   }
   .kill-time {
-    width: 80px;
+    width: 105px;
   }
   .analytics {
     padding: 0.35rem 0;
@@ -211,20 +223,26 @@
   }
 
   .analytics-filters label {
+    @include selectionTokens.selection-label;
+
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
-    font-size: 0.75rem;
   }
 
-  .analytics-filters input,
-  .analytics-filters select,
   .analytics-filters button {
     padding: 0.3rem;
     border: 1px solid #8fc1e4;
     border-radius: 0.3rem;
     background: #f3f9ff;
     color: #2a4b69;
+  }
+
+  .analytics-filters input {
+    @include selectionTokens.selection-control;
+  }
+  .analytics-filters select {
+    @include selectionTokens.selection-dropdown;
   }
 
   .advanced-filters summary {
@@ -260,8 +278,6 @@
     color: #c9e4f8;
   }
 
-  :global(.theme-dark) .analytics-filters input,
-  :global(.theme-dark) .analytics-filters select,
   :global(.theme-dark) .analytics-filters button {
     background: #102032;
     border-color: #355472;

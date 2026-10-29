@@ -13,7 +13,11 @@ export type ClassSpellPreset = {
   icon: string;
 };
 
-export function classSpellPresets(classId: number, edition: string): ClassSpellPreset[] {
+export function classSpellPresets(
+  classId: number,
+  edition: string,
+  compositionMode = false
+): ClassSpellPreset[] {
   return [
     {
       key: 'Everything',
@@ -21,10 +25,31 @@ export function classSpellPresets(classId: number, edition: string): ClassSpellP
       role: 'Everything',
       icon: spellIconUrl('inv_misc_book_09')!
     },
-    ...getClassSpellRoles(classId, edition).map((entry) => ({
-      ...entry,
-      key: `${entry.role}:${entry.spec}`
-    })),
+    ...(compositionMode
+      ? [
+          {
+            key: 'RaidCooldowns',
+            label: 'Raid cooldowns',
+            role: 'Healing' as const,
+            icon: spellIconUrl('spell_holy_powerwordbarrier')!
+          },
+          {
+            key: 'Healing',
+            label: 'Healing',
+            role: 'Healing' as const,
+            icon: spellIconUrl('spell_holy_heal')!
+          },
+          {
+            key: 'Tank',
+            label: 'Tank',
+            role: 'Tank' as const,
+            icon: spellIconUrl('ability_warrior_shieldwall')!
+          }
+        ]
+      : getClassSpellRoles(classId, edition).map((entry) => ({
+          ...entry,
+          key: `${entry.role}:${entry.spec}`
+        }))),
     {
       key: 'Consumables',
       label: 'Consumables',
@@ -88,12 +113,27 @@ export function matchesClassSpellPreset(
   preset: ClassSpellPreset,
   classId: number
 ): boolean {
+  if (preset.key === 'RaidCooldowns') return isRaidCooldown(spell);
   if (preset.role !== 'Damage' || !preset.spec || !damageSpecNames[preset.spec])
     return matchesSpellPreset(spell, preset.role);
   return (
     isPowerWindow(spell) ||
     Boolean(sharedDamageNames[classId]?.test(spell.name)) ||
     damageSpecNames[preset.spec].test(spell.name)
+  );
+}
+
+const raidCooldownIds = new Set([
+  740, 2825, 32182, 16190, 29166, 31821, 51052, 62618, 64843, 80353, 97462, 98008, 108280, 114052,
+  115310, 196718, 363534, 374227, 374968, 388615, 264667, 390386
+]);
+
+export function isRaidCooldown(spell: TimelineSpell): boolean {
+  return (
+    raidCooldownIds.has(spell.id) ||
+    /^(tranquility|divine hymn|power word: barrier|aura mastery|spirit link totem|healing tide totem|healing stream totem|mana tide totem|rallying cry|anti-magic zone|darkness|revival|restoral|rewind|zephyr|dream flight|ancestral guidance|divine sacrifice|divine guardian|bloodlust|heroism|time warp|primal rage|fury of the aspects|innervate)(?: \(rank \d+\))?$/i.test(
+      spell.name
+    )
   );
 }
 

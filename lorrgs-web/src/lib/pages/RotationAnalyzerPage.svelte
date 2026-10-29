@@ -332,8 +332,12 @@
   {/if}
 </div>
 
-<style>
+<style lang="scss">
+  @use '../styles/selection-tokens' as selectionTokens;
+
   .rotation-page {
+    @include selectionTokens.apply-selection-tokens;
+
     max-width: 1100px;
   }
 
@@ -360,21 +364,25 @@
   }
 
   label {
+    @include selectionTokens.selection-label;
+
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    color: #d5d5d5;
-    font-size: 0.92rem;
   }
 
-  input,
-  select,
   button {
     background: #262626;
     color: #f1f1f1;
     border: 1px solid #454545;
     border-radius: 0.4rem;
     padding: 0.5rem 0.65rem;
+  }
+  input {
+    @include selectionTokens.selection-control;
+  }
+  select {
+    @include selectionTokens.selection-dropdown;
   }
 
   button {

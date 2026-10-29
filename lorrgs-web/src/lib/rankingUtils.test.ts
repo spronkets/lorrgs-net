@@ -7,6 +7,7 @@ import {
   getRankingReportLink,
   getRotationAnalyzerLink,
   parseKillTime,
+  toKillTimeInput,
   selectRankingReports,
   summarizeRankingReports,
   type RankingFilters
@@ -38,6 +39,14 @@ const reports = [
 ];
 
 describe('ranking utilities', () => {
+  it('formats legacy kill-time links as minute and second duration inputs', () => {
+    expect(toKillTimeInput('120')).toBe('2:00');
+    expect(toKillTimeInput('2:05')).toBe('2:05');
+    expect(toKillTimeInput('3605')).toBe('60:05');
+    expect(toKillTimeInput('0')).toBe('0:00');
+    expect(toKillTimeInput('')).toBe('');
+    expect(toKillTimeInput('invalid')).toBe('invalid');
+  });
   it('converts percentile to a top percentage without showing a misleading zero', () => {
     expect(getTopPercentLabel(99)).toBe('Top 1%');
     expect(getTopPercentLabel(95)).toBe('Top 5%');

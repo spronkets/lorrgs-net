@@ -1,17 +1,15 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-
   export let versions: string[] = [];
   export let selectedVersion = '';
   export let getVersionIconUrl: (_version: string) => string;
   export let variant: 'cards' | 'select' = 'cards';
   export let placeholder = '— choose an edition —';
 
-  const dispatch = createEventDispatcher<{ select: { version: string } }>();
+  export let onselect: ((_version: string) => void) | undefined = undefined;
 
   function onSelect(version: string) {
     if (!version || selectedVersion === version) return;
-    dispatch('select', { version });
+    onselect?.(version);
   }
 </script>
 

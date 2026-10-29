@@ -10,6 +10,7 @@ type ApiOptions = {
   method?: string;
   headers?: HeadersInit;
   signal?: AbortSignal;
+  timeoutMs?: number;
 };
 
 export type WowRole = {
@@ -60,6 +61,9 @@ export type RankingCast = {
 };
 
 export type RankingPlayer = {
+  parsePercentile?: number | null;
+  timeline?: ReportTimeline | null;
+  roleCode?: string;
   playerId: number;
   name: string;
   guildName?: string | null;
@@ -76,7 +80,23 @@ export type RankingPlayer = {
   casts?: RankingCast[];
 };
 
+export type RaidFightRanking = {
+  rank: number | null;
+  best: number | null;
+  totalParses: number | null;
+  rankPercent: number | null;
+};
+
 export type RankingFight = {
+  speed?: RaidFightRanking | null;
+  execution?: RaidFightRanking | null;
+  composition?: {
+    specs: Record<string, number>;
+    roles: Record<string, number>;
+    classes: Record<string, number>;
+  };
+  deaths?: number;
+  damageTaken?: number;
   encounterId?: number;
   phases?: TimelinePhase[] | null;
   fightId: number;
@@ -88,6 +108,9 @@ export type RankingFight = {
 };
 
 export type RankingReport = {
+  guildName?: string | null;
+  serverName?: string | null;
+  serverRegion?: string | null;
   reportId: string;
   title: string;
   percentile: number | null;
@@ -381,25 +404,26 @@ async function buildApiError(response: Response): Promise<Error> {
 }
 
 export async function get<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
+  const { timeoutMs = API_TIMEOUT_MS, ...fetchOptions } = options;
   const url = buildApiUrl(endpoint);
   const controller = new AbortController();
   const cancel = () => controller.abort();
   options.signal?.addEventListener('abort', cancel, { once: true });
   if (options.signal?.aborted) controller.abort();
-  const timeoutHandle = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
 
   let response: Response;
   try {
     response = await fetch(url, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', ...options.headers },
-      ...options,
+      ...fetchOptions,
       signal: controller.signal
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       if (options.signal?.aborted) throw error;
-      throw new Error(`API Error: request timed out after ${API_TIMEOUT_MS}ms`);
+      throw new Error(`API Error: request timed out after ${timeoutMs}ms`);
     }
 
     throw error;
@@ -580,18 +604,63 @@ export async function getSpecRankingsInfo(
   return get<SpecRankingData>(`/rankings/spec/${specSlug}/${bossSlug}/info${suffix}`);
 }
 
+export type CompRankingData = {
+  bossSlug: string;
+  difficulty: string;
+  updated: string;
+  page: number;
+  hasMorePages: boolean;
+  totalCount: number;
+  reports: RankingReport[];
+};
+
+export type CompRankingQuery = {
+  encounterId: number;
+  difficultyId: number;
+  page?: number;
+  minSeconds?: number;
+  maxSeconds?: number;
+  refresh?: boolean;
+};
+
 export async function getCompRankings(
   bossSlug: string,
-  limit = 25,
   roles: string[] = [],
   specs: string[] = [],
-  edition = ''
+  edition = '',
+  options?: CompRankingQuery,
+  signal?: AbortSignal
 ) {
-  const params = new URLSearchParams({ limit: String(limit) });
+  const params = new URLSearchParams();
   if (roles.length) roles.forEach((r) => params.append('role', r));
   if (specs.length) specs.forEach((s) => params.append('spec', s));
   if (edition) params.set('edition', edition);
-  return get(`/rankings/comp/${bossSlug}?${params}`);
+  if (options) {
+    params.set('encounterId', String(options.encounterId));
+    params.set('difficultyId', String(options.difficultyId));
+    params.set('page', String(options.page ?? 1));
+    params.set('killtime_min', String(options.minSeconds ?? 0));
+    params.set('killtime_max', String(options.maxSeconds ?? 0));
+    if (options.refresh) params.set('refresh', 'true');
+  }
+  return get<CompRankingData>(`/rankings/comp/${encodeURIComponent(bossSlug)}?${params}`, {
+    signal,
+    timeoutMs: 120000
+  });
+}
+
+export function getCompRankingDetails(
+  report: RankingReport,
+  edition: string,
+  refresh = false,
+  signal?: AbortSignal
+): Promise<RankingReport> {
+  const params = new URLSearchParams({ edition });
+  if (refresh) params.set('refresh', 'true');
+  return get<RankingReport>(
+    `/rankings/comp/reports/${encodeURIComponent(report.reportId)}/fights/${report.fights?.[0]?.fightId ?? 0}?${params}`,
+    { signal }
+  );
 }
 
 export async function queueSpecRankingUpdate(

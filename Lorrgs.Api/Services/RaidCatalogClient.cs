@@ -57,6 +57,7 @@ public class RaidCatalogClient(
                 configuredRaids.Add(new RaidInstance
                 {
                     ZoneId = raid.ZoneId,
+                    RaidSize = raid.RaidSize,
                     Slug = raid.Slug,
                     Name = raid.Name,
                     Edition = editionSlug,

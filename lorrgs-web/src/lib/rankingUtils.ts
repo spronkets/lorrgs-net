@@ -29,11 +29,18 @@ export function parseKillTime(value: string): number | null {
   return Number.isSafeInteger(seconds) ? seconds * 1000 : NaN;
 }
 
+export function toKillTimeInput(value: string): string {
+  const milliseconds = parseKillTime(value);
+  if (milliseconds === null || !Number.isFinite(milliseconds)) return value;
+  const seconds = milliseconds / 1000;
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
 export function getRankingFilterError(filters: RankingFilters): string {
   const min = parseKillTime(filters.minDuration);
   const max = parseKillTime(filters.maxDuration);
   if (Number.isNaN(min) || Number.isNaN(max)) {
-    return 'Enter kill times as seconds or m:ss (for example, 240 or 4:00).';
+    return 'Enter kill times as m:ss (for example, 5:32).';
   }
   if (min !== null && max !== null && min > max) {
     return 'Minimum kill time must not exceed maximum kill time.';

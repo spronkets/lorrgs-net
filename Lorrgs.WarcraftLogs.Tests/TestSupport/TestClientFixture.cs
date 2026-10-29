@@ -13,7 +13,7 @@ namespace Lorrgs.Tests.TestSupport;
 
 internal sealed class TestClientFixture : IDisposable
 {
-    private readonly string root = Path.Combine(Path.GetTempPath(), "LorrgsTests", Guid.NewGuid().ToString("N"));
+    private readonly string root = Path.Combine(AppContext.BaseDirectory, "test-data", Guid.NewGuid().ToString("N"));
     private readonly List<HttpClient> clients = [];
     private readonly List<MemoryCache> caches = [];
     public string CacheDirectory => Path.Combine(root, "Data", "cache", "wcl-graphql");

@@ -15,6 +15,7 @@
     timelines: ReportTimeline[];
     classId: number;
     edition: string;
+    compositionMode?: boolean;
     hidden?: Set<number>;
     inspected?: InspectedSpell | null;
   };
@@ -22,6 +23,7 @@
     timelines,
     classId,
     edition,
+    compositionMode = false,
     hidden = $bindable(new Set<number>()),
     inspected = $bindable(null)
   }: Props = $props();
@@ -29,7 +31,7 @@
   let search = $state('');
   let showSpellNames = $state(false);
   const spells = $derived(timelineSpells(timelines));
-  const presets = $derived(classSpellPresets(classId, edition));
+  const presets = $derived(classSpellPresets(classId, edition, compositionMode));
   const selectedPreset = $derived(presets.find((option) => option.key === preset));
   const castSpellIds = $derived(
     new Set(
@@ -150,7 +152,13 @@
   </div>
 </details>
 
-<style>
+<style lang="scss">
+  @use '../styles/selection-tokens' as selectionTokens;
+
+  .spell-selection {
+    @include selectionTokens.apply-selection-tokens;
+  }
+
   @media (max-width: 600px) {
     .spell-selection .spell-actions {
       margin-bottom: 6px;
@@ -221,8 +229,7 @@
     gap: 4px;
     align-items: center;
   }
-  button,
-  input:not([type='checkbox']) {
+  button {
     color: var(--text);
     background: var(--panel);
     border: 1px solid var(--line);
@@ -230,6 +237,9 @@
     padding: 5px 8px;
     font: inherit;
     font-size: 12px;
+  }
+  input:not([type='checkbox']) {
+    @include selectionTokens.selection-control;
   }
   button {
     cursor: pointer;

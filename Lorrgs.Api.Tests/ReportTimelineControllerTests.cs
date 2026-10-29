@@ -136,6 +136,8 @@ public sealed class ReportTimelineControllerTests
 
     private sealed class TimelineService : IReportTimelineService
     {
+        public Task PopulateRosterTimelinesAsync(RankingReport report, string edition, bool refresh, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
         public Exception? Failure { get; init; }
         public ReportTimeline Player { get; } = new("report", 3, 7, "Player", 60000, true, [], []);
         public BossTimeline? Boss { get; init; } = new("report", 3, "Boss", 60000, true, [], [], []);

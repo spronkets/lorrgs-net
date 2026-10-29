@@ -1,3 +1,68 @@
+@mixin selection-label {
+  color: var(--section-heading);
+  font-size: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+@mixin selection-control {
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 0;
+  padding: var(--select-padding-y, 0.52rem) var(--select-padding-x, 0.62rem);
+  border: 1px solid var(--select-border);
+  border-radius: var(--radius-md, 0.58rem);
+  background-color: var(--select-bg);
+  color: var(--select-text);
+  font-family: inherit;
+  font-size: var(--control-font-size, 0.95rem);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.4;
+  transition:
+    border-color var(--transition-fast, 0.15s),
+    box-shadow var(--transition-fast, 0.15s),
+    background-color var(--transition-fast, 0.15s);
+
+  &:hover:not(:disabled) {
+    border-color: var(--select-hover-border);
+    background-color: var(--select-hover-bg);
+    box-shadow: var(--select-hover-ring);
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--select-focus-border);
+    background-color: var(--select-hover-bg);
+    box-shadow: var(--select-focus-ring);
+  }
+
+  &:disabled {
+    background-color: var(--disabled-bg);
+    border-color: var(--disabled-border);
+    color: var(--disabled-text);
+    cursor: not-allowed;
+    opacity: 1;
+  }
+}
+
+@mixin selection-dropdown {
+  @include selection-control;
+
+  appearance: none;
+  padding-right: var(--select-padding-right, 2.1rem);
+  background-image: var(--select-chevron-icon);
+  background-repeat: no-repeat;
+  background-position: right var(--select-chevron-offset, 0.72rem) center;
+  background-size: var(--select-chevron-size, 0.72rem);
+
+  &:disabled {
+    background-image: var(--disabled-chevron-icon);
+  }
+}
+
 @mixin apply-selection-tokens {
   --space-1: 0.32rem;
   --space-2: 0.5rem;
@@ -67,6 +132,7 @@
   --edition-logo-boost-hover-filter: contrast(1.42) brightness(0.78) saturate(0.93);
 
   --select-bg: #ffffff;
+  color-scheme: light;
   --select-border: #9fbcd1;
   --select-text: #14314c;
   --select-chevron-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%234c6f8f' d='M6 8 .8 1.7A1 1 0 0 1 2.2.3L6 4.2 9.8.3a1 1 0 1 1 1.4 1.4z'/%3E%3C/svg%3E");
@@ -126,6 +192,7 @@
     --edition-logo-boost-hover-filter: none;
 
     --select-bg: #13283d;
+    color-scheme: dark;
     --select-border: #3f6383;
     --select-text: #d5e8f8;
     --select-chevron-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2394b5d1' d='M6 8 .8 1.7A1 1 0 0 1 2.2.3L6 4.2 9.8.3a1 1 0 1 1 1.4 1.4z'/%3E%3C/svg%3E");

@@ -6,6 +6,8 @@ namespace Lorrgs.Api.Services;
 
 public interface IReportTimelineService
 {
+    Task PopulateRosterTimelinesAsync(RankingReport report, string edition, bool refresh,
+        CancellationToken cancellationToken);
     Task<ReportTimeline> LoadAsync(string reportCode, int fightId, int? sourceId,
         string? playerName, string edition, CancellationToken cancellationToken, int? specId = null);
     Task<ReportTimeline?> TryLoadCachedAsync(string reportCode, int fightId, int? sourceId,
@@ -20,6 +22,7 @@ public sealed class ReportTimelineService(
     WarcraftLogsClient client, ILogger<ReportTimelineService> logger) : IReportTimelineService
 {
     private static readonly string MetadataQuery = GraphQlResourceLoader.Load("Timeline.Metadata.graphql");
+    private static readonly string ReportMetadataQuery = GraphQlResourceLoader.Load("Timeline.ReportMetadata.graphql");
     private static readonly string EventsQuery = GraphQlResourceLoader.Load("Timeline.Events.graphql");
     private static readonly string BossMetadataQuery = GraphQlResourceLoader.Load("Timeline.BossMetadata.graphql");
     private static readonly string BossEventsQuery = GraphQlResourceLoader.Load("Timeline.BossEvents.graphql");
@@ -31,6 +34,10 @@ public sealed class ReportTimelineService(
     {
         foreach (var report in reports.Where(report => report.Fights.Any(fight => fight.Phases is null)).ToArray())
         {
+            var shared = await client.TryQueryGraphQLFromCacheAsync(ReportMetadataQuery,
+                new { code = report.ReportId }, edition, cancellationToken);
+            if (shared is not null)
+                ApplyFightMetadata(report, GetReport(shared.Value).GetProperty("fights"));
             foreach (var fight in report.Fights.Where(fight => fight.Phases is null))
             {
                 var cached = await client.TryQueryGraphQLFromCacheAsync(BossMetadataQuery,
@@ -170,6 +177,21 @@ public sealed class ReportTimelineService(
     public async Task<BossTimeline?> LoadBossAsync(string reportCode, int fightId, string edition,
         bool cacheOnly, CancellationToken cancellationToken)
     {
+        var sharedMetadata = await client.TryQueryGraphQLFromCacheAsync(ReportMetadataQuery,
+            new { code = reportCode }, edition, cancellationToken);
+        if (sharedMetadata is not null)
+        {
+            var sharedReport = GetReport(sharedMetadata.Value);
+            var sharedFight = sharedReport.GetProperty("fights").EnumerateArray()
+                .FirstOrDefault(item => Number(item, "id") == fightId);
+            if (sharedFight.ValueKind == JsonValueKind.Object)
+            {
+                var sharedEvents = await ReadReportEventsAsync(reportCode, sharedReport, sharedFight,
+                    edition, true, false, cancellationToken);
+                if (sharedEvents is { Complete: true })
+                    return BuildBossTimeline(reportCode, sharedReport, sharedFight, sharedEvents.Value.Events, edition);
+            }
+        }
         var metadataData = await QueryAsync(BossMetadataQuery,
             new { code = reportCode, fightIds = new[] { fightId } }, edition, cacheOnly, cancellationToken);
         if (metadataData is null) return null;
@@ -217,6 +239,129 @@ public sealed class ReportTimelineService(
         string? playerName, string edition, CancellationToken cancellationToken, int? specId = null) =>
         LoadCoreAsync(reportCode, fightId, sourceId, playerName, edition, true, cancellationToken, specId);
 
+    public async Task PopulateRosterTimelinesAsync(RankingReport report, string edition, bool refresh,
+        CancellationToken cancellationToken)
+    {
+        var fight = report.Fights.Single();
+        var data = await client.QueryGraphQLAsync(ReportMetadataQuery,
+            new { code = report.ReportId },
+            edition, refresh, cancellationToken);
+        var metadata = GetReport(data);
+        var fights = metadata.GetProperty("fights").EnumerateArray().ToArray();
+        var timing = fights.Single(item => Number(item, "id") == fight.FightId);
+        var start = Number(timing, "startTime");
+        var end = Number(timing, "endTime");
+        if (end <= start)
+            throw new InvalidDataException("Warcraft Logs returned invalid fight timing.");
+        var master = metadata.GetProperty("masterData");
+        var actors = master.GetProperty("actors").EnumerateArray().ToArray();
+        foreach (var player in report.Players)
+        {
+            if (!actors.Any(actor => Number(actor, "id") == player.PlayerId &&
+                string.Equals(Text(actor, "name"), player.Name, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidDataException("A roster player could not be identified in the report.");
+        }
+        var pages = await ReadReportEventsAsync(report.ReportId, metadata, timing,
+            edition, false, refresh, cancellationToken);
+        var (rawEvents, complete) = pages
+            ?? throw new InvalidDataException("Warcraft Logs returned no roster timeline data.");
+        foreach (var player in report.Players)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var events = TimelineCorrections.CorrectEvents(
+                NormalizeEvents(rawEvents, player.PlayerId, start, end, complete), player.SpecId, edition, complete);
+            player.Timeline = new ReportTimeline(report.ReportId, fight.FightId, player.PlayerId, player.Name,
+                end - start, complete, TimelineCorrections.CorrectSpells(ObservedSpells(master, events), events), events);
+        }
+        report.BossTimeline = BuildBossTimeline(report.ReportId, metadata, timing, rawEvents, edition);
+        var persistedMetadata = await client.TryQueryGraphQLFromCacheAsync(ReportMetadataQuery,
+            new { code = report.ReportId }, edition, cancellationToken);
+        if (persistedMetadata is not null &&
+            await ReadReportEventsAsync(report.ReportId, GetReport(persistedMetadata.Value), timing,
+                edition, true, false, cancellationToken) is { Complete: true })
+            await RemoveCoveredPlayerEventsAsync(report.ReportId, metadata, edition, cancellationToken);
+    }
+
+    private async Task RemoveCoveredPlayerEventsAsync(string reportCode, JsonElement metadata,
+        string edition, CancellationToken cancellationToken)
+    {
+        var actors = metadata.GetProperty("masterData").GetProperty("actors").EnumerateArray().ToArray();
+        foreach (var fight in metadata.GetProperty("fights").EnumerateArray())
+        {
+            var fightId = checked((int)Number(fight, "id"));
+            var start = Number(fight, "startTime");
+            var end = Number(fight, "endTime");
+            foreach (var actor in actors)
+            {
+                var name = Text(actor, "name");
+                if (string.IsNullOrEmpty(name)) continue;
+                var escaped = name.Replace("\\", "\\\\", StringComparison.Ordinal)
+                    .Replace("'", "\\'", StringComparison.Ordinal);
+                var filter = $"(source.name='{escaped}' AND type='cast') OR " +
+                    $"(target.name='{escaped}' AND type IN ('applybuff','refreshbuff','removebuff','death'))";
+                var cursor = start;
+                for (var page = 0; page < 3; page++)
+                {
+                    var variables = new
+                    {
+                        code = reportCode, fightIds = new[] { fightId },
+                        startTime = cursor, endTime = end, filter
+                    };
+                    var cached = await client.TryQueryGraphQLFromCacheAsync(EventsQuery, variables, edition, cancellationToken);
+                    if (cached is null) break;
+                    var events = GetReport(cached.Value).GetProperty("events");
+                    await client.RemoveGraphQlCacheEntryAsync(EventsQuery, variables, edition, cancellationToken);
+                    if (!events.TryGetProperty("nextPageTimestamp", out var next) ||
+                        next.ValueKind == JsonValueKind.Null) break;
+                    var nextCursor = next.GetDouble();
+                    if (nextCursor >= end || nextCursor <= cursor) break;
+                    cursor = nextCursor;
+                }
+            }
+        }
+    }
+
+    private Task<(List<JsonElement> Events, bool Complete)?> ReadReportEventsAsync(
+        string reportCode, JsonElement metadata, JsonElement fight, string edition,
+        bool cacheOnly, bool refresh, CancellationToken cancellationToken)
+    {
+        var fights = metadata.GetProperty("fights").EnumerateArray().ToArray();
+        var reportStart = fights.Min(item => Number(item, "startTime"));
+        var reportEnd = fights.Max(item => Number(item, "endTime"));
+        var start = Number(fight, "startTime");
+        var end = Number(fight, "endTime");
+        const string filter = "type IN ('cast','applybuff','refreshbuff','removebuff','death')";
+        return ReadEventsAsync(EventsQuery, cursor => new
+        {
+            code = reportCode,
+            fightIds = fights.Select(item => checked((int)Number(item, "id"))).Order().ToArray(),
+            startTime = cursor, endTime = reportEnd, filter
+        }, reportStart, reportEnd, edition, cacheOnly, cancellationToken, refresh, int.MaxValue,
+            item => Number(item, "timestamp") >= start && Number(item, "timestamp") <= end);
+    }
+
+    private static BossTimeline BuildBossTimeline(string reportCode, JsonElement metadata,
+        JsonElement timing, List<JsonElement> rawEvents, string edition)
+    {
+        var start = Number(timing, "startTime");
+        var end = Number(timing, "endTime");
+        var encounterId = checked((int)Number(timing, "encounterID"));
+        var enemies = timing.GetProperty("enemyNPCs").EnumerateArray()
+            .Select(enemy => checked((int)Number(enemy, "id"))).ToHashSet();
+        var bossEvents = rawEvents.Where(item => Text(item, "type") == "cast" &&
+            enemies.Contains(checked((int)Number(item, "sourceID"))) &&
+            Number(item, "abilityGameID") > 0 &&
+            Number(item, "timestamp") >= start && Number(item, "timestamp") <= end)
+            .Select(item => new TimelineEvent(checked((int)Number(item, "abilityGameID")),
+                Number(item, "timestamp") - start, null, "cast")).OrderBy(item => item.Timestamp).ToArray();
+        var phases = ObservedPhases(timing, start, end);
+        if (string.Equals(edition, "retail", StringComparison.OrdinalIgnoreCase))
+            phases = TimelineCorrections.CorrectPhases(encounterId, phases, bossEvents, end - start, true);
+        return new BossTimeline(reportCode, checked((int)Number(timing, "id")),
+            encounterId == 101194 ? "Zul'jin" : Text(timing, "name") ?? "Boss",
+            end - start, true, ObservedSpells(metadata.GetProperty("masterData"), bossEvents), bossEvents, phases);
+    }
+
     private async Task<JsonElement?> QueryAsync(string query, object variables, string edition,
         bool cacheOnly, CancellationToken cancellationToken) =>
         cacheOnly
@@ -226,7 +371,13 @@ public sealed class ReportTimelineService(
     private async Task<ReportTimeline?> LoadCoreAsync(string reportCode, int fightId, int? sourceId,
         string? playerName, string edition, bool cacheOnly, CancellationToken cancellationToken, int? specId)
     {
-        var metadataData = await QueryAsync(MetadataQuery,
+        var sharedMetadata = await client.TryQueryGraphQLFromCacheAsync(ReportMetadataQuery,
+            new { code = reportCode }, edition, cancellationToken);
+        var sharedReport = sharedMetadata is null ? (JsonElement?)null : GetReport(sharedMetadata.Value);
+        var sharedFight = sharedReport?.GetProperty("fights").EnumerateArray()
+            .FirstOrDefault(item => Number(item, "id") == fightId);
+        var hasSharedFight = sharedFight is { ValueKind: JsonValueKind.Object };
+        var metadataData = hasSharedFight ? sharedMetadata : await QueryAsync(MetadataQuery,
             new { code = reportCode, fightIds = new[] { fightId } }, edition, cacheOnly, cancellationToken);
         if (metadataData is null) return null;
         var metadata = GetReport(metadataData.Value);
@@ -299,7 +450,10 @@ public sealed class ReportTimelineService(
             .Replace("'", "\\'", StringComparison.Ordinal);
         var filter = $"(source.name='{filterName}' AND type='cast') OR " +
             $"(target.name='{filterName}' AND type IN ('applybuff','refreshbuff','removebuff','death'))";
-        var pages = await ReadEventsAsync(EventsQuery, cursor => new
+        var sharedPages = hasSharedFight
+            ? await ReadReportEventsAsync(reportCode, metadata, fights[0], edition, true, false, cancellationToken)
+            : null;
+        var pages = sharedPages is { Complete: true } ? sharedPages : await ReadEventsAsync(EventsQuery, cursor => new
         {
             code = reportCode,
             fightIds = new[] { fightId },
@@ -325,19 +479,23 @@ public sealed class ReportTimelineService(
 
     private async Task<(List<JsonElement> Events, bool Complete)?> ReadEventsAsync(string query,
         Func<double, object> variables, double start, double end, string edition, bool cacheOnly,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool refresh = false, int maxPages = 3,
+        Func<JsonElement, bool>? retainEvent = null)
     {
         var rawEvents = new List<JsonElement>();
         var cursor = start;
         var complete = false;
-        for (var page = 0; page < 3; page++)
+        for (var page = 0; page < maxPages; page++)
         {
-            var eventData = await QueryAsync(query, variables(cursor), edition, cacheOnly, cancellationToken);
+            var eventData = refresh
+                ? await client.QueryGraphQLAsync(query, variables(cursor), edition, true, cancellationToken)
+                : await QueryAsync(query, variables(cursor), edition, cacheOnly, cancellationToken);
             if (eventData is null) return null;
             var report = GetReport(eventData.Value);
             var paginator = report.GetProperty("events");
             foreach (var item in paginator.GetProperty("data").EnumerateArray())
-                rawEvents.Add(item.Clone());
+                if (retainEvent is null || retainEvent(item))
+                    rawEvents.Add(item.Clone());
             if (!paginator.TryGetProperty("nextPageTimestamp", out var next) ||
                 next.ValueKind == JsonValueKind.Null)
             {
@@ -351,7 +509,14 @@ public sealed class ReportTimelineService(
                 break;
             }
             if (nextCursor <= cursor)
+            {
+                if (cacheOnly)
+                {
+                    logger.LogWarning("Cached Warcraft Logs timeline pagination did not advance; ignoring incomplete cache coverage");
+                    return null;
+                }
                 throw new InvalidOperationException("Warcraft Logs timeline pagination did not advance.");
+            }
             cursor = nextCursor;
         }
         return (rawEvents, complete);

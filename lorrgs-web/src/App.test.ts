@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
 import * as API from './lib/api';
@@ -64,6 +64,92 @@ describe('App version mapping', () => {
   it('uses the retail catalog key and retail icon for the Retail option', () => {
     expect(getEditionSlug('Retail')).toBe('retail');
     expect(getVersionIconUrl('Retail')).toBe('/images/wow/editions/midnight.png');
+  });
+
+  it('launches separate ranking flows from home with the shared encounter selection', async () => {
+    mockWorldData();
+    vi.mocked(API.getRaidCatalog).mockResolvedValue({
+      editions: [],
+      instances: {
+        anniversary: [
+          {
+            zoneId: 1060,
+            slug: 'blacktemple',
+            name: 'Black Temple',
+            edition: 'anniversary',
+            phase: 3,
+            public: true,
+            bosses: [{ id: 50609, name: 'Illidan', slug: 'illidan', mapped: true }]
+          }
+        ]
+      }
+    });
+    vi.spyOn(API, 'getCompRankings').mockResolvedValue({
+      bossSlug: 'illidan',
+      difficulty: '3',
+      updated: '',
+      page: 1,
+      totalCount: 0,
+      hasMorePages: false,
+      reports: []
+    });
+    history.replaceState({}, '', '/?edition=Anniversary&raid=blacktemple&boss=illidan');
+    render(App);
+    const landing = (await screen.findByRole('heading', { name: 'Compare raid cooldowns' })).closest(
+      'section'
+    )!;
+    expect(API.getCompRankings).not.toHaveBeenCalled();
+    await fireEvent.click(within(landing).getByRole('button', { name: 'Comp Rankings' }));
+    await screen.findByRole('button', { name: 'Search compositions' });
+    expect(screen.getAllByRole('button', { name: 'Boss' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Illidan');
+    expect(screen.getByRole('combobox', { name: 'Raid' })).toHaveValue('blacktemple');
+    expect(API.getCompRankings).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Search compositions' }));
+    await waitFor(() =>
+      expect(API.getCompRankings).toHaveBeenCalledWith(
+        'illidan',
+        [],
+        [],
+        'anniversary',
+        expect.objectContaining({ encounterId: 50609 }),
+        expect.any(AbortSignal)
+      )
+    );
+    const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+    await fireEvent.click(within(nav).getByRole('button', { name: 'Spec Rankings' }));
+    expect(screen.queryByRole('button', { name: 'Search compositions' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Illidan');
+    expect(new URLSearchParams(location.search).get('page')).toBe('spec');
+    await fireEvent.click(screen.getByRole('button', { name: 'LorrgsNET home' }));
+    await screen.findByRole('heading', { name: 'Compare raid cooldowns' });
+    expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Illidan');
+    await fireEvent.click(
+      within(
+        screen.getByRole('heading', { name: 'Compare raid cooldowns' }).closest('section')!
+      ).getByRole('button', { name: 'Spec Rankings' })
+    );
+    expect(new URLSearchParams(location.search).get('page')).toBe('spec');
+    expect(screen.queryByRole('heading', { name: 'Compare raid cooldowns' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Illidan');
+  });
+
+  it('requires an encounter on the launcher but keeps toolbar ranking links available', async () => {
+    mockWorldData();
+    render(App);
+    const landing = (await screen.findByRole('heading', { name: 'Compare raid cooldowns' })).closest(
+      'section'
+    )!;
+    expect(within(landing).getByRole('heading', { name: 'What is this?' })).toBeInTheDocument();
+    expect(
+      within(landing).getByRole('heading', { name: 'Disclaimer: use timings as a reference' })
+    ).toBeInTheDocument();
+    expect(within(landing).getByRole('button', { name: 'Spec Rankings' })).toBeDisabled();
+    expect(within(landing).getByRole('button', { name: 'Comp Rankings' })).toBeDisabled();
+    const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+    await fireEvent.click(within(nav).getByRole('button', { name: 'Comp Rankings' }));
+    await screen.findByRole('button', { name: 'Search compositions' });
+    expect(screen.getByRole('region', { name: 'Encounter selection' })).toBeInTheDocument();
   });
 
   afterEach(() => {

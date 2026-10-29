@@ -20,6 +20,7 @@ public sealed class RaidCatalogEditionSeed
 
 public sealed class RaidCatalogRaidSeed
 {
+    public string? RaidSize { get; set; }
     public int ZoneId { get; set; }
 
     public string Slug { get; set; } = string.Empty;
