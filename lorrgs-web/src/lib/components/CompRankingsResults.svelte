@@ -129,7 +129,10 @@
           <h3>
             {Number.isFinite(executionRank(summary))
               ? `#${executionRank(summary)}`
-              : 'Rank unavailable'} · {report.title}
+              : 'Rank unavailable'} {report.title}
+            {#if fight?.execution?.rankPercent != null}
+              ({getTopPercentLabel(fight.execution.rankPercent)})
+            {/if}
           </h3>
           <a
             href={getRankingReportLink({ ...report, players: [] }, edition)}
@@ -153,7 +156,7 @@
           </p>
         {/if}
         <div class="stats">
-          {#each [{ label: 'Speed', ranking: fight?.speed }, { label: 'Execution', ranking: fight?.execution }] as metric (metric.label)}
+          {#each [{ label: 'Speed', ranking: fight?.speed }] as metric (metric.label)}
             <span
               title={metric.ranking?.totalParses != null
                 ? `${metric.label} ranking out of ${metric.ranking.totalParses.toLocaleString()} ranked kills`

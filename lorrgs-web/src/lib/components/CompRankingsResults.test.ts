@@ -87,17 +87,17 @@ it('sorts by ascending execution rank, keeping missing ranks last and ties stabl
   });
   await waitFor(() => {
     const headings = [...container.querySelectorAll('article > .heading h3')];
-    expect(headings.slice(0, 4).map((heading) => heading.textContent)).toEqual([
-      '#2 · Kill 2',
-      '#2 · Kill 3',
-      '#8 · Kill 1',
-      'Rank unavailable · Kill 4'
+    expect(headings.slice(0, 4).map((heading) => heading.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      '#2 Kill 2 (Top 1%)',
+      '#2 Kill 3 (Top 1%)',
+      '#8 Kill 1 (Top 1%)',
+      'Rank unavailable Kill 4'
     ]);
   });
   const first = container.querySelector('article')!;
   expect(within(first).getByText('Raid Guild · Thunderstrike EU')).toBeInTheDocument();
   expect(within(first).getByText('Speed').nextElementSibling).toHaveTextContent('#5 (Top 5%)');
-  expect(within(first).getByText('Execution').nextElementSibling).toHaveTextContent('#2 (Top 1%)');
+  expect(within(first).queryByText('Execution')).not.toBeInTheDocument();
   expect(within(first).getByText('Speed').parentElement).toHaveAttribute(
     'title', 'Speed ranking out of 100 ranked kills'
   );
