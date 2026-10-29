@@ -10,12 +10,14 @@ public sealed class GetCompRankingHandler(ICompRankingService service, ILogger<G
         GetCompRankingRequest request, CancellationToken cancellationToken = default)
     {
         var normalizedEdition = WorldDataEditions.NormalizeEdition(request.Edition);
-        if (normalizedEdition is null || request.EncounterId <= 0 || request.DifficultyId is < 1 or > 5 ||
+        if (normalizedEdition is null || request.EncounterId < 0 || request.ZoneId < 0 ||
+            (request.EncounterId == 0 && (request.ZoneId == 0 || string.IsNullOrWhiteSpace(request.BossSlug))) ||
+            request.DifficultyId is < 1 or > 5 ||
             request.Page is < 1 or > 100 || request.MinSeconds is < 0 or > 86400 ||
             request.MaxSeconds is < 0 or > 86400 || (request.MaxSeconds > 0 && request.MaxSeconds < request.MinSeconds) ||
             (request.Roles?.Length ?? 0) + (request.Specs?.Length ?? 0) > 100)
             return TypedResults.Problem(statusCode: 400, title: "Invalid composition search",
-                detail: "Provide a supported edition, encounterId, difficultyId (1–5), page (1–100), and an ordered nonnegative kill-time range in seconds.");
+                detail: "Provide a supported edition, encounterId (or zoneId and boss slug), difficultyId (1–5), page (1–100), and an ordered nonnegative kill-time range in seconds.");
         CompRankingSearch search;
         try
         {
@@ -24,7 +26,7 @@ public sealed class GetCompRankingHandler(ICompRankingService service, ILogger<G
             if (roleFilters.Any(filter => filter.Key is not ("tank" or "heal" or "mdps" or "rdps")))
                 throw new ArgumentException("Roles must be tank, heal, mdps, or rdps.");
             search = new(request.BossSlug, normalizedEdition, request.EncounterId, request.DifficultyId, request.Page,
-                request.MinSeconds, request.MaxSeconds, roleFilters, specFilters, request.Refresh);
+                request.MinSeconds, request.MaxSeconds, roleFilters, specFilters, request.Refresh, request.ZoneId);
         }
         catch (ArgumentException ex) { return TypedResults.Problem(statusCode: 400, title: "Invalid count filter", detail: ex.Message); }
         try

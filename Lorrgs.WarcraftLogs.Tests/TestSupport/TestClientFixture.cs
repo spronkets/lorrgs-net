@@ -54,6 +54,7 @@ internal sealed class TestClientFixture : IDisposable
 internal sealed class QueueHandler(params string[] graphQlResponses) : HttpMessageHandler
 {
     private readonly Queue<string> responses = new(graphQlResponses);
+    private readonly object sync = new();
     public int GraphQlRequests { get; private set; }
     public int TokenRequests { get; private set; }
     public List<JsonElement> Requests { get; } = [];
@@ -63,20 +64,34 @@ internal sealed class QueueHandler(params string[] graphQlResponses) : HttpMessa
     {
         if (request.RequestUri?.AbsolutePath == "/oauth/token")
         {
-            TokenRequests++;
+            lock (sync) TokenRequests++;
             return JsonResponse("""{"access_token":"test-token","expires_in":3600}""");
         }
-        GraphQlRequests++;
         using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
-        Requests.Add(document.RootElement.Clone());
-        if (GraphQlFailure is not null) throw GraphQlFailure;
-        if (!responses.TryDequeue(out var payload))
-            throw new InvalidOperationException("No queued GraphQL response remains.");
-        return JsonResponse(payload);
+        lock (sync)
+        {
+            GraphQlRequests++;
+            Requests.Add(document.RootElement.Clone());
+            if (GraphQlFailure is not null) throw GraphQlFailure;
+            if (!responses.TryDequeue(out var payload))
+                throw new InvalidOperationException("No queued GraphQL response remains.");
+            return JsonResponse(payload);
+        }
     }
 
     private static HttpResponseMessage JsonResponse(string payload) => new(HttpStatusCode.OK)
     {
         Content = new StringContent(payload, Encoding.UTF8, "application/json")
     };
+}
+
+internal sealed class CallbackHandler(
+    Func<HttpRequestMessage, CancellationToken, Task<string>> respond) : HttpMessageHandler
+{
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, CancellationToken cancellationToken) =>
+        new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(await respond(request, cancellationToken), Encoding.UTF8, "application/json")
+        };
 }

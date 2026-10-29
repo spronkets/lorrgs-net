@@ -1,4 +1,4 @@
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { getCompRankingDetails } from './api';
 import type { RankingReport } from './models/RankingReport';
 
@@ -9,7 +9,7 @@ export function compKey(report: RankingReport): string {
 export class CompDetailLoader {
   readonly loaded = new SvelteMap<string, RankingReport>();
   readonly errors = new SvelteMap<string, string>();
-  loadingKey = $state('');
+  readonly loadingKeys = new SvelteSet<string>();
   stopped = $state(false);
   private readonly controller = new AbortController();
 
@@ -20,18 +20,16 @@ export class CompDetailLoader {
 
   async start(reports: RankingReport[]) {
     // Exactly the first three kills, not the first three matches. No backfill on failures.
-    for (const report of reports.slice(0, 3)) {
-      if (this.controller.signal.aborted || this.stopped) break;
-      if (!(await this.load(report))) break;
-    }
+    await Promise.all(reports.slice(0, 3).map((report) => this.load(report)));
   }
 
   async load(report: RankingReport): Promise<boolean> {
-    if (this.loadingKey || this.controller.signal.aborted) return false;
     const key = compKey(report);
-    this.loadingKey = key;
+    if (this.loadingKeys.has(key) || this.loaded.has(key) || this.controller.signal.aborted)
+      return false;
+    this.loadingKeys.add(key);
     this.errors.delete(key);
-    this.stopped = false;
+    this.stopped = this.errors.size > 0;
     try {
       const details = await getCompRankingDetails(
         report,
@@ -60,13 +58,13 @@ export class CompDetailLoader {
         ]
       });
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       if (this.controller.signal.aborted) return false;
       this.errors.set(key, error instanceof Error ? error.message : 'Unable to load kill details.');
       this.stopped = true;
       return false;
     } finally {
-      this.loadingKey = '';
+      this.loadingKeys.delete(key);
     }
   }
 

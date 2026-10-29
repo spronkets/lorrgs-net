@@ -1,10 +1,124 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getReportTimeline, getBossTimeline, getSpecRankings, getCompRankings } from './api';
+import {
+  getReportTimeline,
+  getBossTimeline,
+  getSpecRankings,
+  getSpecRankingsInfo,
+  getCompRankings,
+  getCompRankingDetails
+} from './api';
 import { rows, response } from './testing/timelineFixtures';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.resetModules();
+  vi.useRealTimers();
+});
+
+const rankingRequests = [
+  { name: 'spec rankings', request: () => getSpecRankings('holy-paladin', 'illidan-stormrage') },
+  {
+    name: 'spec ranking info',
+    request: () => getSpecRankingsInfo('holy-paladin', 'illidan-stormrage')
+  },
+  { name: 'composition rankings', request: () => getCompRankings('illidan-stormrage') },
+  {
+    name: 'composition report details',
+    request: () => getCompRankingDetails(rows[0].report, 'anniversary')
+  }
+];
 
 describe('api utilities', () => {
+  it('uses the configured timeout for all ranking requests', async () => {
+    vi.stubEnv('VITE_REQUEST_TIMEOUT_MS', '75000');
+    vi.resetModules();
+    const api = await import('./api');
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string, options: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            options.signal!.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError'))
+            );
+          })
+      )
+    );
+    const requests = [
+      api.getSpecRankings('holy-paladin', 'illidan-stormrage'),
+      api.getSpecRankingsInfo('holy-paladin', 'illidan-stormrage'),
+      api.getCompRankings('illidan-stormrage'),
+      api.getCompRankingDetails(rows[0].report, 'anniversary')
+    ];
+    const assertions = requests.map((request) =>
+      expect(request).rejects.toThrow('API Error: request timed out after 75000ms')
+    );
+    await vi.advanceTimersByTimeAsync(74999);
+    expect(vi.getTimerCount()).toBe(4);
+    await vi.advanceTimersByTimeAsync(1);
+    await Promise.all(assertions);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(rankingRequests)(
+    'allows uncached $name to finish after 30 seconds',
+    async ({ request }) => {
+      vi.useFakeTimers();
+      const payload = { reports: [] };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          (_url: string, options: RequestInit) =>
+            new Promise<Response>((resolve, reject) => {
+              const timer = setTimeout(() => resolve(Response.json(payload)), 45000);
+              options.signal?.addEventListener(
+                'abort',
+                () => {
+                  clearTimeout(timer);
+                  reject(new DOMException('Aborted', 'AbortError'));
+                },
+                { once: true }
+              );
+            })
+        )
+      );
+
+      const result = request();
+      const assertion = expect(result).resolves.toEqual(payload);
+      await vi.advanceTimersByTimeAsync(45000);
+      await assertion;
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
+  it.each(rankingRequests)('still times out $name after two minutes', async ({ request }) => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string, options: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            options.signal?.addEventListener(
+              'abort',
+              () => {
+                reject(new DOMException('Aborted', 'AbortError'));
+              },
+              { once: true }
+            );
+          })
+      )
+    );
+
+    const assertion = expect(request()).rejects.toThrow(
+      'API Error: request timed out after 120000ms'
+    );
+    await vi.advanceTimersByTimeAsync(120000);
+    await assertion;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('sends complete composition context, repeated comparisons, pagination and refresh', async () => {
     const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ reports: [] }) });
     vi.stubGlobal('fetch', fetch);
@@ -16,6 +130,7 @@ describe('api utilities', () => {
       'anniversary',
       {
         encounterId: 50609,
+        zoneId: 1060,
         difficultyId: 3,
         page: 2,
         minSeconds: 120,
@@ -32,6 +147,7 @@ describe('api utilities', () => {
     expect(Object.fromEntries(parsed.searchParams)).toMatchObject({
       edition: 'anniversary',
       encounterId: '50609',
+      zoneId: '1060',
       difficultyId: '3',
       page: '2',
       killtime_min: '120',

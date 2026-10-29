@@ -3,6 +3,7 @@
   import * as HttpApi from './lib/common/http/apiClient';
 
   import Alert from './lib/components/Alert.svelte';
+  import Spinner from './lib/components/Spinner.svelte';
   import { onMount } from 'svelte';
   import * as API from './lib/api';
   import HomePage from './pages/HomePage.svelte';
@@ -11,9 +12,11 @@
   import WorldDataPage from './pages/WorldDataPage.svelte';
   import RotationAnalyzerPage from './pages/RotationAnalyzerPage.svelte';
   import { getApiEditionSlug, getRaidsForEdition } from './lib/raidCatalog';
+  import type { WorldDataSnapshot } from './lib/models/WorldDataSnapshot';
+  import type { RaidCatalog } from './lib/models/RaidCatalog';
 
   let currentPage = 'home';
-  let worldData = {
+  let worldData: Required<WorldDataSnapshot> = {
     classes: [],
     specs: [],
     roles: [],
@@ -23,7 +26,7 @@
     trinkets: [],
     seasons: []
   };
-  let raidCatalog = {
+  let raidCatalog: RaidCatalog = {
     editions: [],
     instances: {}
   };
@@ -44,7 +47,7 @@
   const PAGE_QUERY_KEY = 'page';
   const APP_PAGES = new Set(['home', 'spec', 'comp', 'worlddata', 'rotation']);
 
-  function applyTheme(nextTheme) {
+  function applyTheme(nextTheme: string) {
     theme = nextTheme === 'dark' ? 'dark' : 'light';
   }
 
@@ -138,22 +141,11 @@
         WorldDataApi.getSeasons(edition)
       ]);
 
-      const data = {
-        classes: HttpApi.normalizeApiCollection(classes, 'classes'),
-        specs: HttpApi.normalizeApiCollection(specs, 'specs'),
-        roles: HttpApi.normalizeApiCollection(roles, 'roles'),
-        bosses: HttpApi.normalizeApiCollection(bosses, 'bosses'),
-        zones: HttpApi.normalizeApiCollection(zones, 'zones'),
-        spells: HttpApi.normalizeApiCollection(spells, 'spells'),
-        trinkets: HttpApi.normalizeApiCollection(trinkets, 'trinkets'),
-        seasons: HttpApi.normalizeApiCollection(seasons, 'seasons')
-      };
-
       if (request !== worldDataRequest) return;
-      worldData = data;
+      worldData = { classes, specs, roles, bosses, zones, spells, trinkets, seasons };
       raidCatalog = initialRaidCatalog;
       error = '';
-    } catch (err) {
+    } catch (err: unknown) {
       if (request !== worldDataRequest) return;
       error = err instanceof Error ? err.message : 'Unknown error';
       console.error('Failed to load world data:', err);
@@ -261,7 +253,7 @@
     {/if}
 
     {#if loading}
-      <div class="loading">Loading...</div>
+      <Spinner loadingText="Loading..." />
     {:else}
       {#if currentPage === 'home'}
         <LandingPage
@@ -509,13 +501,6 @@
     margin: 0 auto;
     width: 100%;
     padding: 0.75rem 1.25rem 1.5rem;
-  }
-
-  .loading {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--loading-color);
-    font-weight: 600;
   }
 
   @media (max-width: 900px) {

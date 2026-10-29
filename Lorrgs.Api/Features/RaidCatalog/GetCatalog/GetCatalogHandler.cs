@@ -9,7 +9,7 @@ public sealed class GetCatalogHandler(ILogger<GetCatalogHandler> logger, RaidCat
         cancellationToken.ThrowIfCancellationRequested();
         logger.LogInformation("Fetching raid catalog");
 
-        RaidCatalog catalog = await raidCatalogClient.GetCatalogAsync();
+        RaidCatalog catalog = await raidCatalogClient.GetCatalogAsync(cancellationToken);
         return TypedResults.Ok(catalog);
     }
 }

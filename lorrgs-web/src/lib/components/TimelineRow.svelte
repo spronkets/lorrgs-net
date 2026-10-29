@@ -1,5 +1,6 @@
 <script lang="ts">
   import Alert from './Alert.svelte';
+  import Spinner from './Spinner.svelte';
   import { getBlizzardClassColor, getBlizzardClassColors } from '../classColors';
   import { getSpecIconUrl } from '../wowAssets';
   import { timelineErrorSummary } from '../timelineError';
@@ -42,7 +43,6 @@
     showDeaths: boolean;
     separateSpells: boolean;
     loading: boolean;
-    batchLoading: boolean;
     error?: string;
     inspected?: InspectedSpell | null;
     magnifier?: TimelineMagnification | null;
@@ -68,7 +68,6 @@
     showDeaths,
     separateSpells,
     loading,
-    batchLoading,
     error,
     inspected = $bindable(null),
     magnifier = $bindable(null),
@@ -345,23 +344,19 @@
           <Alert compact>No events match the spell / timeline selection.</Alert>
         </div>{/if}
     {:else if loading}
-      <span class="track-message loading-message" role="status">Loading report events…</span>
+      <span class="track-message loading-message" role="status"
+        ><Spinner inline />Loading report events…</span
+      >
     {:else if error}
       <div class="track-message error-message">
         <Alert variant="error" compact>
           <span>{timelineErrorSummary(error)}</span>
-          <button type="button" disabled={batchLoading} onclick={() => onload(report)}>Retry</button
-          >
+          <button type="button" onclick={() => onload(report)}>Retry</button>
         </Alert>
       </div>
     {:else if canLoadTimeline(report)}
       <div class="unloaded-controls">
-        <button
-          class="load-row"
-          type="button"
-          disabled={batchLoading}
-          onclick={() => onload(report)}
-        >
+        <button class="load-row" type="button" onclick={() => onload(report)}>
           Load report {report.title || report.reportId}
         </button>
       </div>

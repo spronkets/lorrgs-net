@@ -479,6 +479,43 @@ public sealed class RankingsHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task PercentileBatchesStartTogetherAndRemoveOnlyUnavailableReports()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requests = 0;
+        using var handler = new CallbackHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/oauth/token")
+                return """{"access_token":"token","expires_in":3600}""";
+            using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+            var query = document.RootElement.GetProperty("query").GetString()!;
+            if (Interlocked.Increment(ref requests) == 3) started.TrySetResult();
+            await release.Task.WaitAsync(cancellationToken);
+            if (query.Contains("\"parallel20\"", StringComparison.Ordinal))
+                return """{"data":{"reportData":{"r0":null}},"errors":[{"message":"This report is private","path":["reportData","r0"]}]}""";
+            var data = Enumerable.Range(0, 10).ToDictionary(index => $"r{index}",
+                _ => new { title = "Enriched", rankings = Array.Empty<object>() });
+            return JsonSerializer.Serialize(new { data = new { reportData = data } });
+        });
+        var reports = Enumerable.Range(0, 21).Select(index => Report($"parallel{index:D2}", 1)).ToList();
+        var task = Enrich(fixture.CreateClient(handler), reports);
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(task.IsCompleted);
+        }
+        finally
+        {
+            release.TrySetResult();
+            await task;
+        }
+        Assert.Equal(3, requests);
+        Assert.Equal(20, reports.Count);
+        Assert.All(reports, report => Assert.Equal("Enriched", report.Title));
+    }
+
+    [Fact]
     public async Task PercentileEnrichmentSurfacesUnknownErrorsWithoutPerReportRetries()
     {
         using var handler = new QueueHandler("""{"errors":[{"message":"Invalid query argument."}]}""");

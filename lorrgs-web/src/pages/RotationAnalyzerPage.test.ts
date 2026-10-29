@@ -179,7 +179,7 @@ it('resolves linked actors by explicit ID, applies query filters, and falls back
     castsPerMinute: 8,
     abilitySummary: [{ spellId: 901, castCount: 1, sharePercent: 100 }]
   });
-  vi.mocked(WorldDataApi.getSpell).mockResolvedValue({});
+  vi.mocked(WorldDataApi.getSpell).mockResolvedValue({ id: 901, name: '', icon: '', type: '' });
 
   render(RotationAnalyzerPage);
 

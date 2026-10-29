@@ -133,11 +133,42 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
+it('explains missing mappings instead of claiming a selected encounter is unselected', async () => {
+  window.history.replaceState(
+    {},
+    '',
+    '/?page=comp&edition=Anniversary&raid=hyjalsummit&boss=archimonde'
+  );
+  render(CompRankingsPage, {
+    worldData,
+    selectedVersion: 'Anniversary',
+    raidCatalog: {
+      editions: [],
+      instances: {
+        anniversary: [
+          {
+            ...raidCatalog.instances.anniversary[0],
+            zoneId: 0,
+            slug: 'hyjalsummit',
+            name: 'Hyjal Summit',
+            bosses: [{ id: 0, name: 'Archimonde', slug: '', mapped: false }]
+          }
+        ]
+      }
+    }
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Search compositions' }));
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Selected raid boss is missing encounter and zone mappings.'
+  );
+  expect(API.getCompRankings).not.toHaveBeenCalled();
+});
+
 it('hydrates repeated filters and kill times, then requests the correct edition and encounter', async () => {
   const { container } = renderPage(
     '&role=heal.gte.2&role=mdps.eq.0&spec=holy-paladin.lte.2&killtime_min=2:00&killtime_max=300&compPage=2'
   );
-  await screen.findByRole('button', { name: 'Next page' });
+  await screen.findByText('No inspected kills match these filters on this page.');
   expect(API.getCompRankings).toHaveBeenCalledWith(
     'illidan',
     ['heal.gte.2', 'mdps.eq.0'],
@@ -160,30 +191,28 @@ it('hydrates repeated filters and kill times, then requests the correct edition 
   expect(container.querySelector('.icon-select img')).toBeNull();
 });
 
-it('serializes zero-count comparisons to a shareable URL and supports refresh and pagination', async () => {
+it('serializes zero-count comparisons and refreshes without pagination controls', async () => {
   renderPage();
-  await screen.findByRole('button', { name: 'Next page' });
+  await screen.findByText('Roster & cooldown timelines (1 players)');
   await fireEvent.input(screen.getByLabelText('Healer count'), { target: { value: '0' } });
   await fireEvent.change(screen.getByLabelText('Healer comparison'), { target: { value: 'eq' } });
   await fireEvent.click(screen.getByRole('button', { name: 'Search compositions' }));
   await waitFor(() => expect(API.getCompRankings).toHaveBeenCalledTimes(2));
   expect(new URLSearchParams(location.search).getAll('role')).toEqual(['heal.eq.0']);
-  await screen.findByRole('button', { name: 'Next page' });
-  await fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
-  await waitFor(() => expect(API.getCompRankings).toHaveBeenCalledTimes(3));
-  expect(vi.mocked(API.getCompRankings).mock.calls.at(-1)?.[4].page).toBe(2);
-  await screen.findByRole('button', { name: 'Next page' });
+  await screen.findByText('No inspected kills match these filters on this page.');
+  expect(screen.queryByRole('button', { name: 'Next page' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Previous page' })).not.toBeInTheDocument();
   await fireEvent.click(screen.getByRole('button', { name: 'Refresh from Warcraft Logs' }));
-  await waitFor(() => expect(API.getCompRankings).toHaveBeenCalledTimes(4));
+  await waitFor(() => expect(API.getCompRankings).toHaveBeenCalledTimes(3));
   expect(vi.mocked(API.getCompRankings).mock.calls.at(-1)?.[4]).toMatchObject({
     refresh: true,
-    page: 2
+    page: 1
   });
 });
 
 it('edits direct spec counts and clears restrictions without treating blank as zero', async () => {
   renderPage();
-  await screen.findByRole('button', { name: 'Next page' });
+  await screen.findByText('Roster & cooldown timelines (1 players)');
   expect(screen.getByLabelText('Holy Paladin comparison')).toBeDisabled();
   await fireEvent.input(screen.getByLabelText('Holy Paladin count'), { target: { value: '2' } });
   expect(screen.getByLabelText('Holy Paladin comparison')).not.toBeDisabled();
@@ -201,7 +230,7 @@ it('edits direct spec counts and clears restrictions without treating blank as z
 
 it('rejects reversed kill-time ranges before requesting upstream', async () => {
   renderPage();
-  await screen.findByRole('button', { name: 'Next page' });
+  await screen.findByText('Roster & cooldown timelines (1 players)');
   await fireEvent.input(screen.getByLabelText('Minimum kill time'), { target: { value: '05:00' } });
   await fireEvent.input(screen.getByLabelText('Maximum kill time'), { target: { value: '04:00' } });
   await fireEvent.click(screen.getByRole('button', { name: 'Search compositions' }));
@@ -211,7 +240,7 @@ it('rejects reversed kill-time ranges before requesting upstream', async () => {
 
 it('masks typed kill times and sends their duration in seconds', async () => {
   renderPage();
-  await screen.findByRole('button', { name: 'Next page' });
+  await screen.findByText('Roster & cooldown timelines (1 players)');
   await fireEvent.input(screen.getByLabelText('Minimum kill time'), { target: { value: '532' } });
   expect(screen.getByLabelText('Minimum kill time')).toHaveValue('5:32');
   await fireEvent.click(screen.getByRole('button', { name: 'Search compositions' }));
@@ -247,7 +276,7 @@ it('cancels stale searches when changing editions and ignores late responses', a
 
 it('restores searches on browser navigation and distinguishes errors from no matches', async () => {
   renderPage();
-  await screen.findByRole('button', { name: 'Next page' });
+  await screen.findByText('Roster & cooldown timelines (1 players)');
   vi.mocked(API.getCompRankings).mockResolvedValueOnce({ ...result, reports: [], page: 2 });
   window.history.replaceState(
     {},
@@ -266,7 +295,6 @@ it('restores searches on browser navigation and distinguishes errors from no mat
 
 it('opens real shared player and boss timelines with the Everything preset', async () => {
   const { container } = renderPage();
-  await screen.findByRole('button', { name: 'Next page' });
   await screen.findByText('Roster & cooldown timelines (1 players)');
   expect(API.getReportTimeline).not.toHaveBeenCalled();
   expect(screen.getByRole('link', { name: /Warcraft Logs/ })).toHaveAttribute(

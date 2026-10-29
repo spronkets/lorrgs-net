@@ -1,5 +1,6 @@
 <script lang="ts">
   import Alert from '../lib/components/Alert.svelte';
+  import Spinner from '../lib/components/Spinner.svelte';
   import { onMount, tick } from 'svelte';
   import * as API from '../lib/api';
   import type { SpecRankingData } from '../lib/models/SpecRankingData';
@@ -259,7 +260,7 @@
           includeOtherPlayers: false
         }
       );
-    } catch (err) {
+    } catch (err: unknown) {
       rankings = null;
       rankingsError = err instanceof Error ? err.message : 'Failed to load rankings.';
       console.error('Failed to load rankings:', err);
@@ -386,7 +387,7 @@
 
   {#if isSelectionCollapsed}
     {#if rankingsLoading}
-      <div class="loading">Loading rankings...</div>
+      <Spinner loadingText="Loading rankings..." />
     {:else if rankingsError}
       <Alert variant="error">{rankingsError}</Alert>
     {:else if rankings}
@@ -676,18 +677,6 @@
     border-color: var(--select-hover-border);
     background: var(--select-hover-bg);
     box-shadow: var(--select-hover-ring);
-  }
-
-  .loading {
-    margin-bottom: var(--space-7);
-  }
-
-  .loading {
-    background: var(--summary-bg);
-    border: 1px dashed var(--panel-border);
-    border-radius: 0.75rem;
-    padding: 1rem;
-    color: var(--summary-value);
   }
 
   @media (max-width: 700px) {

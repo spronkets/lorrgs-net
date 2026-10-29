@@ -11,7 +11,7 @@
 # Live requests require configured WCL credentials and may consume upstream quota.
 #
 # Search: GET /api/rankings/comp/{bossSlug}
-# Required query context: edition, encounterId (> 0).
+# Required query context: edition, encounterId (> 0) or zoneId (> 0) plus the route boss slug.
 # Optional: difficultyId=5 (1-5), page=1 (1-100), refresh=false,
 # repeated role/spec filters, killtime_min=0 and killtime_max=0 (seconds).
 # Kill-time bounds: 0-86400; max=0 is unbounded, otherwise max must be >= min.
@@ -34,6 +34,10 @@ Accept: application/json
 
 ### Minimal search: defaults to difficultyId=5, page=1, refresh=false, no filters
 GET {{host}}/api/rankings/comp/{{bossSlug}}?edition={{edition}}&encounterId={{encounterId}}
+Accept: application/json
+
+### Resolve an encounter missing from static World Data using the selected zone and boss slug
+GET {{host}}/api/rankings/comp/archimonde?edition=anniversary&zoneId=1060&difficultyId=3
 Accept: application/json
 
 ### Every search parameter, including repeated role/spec filters

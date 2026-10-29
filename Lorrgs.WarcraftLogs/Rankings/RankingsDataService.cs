@@ -56,9 +56,6 @@ public sealed class RankingsDataService(
     private static readonly string SpecRankingsQuery =
         GraphQlResourceLoader.Load("Rankings.SpecRankings.graphql");
 
-    private static readonly string EncounterListQuery =
-        GraphQlResourceLoader.Load("Rankings.EncounterList.graphql");
-
     private static readonly string ReportRankingsEnrichmentQueryTemplate =
         GraphQlResourceLoader.Load("Rankings.ReportRankingsEnrichment.graphql");
 
@@ -73,13 +70,25 @@ public sealed class RankingsDataService(
         ranking.BossIconUrl = !string.IsNullOrWhiteSpace(bossIcon)
             ? $"https://wow.zamimg.com/images/wow/icons/medium/{bossIcon}"
             : null;
-        foreach (var report in ranking.Reports.ToArray())
+        var reports = ranking.Reports.ToArray();
+        var reportTasks = reports.Select(PopulateReportAsync).ToArray();
+        await Task.WhenAll(reportTasks);
+        for (var index = 0; index < reports.Length; index++)
+        {
+            if (!await reportTasks[index])
+                ranking.Reports.Remove(reports[index]);
+            else if (reports[index].BossTimeline is { IsComplete: true } reference &&
+                reports[index].Fights.FirstOrDefault() is { } fight)
+                fight.Phases = reference.Phases;
+        }
+
+        async Task<bool> PopulateReportAsync(RankingReport report)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var fight = report.Fights.FirstOrDefault();
             var player = report.Players.FirstOrDefault();
             if (fight is null || fight.FightId <= 0 || player is null ||
-                (player.PlayerId <= 0 && string.IsNullOrWhiteSpace(player.Name))) continue;
+                (player.PlayerId <= 0 && string.IsNullOrWhiteSpace(player.Name))) return true;
             try
             {
                 report.Timeline = await timelines.TryLoadCachedAsync(report.ReportId,
@@ -87,13 +96,12 @@ public sealed class RankingsDataService(
                     edition, cancellationToken, player.SpecId);
                 report.BossTimeline = await timelines.LoadBossAsync(report.ReportId, fight.FightId,
                     edition, true, cancellationToken);
-                if (report.BossTimeline is { IsComplete: true } reference)
-                    fight.Phases = reference.Phases;
+                return true;
             }
             catch (Exception ex) when (ex is WarcraftLogsReportPrivateException or WarcraftLogsReportNotFoundException)
             {
                 _logger.LogWarning(ex, "Cached ranking timeline report unavailable report={ReportCode}", report.ReportId);
-                ranking.Reports.Remove(report);
+                return false;
             }
         }
     }
@@ -314,8 +322,10 @@ public sealed class RankingsDataService(
                 ranking.Reports.Add(report);
             }
 
-            await PopulatePlayerPercentilesAsync(ranking.Reports, queryContext, metric, edition, bypassWclCache, cancellationToken);
-            await EnrichPlayerFactionsAsync(ranking.Reports, edition, bypassWclCache, cancellationToken);
+            var factionReports = ranking.Reports.ToList();
+            await Task.WhenAll(
+                PopulatePlayerPercentilesAsync(ranking.Reports, queryContext, metric, edition, bypassWclCache, cancellationToken),
+                EnrichPlayerFactionsAsync(factionReports, edition, bypassWclCache, cancellationToken));
 
             return ranking;
         }
@@ -352,16 +362,15 @@ public sealed class RankingsDataService(
         var encounterId = queryContext.EncounterId;
         if (encounterId <= 0)
         {
-            var encounterList = await _warcraftLogsClient.QueryGraphQLAsync<WclSpecRankingsResponse>(
-                EncounterListQuery, new { zoneId = queryContext.ZoneId }, edition, bypassWclCache, cancellationToken);
-            var encounters = encounterList.WorldData?.Zone?.Encounters;
-            if (encounters is null || !TryFindEncounter(encounters, queryContext, out var selectedEncounter))
+            var resolvedId = await EncounterResolver.ResolveAsync(_warcraftLogsClient,
+                queryContext.ZoneId, queryContext.BossSlug, edition, bypassWclCache, cancellationToken);
+            if (resolvedId is null)
             {
                 _logger.LogWarning("Encounter {BossSlug} was not returned for zone {ZoneId}",
                     queryContext.BossSlug, queryContext.ZoneId);
                 return (null, null);
             }
-            encounterId = selectedEncounter.Id;
+            encounterId = resolvedId.Value;
         }
 
         var variables = new
@@ -452,14 +461,18 @@ public sealed class RankingsDataService(
                 $"rankings(fightIDs: [{fightIds}], playerMetric: $playerMetric) }}";
         }
 
-        for (var offset = 0; offset < unresolvedReports.Count; offset += chunkSize)
+        var removedReports = new System.Collections.Concurrent.ConcurrentBag<RankingReport>();
+        await Task.WhenAll(unresolvedReports.Chunk(chunkSize)
+            .Select((chunk, index) => PopulateChunkAsync(chunk, index * chunkSize)));
+        foreach (var report in removedReports) reports.Remove(report);
+
+        async Task PopulateChunkAsync(IGrouping<string, RankingReport>[] chunk, int offset)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var chunk = unresolvedReports.Skip(offset).Take(chunkSize).ToList();
             var aliasToReport = new Dictionary<string, IGrouping<string, RankingReport>>(StringComparer.OrdinalIgnoreCase);
             var reportsBlock = new StringBuilder();
 
-            for (var i = 0; i < chunk.Count; i++)
+            for (var i = 0; i < chunk.Length; i++)
             {
                 var report = chunk[i];
                 var alias = $"r{i}";
@@ -500,15 +513,15 @@ public sealed class RankingsDataService(
                     foreach (var alias in ex.InaccessibleReportAliases)
                     {
                         _logger.LogWarning("Ranking enrichment report unavailable report={ReportCode}", aliasToReport[alias].Key);
-                        foreach (var report in aliasToReport[alias]) reports.Remove(report);
+                        foreach (var report in aliasToReport[alias]) removedReports.Add(report);
                     }
                     response = partialData;
                 }
                 else
                 {
                     // Without usable paths or partial data, isolate only this failed batch.
-                    var recoveredReports = new Dictionary<string, JsonElement>();
-                    foreach (var entry in aliasToReport)
+                    var recoveredReports = new System.Collections.Concurrent.ConcurrentDictionary<string, JsonElement>();
+                    await Task.WhenAll(aliasToReport.Select(async entry =>
                     {
                         var singleQuery = ReportRankingsEnrichmentQueryTemplate.Replace(
                             "__REPORTS_BLOCK__", ReportSelection(entry.Key, entry.Value));
@@ -527,9 +540,9 @@ public sealed class RankingsDataService(
                             singleError is WarcraftLogsReportPrivateException or WarcraftLogsReportNotFoundException)
                         {
                             _logger.LogWarning(singleError, "Ranking enrichment report unavailable report={ReportCode}", entry.Value.Key);
-                            foreach (var report in entry.Value) reports.Remove(report);
+                            foreach (var report in entry.Value) removedReports.Add(report);
                         }
-                    }
+                    }));
                     response = JsonSerializer.SerializeToElement(new { reportData = recoveredReports });
                 }
             }
@@ -541,7 +554,7 @@ public sealed class RankingsDataService(
             {
                 _logger.LogError(ex,
                     "Failed to enrich report percentiles for {SpecSlug}/{BossSlug} edition={Edition} metric={Metric} batchOffset={BatchOffset} batchCount={BatchCount}",
-                    queryContext.SpecSlug, queryContext.BossSlug, edition, metric, offset, chunk.Count);
+                    queryContext.SpecSlug, queryContext.BossSlug, edition, metric, offset, chunk.Length);
                 throw;
             }
 
@@ -550,15 +563,15 @@ public sealed class RankingsDataService(
             {
                 _logger.LogWarning(
                     "WarcraftLogs percentile enrichment returned no reportData for {SpecSlug}/{BossSlug} edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}",
-                    queryContext.SpecSlug, queryContext.BossSlug, edition, offset, chunk.Count);
-                continue;
+                    queryContext.SpecSlug, queryContext.BossSlug, edition, offset, chunk.Length);
+                return;
             }
 
             foreach (var entry in aliasToReport)
             {
                 if (!reportData.TryGetProperty(entry.Key, out var reportElement) || reportElement.ValueKind != JsonValueKind.Object)
                 {
-                    foreach (var report in entry.Value) reports.Remove(report);
+                    foreach (var report in entry.Value) removedReports.Add(report);
                     continue;
                 }
 
@@ -870,14 +883,16 @@ public sealed class RankingsDataService(
 
         const int chunkSize = 20;
 
-        for (var offset = 0; offset < lookupRequests.Count; offset += chunkSize)
+        await Task.WhenAll(lookupRequests.Chunk(chunkSize)
+            .Select((chunk, index) => PopulateChunkAsync(chunk, index * chunkSize)));
+
+        async Task PopulateChunkAsync(CharacterLookupRequest[] chunk, int offset)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var chunk = lookupRequests.Skip(offset).Take(chunkSize).ToList();
             var aliasToKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var charactersBlock = new StringBuilder();
 
-            for (var i = 0; i < chunk.Count; i++)
+            for (var i = 0; i < chunk.Length; i++)
             {
                 var item = chunk[i];
                 var alias = $"c{i}";
@@ -911,7 +926,7 @@ public sealed class RankingsDataService(
             {
                 _logger.LogError(ex,
                     "Failed to enrich ranking factions from WarcraftLogs characterData edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}",
-                    edition, offset, chunk.Count);
+                    edition, offset, chunk.Length);
                 throw;
             }
 
@@ -919,8 +934,8 @@ public sealed class RankingsDataService(
             {
                 _logger.LogWarning(
                     "WarcraftLogs faction enrichment returned no characterData edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}",
-                    edition, offset, chunk.Count);
-                continue;
+                    edition, offset, chunk.Length);
+                return;
             }
 
             foreach (var alias in aliasToKey.Keys)
@@ -1462,67 +1477,6 @@ public sealed class RankingsDataService(
 
 
 
-
-    private static bool TryFindEncounter(IReadOnlyList<WclEncounterNode> encounters, RankingQueryContext queryContext, out WclEncounterNode encounter)
-    {
-        if (queryContext.EncounterId > 0)
-        {
-            encounter = encounters.FirstOrDefault(encounterElem => encounterElem.Id == queryContext.EncounterId)!;
-            if (encounter != null)
-            {
-                return true;
-            }
-        }
-
-        var targetSlug = NormalizeBossSlugForLookup(queryContext.BossSlug);
-        if (string.IsNullOrWhiteSpace(targetSlug))
-        {
-            encounter = null!;
-            return false;
-        }
-
-        encounter = encounters.FirstOrDefault(encounterElem =>
-            string.Equals(
-                NormalizeBossSlugForLookup(SlugifyEncounterName(encounterElem.Name)),
-                targetSlug,
-                StringComparison.OrdinalIgnoreCase))!;
-
-        return encounter != null;
-    }
-
-    private static string SlugifyEncounterName(string? value)
-    {
-        var raw = value ?? string.Empty;
-        raw = raw.Replace("'", string.Empty).Replace("’", string.Empty);
-        var chars = raw
-            .ToLowerInvariant()
-            .Select(c => char.IsLetterOrDigit(c) ? c : '-')
-            .ToArray();
-        var slug = new string(chars);
-        while (slug.Contains("--", StringComparison.Ordinal))
-        {
-            slug = slug.Replace("--", "-", StringComparison.Ordinal);
-        }
-
-        return slug.Trim('-');
-    }
-
-    private static string NormalizeBossSlugForLookup(string? value)
-    {
-        var slug = (value ?? string.Empty).Trim().ToLowerInvariant().Trim('-');
-        if (slug.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        var lastDashIndex = slug.LastIndexOf('-');
-        if (lastDashIndex > 0 && int.TryParse(slug[(lastDashIndex + 1)..], out _))
-        {
-            return slug[..lastDashIndex];
-        }
-
-        return slug;
-    }
 
     public static string? NormalizeMetric(string metric)
     {

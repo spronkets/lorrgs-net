@@ -4,6 +4,7 @@
   import type { RankingReport } from '../models/RankingReport';
   import type { WorldDataSnapshot } from '../models/WorldDataSnapshot';
   import RankingsTimeline from './RankingsTimeline.svelte';
+  import Spinner from './Spinner.svelte';
   import { getBlizzardClassColor } from '../classColors';
   import { timelineTime } from '../timelineUtils';
   import { getRankingReportLink, getTopPercentLabel } from '../rankingUtils';
@@ -32,8 +33,11 @@
     untrack(() => edition),
     untrack(() => refresh)
   );
+  let initialLoading = $state(true);
   onMount(() => {
-    void loader.start(rankings.reports);
+    void loader.start(rankings.reports).then(() => {
+      initialLoading = false;
+    });
     return () => loader.dispose();
   });
   const expanded = new SvelteSet<string>();
@@ -64,15 +68,6 @@
   const pendingCount = $derived(
     rankings.reports.filter((report) => durationMatches(report) && !loader.loaded.has(key(report)))
       .length
-  );
-  function executionRank(report: RankingReport) {
-    const rank = (loader.loaded.get(key(report)) ?? report).fights?.[0]?.execution?.rank;
-    return typeof rank === 'number' && Number.isFinite(rank) && rank > 0
-      ? rank
-      : Number.POSITIVE_INFINITY;
-  }
-  const sortedReports = $derived(
-    [...rankings.reports].sort((left, right) => executionRank(left) - executionRank(right))
   );
   function rosterReports(report: RankingReport, roleFilter: string) {
     const roleOrder = ['tank', 'heal', 'mdps', 'rdps'];
@@ -113,154 +108,162 @@
   }
 </script>
 
-<div class="comp-results">
-  {#if loader.stopped}
-    <p role="alert">
-      Detail loading paused after an error. Retry that row or load another kill when ready.
-    </p>
-  {/if}
-  {#if !matches.length && !pendingCount}<p>
-      No inspected kills match these filters on this page.
-    </p>{/if}
-  {#each sortedReports as summary (key(summary))}
-    {@const report = loader.loaded.get(key(summary)) ?? summary}
-    {@const fight = report.fights?.[0]}
-    {#if durationMatches(summary) && compositionMatches(report)}
-      <article>
-        <div class="heading">
-          <h3>
-            {Number.isFinite(executionRank(summary))
-              ? `#${executionRank(summary)}`
-              : 'Rank unavailable'}
-            {report.title}
-            {#if fight?.execution?.rankPercent != null}
-              ({getTopPercentLabel(fight.execution.rankPercent)})
-            {/if}
-          </h3>
-          <a
-            href={getRankingReportLink({ ...report, players: [] }, edition)}
-            target="_blank"
-            rel="noopener noreferrer">Warcraft Logs ↗</a
-          >
-        </div>
-        {#if report.guildName || summary.guildName || report.serverName || summary.serverName}
-          <p class="raid-identity">
-            {[
-              report.guildName ?? summary.guildName,
-              [
-                report.serverName ?? summary.serverName,
-                (report.serverRegion ?? summary.serverRegion)?.toUpperCase()
+<div class="comp-results" aria-busy={initialLoading}>
+  {#if initialLoading}
+    <Spinner
+      loadingText={`Loading raid compositions and cooldown timelines… ${loader.loaded.size} of ${Math.min(3, rankings.reports.length)} reports ready.`}
+    />
+  {:else}
+    {#if loader.stopped}
+      <p role="alert">
+        Some report details could not be loaded. Retry those rows or load another kill when ready.
+      </p>
+    {/if}
+    {#if !matches.length && !pendingCount}<p>
+        No inspected kills match these filters on this page.
+      </p>{/if}
+    {#each rankings.reports as summary, index (key(summary))}
+      {@const report = loader.loaded.get(key(summary)) ?? summary}
+      {@const fight = report.fights?.[0]}
+      {#if durationMatches(summary) && compositionMatches(report)}
+        <article>
+          <div class="heading">
+            <h3>
+              #{(rankings.page - 1) * 50 + index + 1}
+              {report.title}
+              {#if fight?.execution?.rankPercent != null}
+                ({getTopPercentLabel(fight.execution.rankPercent)})
+              {/if}
+            </h3>
+            <a
+              href={getRankingReportLink({ ...report, players: [] }, edition)}
+              target="_blank"
+              rel="noopener noreferrer">Warcraft Logs ↗</a
+            >
+          </div>
+          {#if report.guildName || summary.guildName || report.serverName || summary.serverName}
+            <p class="raid-identity">
+              {[
+                report.guildName ?? summary.guildName,
+                [
+                  report.serverName ?? summary.serverName,
+                  (report.serverRegion ?? summary.serverRegion)?.toUpperCase()
+                ]
+                  .filter(Boolean)
+                  .join(' ')
               ]
                 .filter(Boolean)
-                .join(' ')
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-        {/if}
-        <div class="stats">
-          {#each [{ label: 'Speed', ranking: fight?.speed }] as metric (metric.label)}
-            <span
-              title={metric.ranking?.totalParses != null
-                ? `${metric.label} ranking out of ${metric.ranking.totalParses.toLocaleString()} ranked kills`
-                : undefined}
-            >
-              <small>{metric.label}</small>
-              <strong>
-                {metric.ranking?.rank != null ? `#${metric.ranking.rank}` : 'Unavailable'}
-                {#if metric.ranking?.rankPercent != null}
-                  ({getTopPercentLabel(metric.ranking.rankPercent)})
-                {/if}
-              </strong>
-            </span>
-          {/each}
-          <span><small>Kill time</small><strong>{timelineTime(report.duration)}</strong></span>
-          <span><small>Deaths</small><strong>{fight?.deaths ?? 0}</strong></span>
-          <span
-            ><small>Damage taken</small><strong>{(fight?.damageTaken ?? 0).toLocaleString()}</strong
-            ></span
-          >
-          <span
-            ><small>Logged</small><time datetime={report.startTime}
-              >{new Date(report.startTime).toLocaleDateString()}</time
-            ></span
-          >
-        </div>
-        {#if !loader.loaded.has(key(summary))}
-          <p>Composition pending · roster not inspected</p>
-          {#if loader.errors.has(key(summary))}<p role="alert">
-              {loader.errors.get(key(summary))}
-            </p>{/if}
-          <button
-            type="button"
-            class="load-details"
-            disabled={Boolean(loader.loadingKey)}
-            onclick={() => loader.load(summary)}
-          >
-            {loader.loadingKey === key(summary)
-              ? 'Loading details…'
-              : loader.errors.has(key(summary))
-                ? 'Retry kill details'
-                : 'Load kill details'}
-          </button>
-        {:else}
-          <h4>Raid composition</h4>
-          <div class="composition" aria-label="Composition">
-            {#each Object.entries(fight?.composition?.roles ?? {}) as [code, count] (code)}
+                .join(' · ')}
+            </p>
+          {/if}
+          <div class="stats">
+            {#each [{ label: 'Speed', ranking: fight?.speed }] as metric (metric.label)}
               <span
-                >{worldData.roles?.find((role) => role.code === code)?.name ?? code}: {count}</span
+                title={metric.ranking?.totalParses != null
+                  ? `${metric.label} ranking out of ${metric.ranking.totalParses.toLocaleString()} ranked kills`
+                  : undefined}
               >
+                <small>{metric.label}</small>
+                <strong>
+                  {metric.ranking?.rank != null ? `#${metric.ranking.rank}` : 'Unavailable'}
+                  {#if metric.ranking?.rankPercent != null}
+                    ({getTopPercentLabel(metric.ranking.rankPercent)})
+                  {/if}
+                </strong>
+              </span>
             {/each}
+            <span><small>Kill time</small><strong>{timelineTime(report.duration)}</strong></span>
+            <span><small>Deaths</small><strong>{fight?.deaths ?? 0}</strong></span>
+            <span
+              ><small>Damage taken</small><strong
+                >{(fight?.damageTaken ?? 0).toLocaleString()}</strong
+              ></span
+            >
+            <span
+              ><small>Logged</small><time datetime={report.startTime}
+                >{new Date(report.startTime).toLocaleDateString()}</time
+              ></span
+            >
           </div>
-          <div class="composition specs">
-            {#each Object.entries(fight?.composition?.specs ?? {}) as [slug, count] (slug)}
-              <span style={`border-color: ${color(slug)}`}
-                >{#if specIcon(slug)}<img src={specIcon(slug)} alt="" />{/if}{worldData.specs?.find(
-                  (spec) => spec.fullNameSlug === slug
-                )?.fullName ?? slug} ×{count}</span
-              >
-            {/each}
-          </div>
-          <details
-            ontoggle={(event) => {
-              if (event.currentTarget.open) expanded.add(key(report));
-              else expanded.delete(key(report));
-            }}
-          >
-            <summary>Roster & cooldown timelines ({report.players?.length ?? 0} players)</summary>
-            {#if expanded.has(key(report))}
-              <div class="roster-content">
-                <div class="roster-filters" role="group" aria-label="Roster roles">
-                  <button
-                    type="button"
-                    aria-pressed={!selectedRole}
-                    onclick={() => (selectedRole = '')}>All players</button
-                  >
-                  {#each worldData.roles ?? [] as role (role.code)}
+          {#if !loader.loaded.has(key(summary))}
+            <p>Composition pending · roster not inspected</p>
+            {#if loader.errors.has(key(summary))}<p role="alert">
+                {loader.errors.get(key(summary))}
+              </p>{/if}
+            <button
+              type="button"
+              class="load-details"
+              disabled={loader.loadingKeys.has(key(summary))}
+              onclick={() => loader.load(summary)}
+            >
+              {#if loader.loadingKeys.has(key(summary))}<Spinner inline />{/if}
+              {loader.loadingKeys.has(key(summary))
+                ? 'Loading details…'
+                : loader.errors.has(key(summary))
+                  ? 'Retry kill details'
+                  : 'Load kill details'}
+            </button>
+          {:else}
+            <h4>Raid composition</h4>
+            <div class="composition" aria-label="Composition">
+              {#each Object.entries(fight?.composition?.roles ?? {}) as [code, count] (code)}
+                <span
+                  >{worldData.roles?.find((role) => role.code === code)?.name ?? code}: {count}</span
+                >
+              {/each}
+            </div>
+            <div class="composition specs">
+              {#each Object.entries(fight?.composition?.specs ?? {}) as [slug, count] (slug)}
+                <span style={`border-color: ${color(slug)}`}
+                  >{#if specIcon(slug)}<img
+                      src={specIcon(slug)}
+                      alt=""
+                    />{/if}{worldData.specs?.find((spec) => spec.fullNameSlug === slug)?.fullName ??
+                    slug} ×{count}</span
+                >
+              {/each}
+            </div>
+            <details
+              ontoggle={(event) => {
+                if (event.currentTarget.open) expanded.add(key(report));
+                else expanded.delete(key(report));
+              }}
+            >
+              <summary>Roster & cooldown timelines ({report.players?.length ?? 0} players)</summary>
+              {#if expanded.has(key(report))}
+                <div class="roster-content">
+                  <div class="roster-filters" role="group" aria-label="Roster roles">
                     <button
                       type="button"
-                      aria-pressed={selectedRole === role.code}
-                      onclick={() => (selectedRole = role.code)}>{role.name}</button
+                      aria-pressed={!selectedRole}
+                      onclick={() => (selectedRole = '')}>All players</button
                     >
-                  {/each}
+                    {#each worldData.roles ?? [] as role (role.code)}
+                      <button
+                        type="button"
+                        aria-pressed={selectedRole === role.code}
+                        onclick={() => (selectedRole = role.code)}>{role.name}</button
+                      >
+                    {/each}
+                  </div>
+                  {#key `${edition}:${key(report)}:${rankings.updated}`}
+                    <RankingsTimeline
+                      reports={rosterReports(report, selectedRole)}
+                      {edition}
+                      bossSlug={rankings.bossSlug}
+                      difficulty={rankings.difficulty}
+                      compositionMode
+                      {bossIconName}
+                    />
+                  {/key}
                 </div>
-                {#key `${edition}:${key(report)}:${rankings.updated}`}
-                  <RankingsTimeline
-                    reports={rosterReports(report, selectedRole)}
-                    {edition}
-                    bossSlug={rankings.bossSlug}
-                    difficulty={rankings.difficulty}
-                    compositionMode
-                    {bossIconName}
-                  />
-                {/key}
-              </div>
-            {/if}
-          </details>
-        {/if}
-      </article>
-    {/if}
-  {/each}
+              {/if}
+            </details>
+          {/if}
+        </article>
+      {/if}
+    {/each}
+  {/if}
 </div>
 
 <style>

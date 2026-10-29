@@ -2,6 +2,7 @@
   import * as WorldDataApi from '../lib/worldDataApi';
 
   import Alert from '../lib/components/Alert.svelte';
+  import Spinner from '../lib/components/Spinner.svelte';
   import { onMount } from 'svelte';
   import * as API from '../lib/api';
 
@@ -192,7 +193,7 @@
 
       selectedFightId = fights.length ? String(fights[0].id) : '';
       selectedSourceId = players.length ? String(players[0].id) : '';
-    } catch (err) {
+    } catch (err: unknown) {
       error = err instanceof Error ? err.message : 'Failed to lookup report';
       lookup = null;
     } finally {
@@ -225,7 +226,7 @@
         eventLimit: 5000
       });
       await resolveSpellNamesFromAnalysis();
-    } catch (err) {
+    } catch (err: unknown) {
       error = err instanceof Error ? err.message : 'Failed to analyze rotation';
       analysis = null;
       resolvedSpellNames = {};
@@ -254,6 +255,7 @@
       <input bind:value={reportCode} placeholder="e.g. abcDEF123xyz" />
     </label>
     <button on:click={runLookup} disabled={loadingLookup}>
+      {#if loadingLookup}<Spinner inline />{/if}
       {loadingLookup ? 'Looking up...' : 'Lookup Report'}
     </button>
   </div>
@@ -289,6 +291,7 @@
       </label>
 
       <button on:click={runAnalysis} disabled={loadingAnalysis}>
+        {#if loadingAnalysis}<Spinner inline />{/if}
         {loadingAnalysis ? 'Analyzing...' : 'Analyze Rotation'}
       </button>
     </div>

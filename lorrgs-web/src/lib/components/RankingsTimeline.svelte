@@ -1,5 +1,6 @@
 <script lang="ts">
   import Alert from './Alert.svelte';
+  import Spinner from './Spinner.svelte';
   import { onMount, untrack } from 'svelte';
   import Toast from './Toast.svelte';
   import CopyNoteDialog from './CopyNoteDialog.svelte';
@@ -232,6 +233,7 @@
       disabled={loader.batchLoading || pending.length === 0}
       onclick={() => loader.loadNext()}
     >
+      {#if loader.batchLoading}<Spinner inline />{/if}
       {loader.batchLoading
         ? 'Loading timelines…'
         : loader.stopped
@@ -255,8 +257,8 @@
   />
   {#if loader.stopped}
     <Alert variant="warning">
-      Timeline loading is paused. Remaining reports haven't been requested. Use Retry or Resume
-      timeline loading when you're ready.
+      Further automatic timeline batches are paused. Other in-flight requests can finish. Use Retry
+      or Resume timeline loading when you're ready.
     </Alert>
   {/if}
   {#if clipboardNotification}
@@ -375,8 +377,7 @@
                 {showBuffs}
                 {showDeaths}
                 {separateSpells}
-                loading={loader.loadingKey === timelineKey(report)}
-                batchLoading={loader.batchLoading}
+                loading={loader.loadingKeys.has(timelineKey(report))}
                 error={loader.errors.get(timelineKey(report))}
                 bind:inspected
                 bind:magnifier

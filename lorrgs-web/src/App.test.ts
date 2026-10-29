@@ -43,7 +43,7 @@ describe('App version mapping', () => {
   it('does not replace the current edition data with an older in-flight response', async () => {
     mockWorldData();
     history.replaceState({}, '', '/?edition=Anniversary');
-    let resolveOlder: (value: unknown[]) => void = () => {};
+    let resolveOlder: (value: Awaited<ReturnType<typeof WorldDataApi.getBosses>>) => void = () => {};
     vi.mocked(WorldDataApi.getBosses).mockImplementation((edition) =>
       edition === 'midnight'
         ? new Promise((resolve) => {
@@ -188,6 +188,89 @@ describe('App version mapping', () => {
       screen.queryByRole('heading', { name: 'Compare raid cooldowns' })
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Illidan');
+  });
+
+  it('resolves an unmapped Archimonde selection when switching from spec to composition rankings', async () => {
+    mockWorldData();
+    vi.mocked(API.getRaidCatalog).mockResolvedValue({
+      editions: [],
+      instances: {
+        anniversary: [
+          {
+            zoneId: 1060,
+            slug: 'hyjalsummit',
+            name: 'Hyjal Summit',
+            edition: 'anniversary',
+            phase: 3,
+            public: true,
+            bosses: [{ id: 0, name: 'Archimonde', slug: '', mapped: false }]
+          }
+        ]
+      }
+    });
+    vi.mocked(WorldDataApi.getClasses).mockResolvedValue([
+      { id: 2, name: 'Paladin', nameSlug: 'paladin', color: '#f58cba', maskId: 2 }
+    ]);
+    vi.mocked(WorldDataApi.getRoles).mockResolvedValue([
+      { id: 1, name: 'Damage', nameSlug: 'damage', code: 'dps', color: '#ffffff' }
+    ]);
+    vi.mocked(WorldDataApi.getSpecs).mockResolvedValue([
+      {
+        id: 70,
+        name: 'Retribution',
+        nameSlug: 'retribution',
+        fullName: 'Retribution Paladin',
+        fullNameSlug: 'retribution-paladin',
+        classId: 2,
+        roleId: 1
+      }
+    ]);
+    vi.spyOn(API, 'getSpecRankings').mockResolvedValue({
+      specSlug: 'retribution-paladin',
+      bossSlug: 'archimonde',
+      difficulty: 'normal',
+      metric: 'dps',
+      updated: '',
+      isDirty: false,
+      percentile: null,
+      reports: []
+    });
+    vi.spyOn(API, 'getCompRankings').mockResolvedValue({
+      bossSlug: 'archimonde',
+      difficulty: '3',
+      updated: '',
+      page: 1,
+      totalCount: 0,
+      hasMorePages: false,
+      reports: []
+    });
+    history.replaceState(
+      {},
+      '',
+      '/?page=spec&edition=Anniversary&raid=hyjalsummit&boss=archimonde&spec=retribution-paladin'
+    );
+    render(App);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Change selection' }));
+    expect(screen.getByRole('combobox', { name: 'Raid' })).toHaveValue('hyjalsummit');
+    expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Archimonde');
+    const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+    await fireEvent.click(within(nav).getByRole('button', { name: 'Comp Rankings' }));
+    expect(screen.getByRole('combobox', { name: 'Raid' })).toHaveValue('hyjalsummit');
+    expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Archimonde');
+    await fireEvent.click(screen.getByRole('button', { name: 'Search compositions' }));
+    await waitFor(() =>
+      expect(API.getCompRankings).toHaveBeenCalledWith(
+        'archimonde',
+        [],
+        [],
+        'anniversary',
+        expect.objectContaining({ encounterId: 0, zoneId: 1060 }),
+        expect.any(AbortSignal)
+      )
+    );
+    expect(
+      screen.queryByText('Select an edition, raid, and boss before searching.')
+    ).not.toBeInTheDocument();
   });
 
   it('requires an encounter on the launcher but keeps toolbar ranking links available', async () => {

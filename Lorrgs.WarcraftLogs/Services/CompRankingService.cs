@@ -15,6 +15,18 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
 
     public async Task<CompRankingData?> LoadAsync(CompRankingSearch search, CancellationToken cancellationToken)
     {
+        if (search.EncounterId <= 0)
+        {
+            var encounterId = await EncounterResolver.ResolveAsync(client, search.ZoneId,
+                search.BossSlug, search.Edition, search.Refresh, cancellationToken);
+            if (encounterId is null)
+            {
+                logger.LogWarning("Encounter {BossSlug} was not returned for zone {ZoneId}",
+                    search.BossSlug, search.ZoneId);
+                return null;
+            }
+            search = search with { EncounterId = encounterId.Value };
+        }
         var data = await client.QueryGraphQLAsync(RankingsQuery,
             new { encounterId = search.EncounterId, difficulty = search.Difficulty, page = search.Page },
             search.Edition, search.Refresh, cancellationToken);
@@ -30,8 +42,7 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
             TotalCount = entries.GetArrayLength()
         };
         var seen = new HashSet<(string, int)>();
-        foreach (var entry in entries.EnumerateArray().OrderBy(entry => Number(entry, "deaths"))
-            .ThenBy(entry => Number(entry, "damageTaken")).ThenBy(entry => Number(entry, "duration")))
+        foreach (var entry in entries.EnumerateArray())
         {
             cancellationToken.ThrowIfCancellationRequested();
             var duration = (int)Number(entry, "duration");
@@ -87,7 +98,6 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
             throw new WarcraftLogsReportNotFoundException("Warcraft Logs fight not found.");
         var players = ParseRoster(metadata.GetProperty("table"));
         var characterIds = ApplyParsePercentiles(players, metadata, fightId);
-        await PopulateGuildsAsync(players, characterIds, edition, refresh, cancellationToken);
         if (players.Count == 0)
             throw new InvalidDataException("Warcraft Logs returned a fight without a player roster.");
         var start = Number(fightData, "startTime");
@@ -115,7 +125,9 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
                 ApplyRaidIdentity(report, entry);
         }
         ReportTimelineService.ApplyFightMetadata(report, metadata.GetProperty("fights"));
-        await timelines.PopulateRosterTimelinesAsync(report, edition, refresh, cancellationToken);
+        await Task.WhenAll(
+            PopulateGuildsAsync(players, characterIds, edition, refresh, cancellationToken),
+            timelines.PopulateRosterTimelinesAsync(report, edition, refresh, cancellationToken));
         return report;
     }
 
@@ -239,7 +251,7 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
     private async Task PopulateGuildsAsync(List<RankingPlayer> players, Dictionary<int, int> characterIds,
         string edition, bool refresh, CancellationToken cancellationToken)
     {
-        foreach (var chunk in characterIds.Values.Distinct().Order().Chunk(20))
+        await Task.WhenAll(characterIds.Values.Distinct().Order().Chunk(20).Select(async chunk =>
         {
             var fields = chunk.Select(id => $"c{id}: character(id: {id}) {{ guilds {{ name }} }}");
             var query = $"query CompPlayerGuilds {{ characterData {{ {string.Join(" ", fields)} }} }}";
@@ -258,7 +270,7 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
                     continue;
                 player.GuildName = Text(guilds[0], "name");
             }
-        }
+        }));
     }
 
     private CompRankingComposition BuildComposition(IEnumerable<RankingPlayer> players)

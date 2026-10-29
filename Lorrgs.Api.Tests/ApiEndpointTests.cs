@@ -199,6 +199,26 @@ public sealed class ApiEndpointTests(ApiEndpointFixture fixture) : IClassFixture
     }
 
     [Fact]
+    public async Task CompositionSearchResolvesUnmappedBossFromZoneOverHttp()
+    {
+        await using var host = new ApiEndpointFixture
+        {
+            Upstream = new QueueHandler(
+                """{"data":{"worldData":{"zone":{"encounters":[{"id":12345,"name":"Archimonde"}]}}}}""",
+                """{"data":{"worldData":{"encounter":{"name":"Archimonde","fightRankings":{"hasMorePages":false,"rankings":[]}}}}}""")
+        };
+        await host.InitializeAsync();
+        using var response = await host.Client.GetAsync(
+            "/api/rankings/comp/archimonde?edition=Anniversary&zoneId=1060&difficultyId=3");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("archimonde", data.GetProperty("bossSlug").GetString());
+        Assert.Equal(2, host.Upstream.GraphQlRequests);
+        Assert.Equal(1060, host.Upstream.Requests[0].GetProperty("variables").GetProperty("zoneId").GetInt32());
+        Assert.Equal(12345, host.Upstream.Requests[1].GetProperty("variables").GetProperty("encounterId").GetInt32());
+    }
+
+    [Fact]
     public async Task CompositionRoutesBindRepeatedFiltersAliasesAndDetailParameters()
     {
         var service = new CompositionService();

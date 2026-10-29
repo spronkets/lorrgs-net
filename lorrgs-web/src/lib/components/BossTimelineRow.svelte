@@ -1,5 +1,6 @@
 <script lang="ts">
   import Alert from './Alert.svelte';
+  import Spinner from './Spinner.svelte';
   import { untrack } from 'svelte';
   import { timelineErrorSummary } from '../timelineError';
   import TimelinePhases from './TimelinePhases.svelte';
@@ -54,7 +55,7 @@
             onloaded?.(result);
           }
         })
-        .catch((failure) => {
+        .catch((failure: unknown) => {
           if (controller.signal.aborted) return;
           error = failure instanceof Error ? failure.message : 'Unable to load boss timeline.';
           console.error('Boss reference timeline failed', {
@@ -87,7 +88,7 @@
       <span class="gridline" style={`left: ${(tick / axisDuration) * 100}%`}></span>
     {/each}
     {#if loading}
-      <span class="message" role="status">Loading boss events…</span>
+      <span class="message" role="status"><Spinner inline />Loading boss events…</span>
     {:else if error}
       <div class="message">
         <Alert variant="error" compact>

@@ -8,6 +8,18 @@ namespace Lorrgs.Api.Tests;
 public sealed class RaidCatalogHandlerTests
 {
     [Fact]
+    public async Task CanceledCatalogRequestsPropagateCancellation()
+    {
+        var client = new RaidCatalogClient(NullLogger<RaidCatalogClient>.Instance,
+            Options.Create(new RaidCatalogOptions()));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var handler = new GetCatalogHandler(NullLogger<GetCatalogHandler>.Instance, client);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => handler.Handle(cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.GetCatalogAsync(cancellation.Token));
+    }
+
+    [Fact]
     public async Task GetCatalogReturnsTheConfiguredCatalogFromTheService()
     {
         var client = new RaidCatalogClient(NullLogger<RaidCatalogClient>.Instance,

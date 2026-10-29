@@ -29,12 +29,14 @@ public class WarcraftLogsClient(
     private const int TokenRefreshBufferSeconds = 60;
     private const int GraphQlMaxAttempts = 3;
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> GraphQlCacheKeyLocks = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> TokenCacheKeyLocks = new(StringComparer.Ordinal);
 
     private TimeSpan GraphQlCacheDuration =>
         _options.GraphQlCacheTtl < TimeSpan.FromMinutes(1) ? TimeSpan.FromMinutes(1) : _options.GraphQlCacheTtl;
 
     public async Task<string> GetClientTokenAsync(string authUrl, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var tokenCacheKey = BuildTokenCacheKey(authUrl);
 
         if (_cache.TryGetValue(tokenCacheKey, out object? cachedToken) && cachedToken is string token)
@@ -43,8 +45,19 @@ public class WarcraftLogsClient(
             return token;
         }
 
-        _logger.LogInformation("Requesting new WarcraftLogs OAuth token");
-        return await RequestNewTokenAsync(authUrl, tokenCacheKey, cancellationToken);
+        var tokenLock = TokenCacheKeyLocks.GetOrAdd(tokenCacheKey, static _ => new SemaphoreSlim(1, 1));
+        await tokenLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_cache.TryGetValue(tokenCacheKey, out cachedToken) && cachedToken is string sharedToken)
+                return sharedToken;
+            _logger.LogInformation("Requesting new WarcraftLogs OAuth token");
+            return await RequestNewTokenAsync(authUrl, tokenCacheKey, cancellationToken);
+        }
+        finally
+        {
+            tokenLock.Release();
+        }
     }
 
     private async Task<string> RequestNewTokenAsync(string authUrl, string tokenCacheKey, CancellationToken cancellationToken)
@@ -112,7 +125,7 @@ public class WarcraftLogsClient(
         {
             var cachedDataJson = bypassCache
                 ? null
-                : await TryReadGraphQlCacheAsync(graphQlCacheKey, graphQlCacheDuration);
+                : await TryReadGraphQlCacheAsync(graphQlCacheKey, graphQlCacheDuration, cancellationToken);
             if (!string.IsNullOrWhiteSpace(cachedDataJson))
             {
                 using var cachedDoc = JsonDocument.Parse(cachedDataJson);
@@ -121,7 +134,7 @@ public class WarcraftLogsClient(
 
             cancellationToken.ThrowIfCancellationRequested();
             var data = await ExecuteGraphQlRequestAsync(endpoint, query, variables, cancellationToken);
-            await WriteGraphQlCacheAsync(graphQlCacheKey, data.GetRawText());
+            await WriteGraphQlCacheAsync(graphQlCacheKey, data.GetRawText(), cancellationToken);
             return data;
         }
         finally
@@ -140,7 +153,7 @@ public class WarcraftLogsClient(
         await cacheLock.WaitAsync(cancellationToken);
         try
         {
-            var json = await TryReadGraphQlCacheAsync(key, GraphQlCacheDuration);
+            var json = await TryReadGraphQlCacheAsync(key, GraphQlCacheDuration, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(json)) return null;
             using var document = JsonDocument.Parse(json);
@@ -338,8 +351,10 @@ public class WarcraftLogsClient(
         return Path.Combine(_graphQlCacheDirectory, $"{fileHash}.json");
     }
 
-    private async Task<string?> TryReadGraphQlCacheAsync(string graphQlCacheKey, TimeSpan maxAge)
+    private async Task<string?> TryReadGraphQlCacheAsync(string graphQlCacheKey, TimeSpan maxAge,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var path = BuildGraphQlCacheFilePath(graphQlCacheKey);
         if (!File.Exists(path))
         {
@@ -355,8 +370,9 @@ public class WarcraftLogsClient(
                 return null;
             }
 
-            return await File.ReadAllTextAsync(path);
+            return await File.ReadAllTextAsync(path, cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to read WarcraftLogs GraphQL cache file {Path}", path);
@@ -364,17 +380,30 @@ public class WarcraftLogsClient(
         }
     }
 
-    private async Task WriteGraphQlCacheAsync(string graphQlCacheKey, string payload)
+    private async Task WriteGraphQlCacheAsync(string graphQlCacheKey, string payload,
+        CancellationToken cancellationToken)
     {
         var path = BuildGraphQlCacheFilePath(graphQlCacheKey);
+        var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
 
         try
         {
-            await File.WriteAllTextAsync(path, payload);
+            await File.WriteAllTextAsync(temporaryPath, payload, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporaryPath, path, overwrite: true);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to write WarcraftLogs GraphQL cache file {Path}", path);
+        }
+        finally
+        {
+            try { File.Delete(temporaryPath); }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to remove WarcraftLogs temporary cache file {Path}", temporaryPath);
+            }
         }
     }
 
@@ -383,6 +412,7 @@ public class WarcraftLogsClient(
         var rateLimitCacheKey = $"wcl:rate-limit:{request.RequestUri!.GetLeftPart(UriPartial.Authority)}:{_options.ClientId}";
         for (var attempt = 1; attempt <= GraphQlMaxAttempts; attempt++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (_cache.TryGetValue(rateLimitCacheKey, out DateTimeOffset retryAt) && retryAt > DateTimeOffset.UtcNow)
             {
                 _logger.LogWarning("WarcraftLogs requests paused until {RetryAt} after an upstream rate limit", retryAt);
@@ -392,7 +422,7 @@ public class WarcraftLogsClient(
                     HttpStatusCode.TooManyRequests);
             }
 
-            using var clonedRequest = await CloneHttpRequestAsync(request);
+            using var clonedRequest = await CloneHttpRequestAsync(request, cancellationToken);
             var response = await _httpClient.SendAsync(clonedRequest, cancellationToken);
 
             if (response.IsSuccessStatusCode)
@@ -496,7 +526,8 @@ public class WarcraftLogsClient(
         return delay;
     }
 
-    private static async Task<HttpRequestMessage> CloneHttpRequestAsync(HttpRequestMessage request)
+    private static async Task<HttpRequestMessage> CloneHttpRequestAsync(HttpRequestMessage request,
+        CancellationToken cancellationToken)
     {
         var clone = new HttpRequestMessage(request.Method, request.RequestUri)
         {
@@ -512,7 +543,7 @@ public class WarcraftLogsClient(
         if (request.Content is not null)
         {
             var memory = new MemoryStream();
-            await request.Content.CopyToAsync(memory);
+            await request.Content.CopyToAsync(memory, cancellationToken);
             memory.Position = 0;
 
             var contentClone = new StreamContent(memory);

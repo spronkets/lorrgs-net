@@ -91,7 +91,7 @@
         color: detectPortraitColor(pixels),
         ...portraitArtworkLayout(pixels, canvas.width, canvas.height)
       };
-    } catch (error) {
+    } catch (error: unknown) {
       if (!(error instanceof DOMException) || error.name !== 'SecurityError') throw error;
       console.warn('Unable to detect boss icon colors: image does not allow canvas access', {
         src

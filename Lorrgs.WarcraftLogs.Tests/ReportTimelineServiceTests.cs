@@ -14,6 +14,58 @@ public sealed class ReportTimelineServiceTests : IDisposable
     public void Dispose() => fixture.Dispose();
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PhaseBatchesStartTogetherAndMergeUnavailableReportsSafely(bool cancel)
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requests = 0;
+        using var handler = new CallbackHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/oauth/token")
+                return """{"access_token":"token","expires_in":3600}""";
+            using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+            var variables = document.RootElement.GetProperty("variables");
+            if (Interlocked.Increment(ref requests) == 2) started.TrySetResult();
+            await release.Task.WaitAsync(cancellationToken);
+            var data = new Dictionary<string, object?>();
+            for (var index = 0; variables.TryGetProperty($"code{index}", out var code); index++)
+                data[$"r{index}"] = code.GetString() == "phase20" ? null :
+                    new { fights = new[] { new { id = 1, startTime = 0, endTime = 10000, phaseTransitions = Array.Empty<object>() } } };
+            return JsonSerializer.Serialize(new { data = new { reportData = data } });
+        });
+        var reports = Enumerable.Range(0, 21).Select(index => new RankingReport
+        {
+            ReportId = $"phase{index:D2}", Title = "Concurrent phase test",
+            Fights = [new RankingFight { FightId = 1, Name = "Boss" }]
+        }).ToList();
+        var service = new ReportTimelineService(fixture.CreateClient(handler), NullLogger<ReportTimelineService>.Instance);
+        using var cancellation = new CancellationTokenSource();
+        var task = service.PopulateFightPhasesAsync(reports, "retail", cancellation.Token);
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(task.IsCompleted);
+            if (cancel) cancellation.Cancel();
+        }
+        finally
+        {
+            release.TrySetResult();
+            if (cancel)
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+            else
+                await task;
+        }
+        Assert.Equal(2, requests);
+        if (!cancel)
+        {
+            Assert.Equal(20, reports.Count);
+            Assert.All(reports, report => Assert.NotNull(report.Fights[0].Phases));
+        }
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void NormalizeEventsFiltersActorAndFightAndPreservesMeasuredBuffIntervals(bool complete)

@@ -97,7 +97,7 @@ describe('TimelineLoader', () => {
     }
   });
 
-  it('reprioritizes the automatic queue between sequential requests', async () => {
+  it('starts the top three together, handles replies independently, and reprioritizes the next batch', async () => {
     let resolve!: (timeline: ReportTimeline) => void;
     vi.mocked(getReportTimeline).mockImplementationOnce(
       () =>
@@ -109,15 +109,18 @@ describe('TimelineLoader', () => {
     try {
       loader.setReports(rows.map(({ report }) => report));
       loader.start();
-      await waitFor(() => expect(getReportTimeline).toHaveBeenCalledTimes(1));
+      expect(getReportTimeline).toHaveBeenCalledTimes(3);
+      await waitFor(() => expect(loader.loaded.size).toBe(2));
+      expect(loader.loadingKeys.has(timelineKey(rows[0].report))).toBe(true);
       loader.setReports([rows[4].report, rows[3].report, rows[2].report]);
       resolve(response(rows[0].report));
       await waitFor(() => expect(loader.batchLoading).toBe(false));
       expect(vi.mocked(getReportTimeline).mock.calls.map(([report]) => report.reportId)).toEqual([
         'Report0',
+        'Report1',
+        'Report2',
         'Report4',
-        'Report3',
-        'Report2'
+        'Report3'
       ]);
     } finally {
       loader.dispose();
@@ -132,7 +135,9 @@ describe('TimelineLoader', () => {
       loader.setReports(rows.map(({ report }) => report));
       loader.start();
       await waitFor(() => expect(loader.stopped).toBe(true));
-      expect(getReportTimeline).toHaveBeenCalledTimes(1);
+      expect(getReportTimeline).toHaveBeenCalledTimes(3);
+      await waitFor(() => expect(loader.batchLoading).toBe(false));
+      expect(loader.loaded.size).toBe(2);
       expect(loader.errors.get(timelineKey(rows[0].report))).toBe('Rate limited');
       await loader.loadOne(rows[0].report);
       await waitFor(() => expect(loader.batchLoading).toBe(false));
@@ -145,24 +150,50 @@ describe('TimelineLoader', () => {
     }
   });
 
+  it('loads individual rows without waiting for the active batch and deduplicates in-flight rows', async () => {
+    const pending = new Map<string, (timeline: ReportTimeline) => void>();
+    vi.mocked(getReportTimeline).mockImplementation(
+      (report) => new Promise((resolve) => pending.set(report.reportId, resolve))
+    );
+    const loader = new TimelineLoader(() => 'anniversary');
+    loader.setReports(rows.map(({ report }) => report));
+    loader.start();
+    const manual = loader.loadOne(rows[4].report);
+    await loader.loadOne(rows[0].report);
+    expect(getReportTimeline).toHaveBeenCalledTimes(4);
+    expect(loader.loadingKeys.size).toBe(4);
+    pending.get(rows[4].report.reportId)!(response(rows[4].report));
+    await manual;
+    expect(loader.loaded.has(timelineKey(rows[4].report))).toBe(true);
+    expect(loader.batchLoading).toBe(true);
+    expect(loader.loadingKeys.size).toBe(3);
+    loader.dispose();
+    for (let index = 0; index < 3; index++)
+      pending.get(rows[index].report.reportId)!(response(rows[index].report));
+    await waitFor(() => expect(loader.batchLoading).toBe(false));
+    expect(loader.loaded.size).toBe(1);
+  });
+
   it('aborts in-flight work on disposal and never starts another request', async () => {
-    let resolve!: (timeline: ReportTimeline) => void;
-    vi.mocked(getReportTimeline).mockImplementationOnce(
-      () =>
-        new Promise((done) => {
-          resolve = done;
+    vi.mocked(getReportTimeline).mockImplementation(
+      (_report, _edition, signal) =>
+        new Promise((_resolve, reject) => {
+          signal!.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError'))
+          );
         })
     );
     const loader = new TimelineLoader(() => 'Anniversary');
     loader.setReports(rows.map(({ report }) => report));
     loader.start();
-    await waitFor(() => expect(getReportTimeline).toHaveBeenCalledTimes(1));
-    const signal = vi.mocked(getReportTimeline).mock.calls[0][2]!;
+    expect(getReportTimeline).toHaveBeenCalledTimes(3);
     loader.dispose();
-    expect(signal.aborted).toBe(true);
-    resolve(response(rows[0].report));
+    for (const [, , signal] of vi.mocked(getReportTimeline).mock.calls)
+      expect(signal?.aborted).toBe(true);
     await waitFor(() => expect(loader.batchLoading).toBe(false));
+    expect(loader.loadingKeys.size).toBe(0);
+    expect(loader.errors.size).toBe(0);
     expect(loader.loaded.size).toBe(0);
-    expect(getReportTimeline).toHaveBeenCalledTimes(1);
+    expect(getReportTimeline).toHaveBeenCalledTimes(3);
   });
 });

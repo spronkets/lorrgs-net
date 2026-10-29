@@ -3,6 +3,7 @@
   import { maska } from 'maska/svelte';
   import { killTimeMask } from '../lib/killTimeMask';
   import Alert from '../lib/components/Alert.svelte';
+  import Spinner from '../lib/components/Spinner.svelte';
   import EncounterFilters from '../lib/components/EncounterFilters.svelte';
   import RankingPageHeader from '../lib/components/RankingPageHeader.svelte';
   import CompRankingsResults from '../lib/components/CompRankingsResults.svelte';
@@ -178,8 +179,13 @@
     loading = false;
     const minSeconds = minTime ? (parseKillTime(minTime) ?? NaN) / 1000 : 0;
     const maxSeconds = maxTime ? (parseKillTime(maxTime) ?? NaN) / 1000 : 0;
-    if (!boss?.id || !raid || !selectedVersion) {
+    if (!boss || !raid || !selectedVersion) {
       error = 'Select an edition, raid, and boss before searching.';
+      return;
+    }
+    if (!boss.id && !raid.zoneId) {
+      error =
+        'Selected raid boss is missing encounter and zone mappings. Please choose a mapped raid.';
       return;
     }
     if (
@@ -217,7 +223,15 @@
         expressions('role'),
         expressions('spec'),
         getApiEditionSlug(selectedVersion),
-        { encounterId: boss.id, difficultyId, page, minSeconds, maxSeconds, refresh },
+        {
+          encounterId: boss.id ?? 0,
+          zoneId: raid.zoneId,
+          difficultyId,
+          page,
+          minSeconds,
+          maxSeconds,
+          refresh
+        },
         controller.signal
       );
       if (id === requestId) {
@@ -230,7 +244,7 @@
         detailRefresh = refresh;
         rankings = result;
       }
-    } catch (err) {
+    } catch (err: unknown) {
       if (id === requestId && !controller.signal.aborted)
         error = err instanceof Error ? err.message : 'Unable to load composition rankings.';
     } finally {
@@ -401,7 +415,7 @@
       {#if loading}<button type="button" on:click={invalidate}>Cancel</button>{/if}
     </div>
   </form>
-  {#if loading}<p role="status">Loading fight summaries…</p>
+  {#if loading}<Spinner loadingText="Loading fight summaries…" />
   {:else if error}<Alert variant="error">{error}</Alert>
   {:else if rankings}
     {#if !rankings.reports.length}<Alert>No kill summaries on this page.</Alert>{/if}
@@ -415,13 +429,6 @@
         refresh={detailRefresh}
       />
     {/key}
-    <div class="actions pagination">
-      <button disabled={page <= 1} on:click={() => search(false, page - 1)}>Previous page</button>
-      <span>Page {page}</span>
-      <button disabled={!rankings.hasMorePages} on:click={() => search(false, page + 1)}
-        >Next page</button
-      >
-    </div>
   {:else}<Alert>Select a boss and search to view composition rankings.</Alert>{/if}
 </section>
 
@@ -599,11 +606,6 @@
   :global(.theme-dark) button {
     background: #243447;
     color: #e6edf5;
-  }
-  .pagination {
-    justify-content: center;
-    align-items: center;
-    margin: 1rem 0;
   }
   @media (max-width: 600px) {
     .search-fields {

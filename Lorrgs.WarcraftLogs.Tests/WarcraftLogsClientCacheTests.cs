@@ -120,6 +120,51 @@ public sealed class WarcraftLogsClientCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task DistinctQueriesRunConcurrentlyWithOneSharedTokenRequest()
+    {
+        var tokenStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tokenReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var queriesStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var queriesReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tokenCount = 0;
+        var queryCount = 0;
+        using var handler = new CallbackHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/oauth/token")
+            {
+                Interlocked.Increment(ref tokenCount);
+                tokenStarted.TrySetResult();
+                await tokenReady.Task.WaitAsync(cancellationToken);
+                return """{"access_token":"test-token","expires_in":3600}""";
+            }
+            if (Interlocked.Increment(ref queryCount) == 3) queriesStarted.TrySetResult();
+            await queriesReady.Task.WaitAsync(cancellationToken);
+            return """{"data":{"value":42}}""";
+        });
+        var client = fixture.CreateClient(handler);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var tasks = Enumerable.Range(0, 3).Select(index =>
+            client.QueryGraphQLAsync($"query Concurrent{index}", cancellationToken: cancellation.Token)).ToArray();
+        try
+        {
+            await tokenStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(1, Volatile.Read(ref tokenCount));
+            Assert.Equal(0, Volatile.Read(ref queryCount));
+            tokenReady.SetResult();
+            await queriesStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.All(tasks, task => Assert.False(task.IsCompleted));
+        }
+        finally
+        {
+            tokenReady.TrySetResult();
+            queriesReady.TrySetResult();
+            await Task.WhenAll(tasks);
+        }
+        Assert.Equal(1, tokenCount);
+        Assert.Equal(3, queryCount);
+    }
+
+    [Fact]
     public async Task ClearCacheRemovesFilesAndCachedToken()
     {
         using var handler = new QueueHandler("""{"data":{"value":1}}""", """{"data":{"value":2}}""");
@@ -131,6 +176,38 @@ public sealed class WarcraftLogsClientCacheTests : IDisposable
         await client.QueryGraphQLAsync("query Clear");
         Assert.Equal(2, handler.GraphQlRequests);
         Assert.Equal(2, handler.TokenRequests);
+    }
+
+    [Fact]
+    public async Task ParentCancellationCancelsAllConcurrentRequestsWithoutCachingResponses()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var count = 0;
+        var canceled = 0;
+        using var handler = new CallbackHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/oauth/token")
+                return """{"access_token":"token","expires_in":3600}""";
+            if (Interlocked.Increment(ref count) == 3) started.TrySetResult();
+            try { await Task.Delay(Timeout.Infinite, cancellationToken); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                Interlocked.Increment(ref canceled);
+                throw;
+            }
+            throw new InvalidOperationException("Request should have been canceled.");
+        });
+        var client = fixture.CreateClient(handler);
+        using var cancellation = new CancellationTokenSource();
+        var tasks = Enumerable.Range(0, 3).Select(index =>
+            client.QueryGraphQLAsync($"query Cascade{index}", cancellationToken: cancellation.Token)).ToArray();
+        try { await started.Task.WaitAsync(TimeSpan.FromSeconds(5)); }
+        finally { cancellation.Cancel(); }
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.All(tasks, task => Assert.True(task.IsCanceled));
+        Assert.Equal(3, canceled);
+        Assert.Empty(Directory.GetFiles(fixture.CacheDirectory));
     }
 
     [Fact]

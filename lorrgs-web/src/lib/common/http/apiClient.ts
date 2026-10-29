@@ -1,11 +1,11 @@
 import type { ApiOptions } from './ApiOptions';
 import { RATE_LIMIT_MESSAGE } from '../../timelineError';
+import { config } from '../../config';
 
 const API_BASE: string =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE) || '/api';
 const HEALTH_READY_URL: string | undefined =
   typeof import.meta !== 'undefined' ? import.meta.env?.VITE_HEALTH_URL : undefined;
-const API_TIMEOUT_MS = 30000;
 
 export function buildApiUrl(endpoint: string): string {
   return `${API_BASE}${endpoint}`;
@@ -69,7 +69,7 @@ export function normalizeApiPayload(payload: unknown): unknown[] {
   return [];
 }
 
-export function normalizeApiCollection(payload: unknown, fallbackKey = ''): unknown[] {
+export function normalizeApiCollection<T = unknown>(payload: unknown, fallbackKey = ''): T[] {
   if (Array.isArray(payload)) {
     return payload;
   }
@@ -78,11 +78,11 @@ export function normalizeApiCollection(payload: unknown, fallbackKey = ''): unkn
     const record = payload as Record<string, unknown>;
 
     if (fallbackKey && Array.isArray(record[fallbackKey])) {
-      return record[fallbackKey] as unknown[];
+      return record[fallbackKey] as T[];
     }
 
     if (Object.values(record).every((value) => value && typeof value === 'object')) {
-      return Object.values(record);
+      return Object.values(record) as T[];
     }
   }
 
@@ -114,7 +114,8 @@ async function buildApiError(response: Response): Promise<Error> {
         detail = text;
       }
     }
-  } catch {
+  } catch (error: unknown) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error;
     // Fallback to status text below.
   }
 
@@ -122,8 +123,8 @@ async function buildApiError(response: Response): Promise<Error> {
   return new Error(detail ? `${statusSummary} - ${detail}` : statusSummary);
 }
 
-export async function get<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
-  const { timeoutMs = API_TIMEOUT_MS, ...fetchOptions } = options;
+async function request<T>(endpoint: string, options: ApiOptions, body?: string): Promise<T> {
+  const { timeoutMs = config.requestTimeoutMs, ...fetchOptions } = options;
   const url = buildApiUrl(endpoint);
   const controller = new AbortController();
   const cancel = () => controller.abort();
@@ -131,15 +132,20 @@ export async function get<T = unknown>(endpoint: string, options: ApiOptions = {
   if (options.signal?.aborted) controller.abort();
   const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
 
-  let response: Response;
   try {
-    response = await fetch(url, {
+    const response = await fetch(url, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', ...options.headers },
+      body,
       ...fetchOptions,
       signal: controller.signal
     });
-  } catch (error) {
+    if (!response.ok) {
+      throw await buildApiError(response);
+    }
+
+    return (await response.json()) as T;
+  } catch (error: unknown) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       if (options.signal?.aborted) throw error;
       throw new Error(`API Error: request timed out after ${timeoutMs}ms`);
@@ -150,45 +156,19 @@ export async function get<T = unknown>(endpoint: string, options: ApiOptions = {
     clearTimeout(timeoutHandle);
     options.signal?.removeEventListener('abort', cancel);
   }
-
-  if (!response.ok) {
-    throw await buildApiError(response);
-  }
-
-  return response.json() as Promise<T>;
 }
 
-export async function send(
-  endpoint: string,
-  body: unknown,
-  options: ApiOptions = {}
-): Promise<unknown> {
-  const url = buildApiUrl(endpoint);
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+export function get<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
+  return request<T>(endpoint, options);
+}
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: options.method || 'POST',
-      headers: { 'Content-Type': 'application/json', ...options.headers },
-      body: JSON.stringify(body ?? {}),
-      signal: controller.signal,
-      ...options
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error(`API Error: request timed out after ${API_TIMEOUT_MS}ms`);
-    }
-
-    throw error;
-  } finally {
-    clearTimeout(timeoutHandle);
-  }
-
-  if (!response.ok) {
-    throw await buildApiError(response);
-  }
-
-  return response.json();
+export function send(endpoint: string, body: unknown, options: ApiOptions = {}): Promise<unknown> {
+  return request(
+    endpoint,
+    {
+      ...options,
+      method: options.method || 'POST'
+    },
+    JSON.stringify(body ?? {})
+  );
 }

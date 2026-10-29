@@ -37,6 +37,52 @@ public sealed class CompRankingsTests : IDisposable
         Assert.Throws<ArgumentException>(() => CompCountFilter.Parse(expression));
 
     [Fact]
+    public async Task UnmappedArchimondeResolvesFromSelectedZoneAndReusesCachedLookup()
+    {
+        using var handler = new QueueHandler(
+            """{"data":{"worldData":{"zone":{"encounters":[{"id":999,"name":"Other boss"},{"id":12345,"name":"Archimonde"}]}}}}""",
+            Rankings(1).Replace("Illidan", "Archimonde"));
+        var handlers = Handlers(handler);
+        var request = new GetCompRankingRequest("archimonde", "anniversary", DifficultyId: 3, ZoneId: 1060);
+
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var response = await handlers.Ranking.Handle(request);
+            Assert.Equal(200, HttpResultAssertions.Read(response).StatusCode);
+            var ranking = Assert.IsType<CompRankingData>(HttpResultAssertions.Read(response).Value);
+            Assert.Equal("archimonde", ranking.BossSlug);
+            Assert.Equal(12345, Assert.Single(Assert.Single(ranking.Reports).Fights).EncounterId);
+        }
+        Assert.Equal(2, handler.GraphQlRequests);
+        Assert.Equal(1060, handler.Requests[0].GetProperty("variables").GetProperty("zoneId").GetInt32());
+        Assert.Equal(12345, handler.Requests[1].GetProperty("variables").GetProperty("encounterId").GetInt32());
+    }
+
+    [Fact]
+    public async Task MissingEncounterNameReturnsNotFoundWithoutQueryingRankings()
+    {
+        using var handler = new QueueHandler(
+            """{"data":{"worldData":{"zone":{"encounters":[{"id":999,"name":"Other boss"}]}}}}""");
+        var response = await Handlers(handler).Ranking.Handle(
+            new GetCompRankingRequest("archimonde", "anniversary", ZoneId: 1060));
+        Assert.Equal(404, HttpResultAssertions.Read(response).StatusCode);
+        Assert.Equal(1, handler.GraphQlRequests);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(-1, 1060)]
+    [InlineData(0, -1)]
+    public async Task MissingOrNegativeEncounterContextReturnsBadRequest(int encounterId, int zoneId)
+    {
+        using var handler = new QueueHandler();
+        var response = await Handlers(handler).Ranking.Handle(
+            new GetCompRankingRequest("archimonde", "anniversary", encounterId, ZoneId: zoneId));
+        Assert.Equal(400, HttpResultAssertions.Read(response).StatusCode);
+        Assert.Equal(0, handler.GraphQlRequests);
+    }
+
+    [Fact]
     public async Task CompletePageReturnsAll50SummariesWithExactlyOneUpstreamCallEvenWithCompositionFilters()
     {
         using var handler = new QueueHandler(Rankings(Enumerable.Range(1, 50).Reverse().ToArray()));
@@ -54,8 +100,74 @@ public sealed class CompRankingsTests : IDisposable
         });
         Assert.Equal(1, handler.GraphQlRequests);
         Assert.True(result.HasMorePages);
-        Assert.Equal(1, result.Reports[0].Fights[0].FightId);
+        Assert.Equal(Enumerable.Range(1, 50).Reverse(),
+            result.Reports.Select(report => report.Fights[0].FightId));
         Assert.Contains("metric: execution", handler.Requests[0].GetProperty("query").GetString());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DetailRequestsShareHandlerCancellation(bool cancel)
+    {
+        var roster = System.Text.Json.Nodes.JsonNode.Parse(Roster(1))!;
+        roster["data"]!["reportData"]!["report"]!["healingRankings"] =
+            System.Text.Json.Nodes.JsonNode.Parse("""
+                {"data":[{"fightID":1,"roles":{"healers":{"characters":[
+                {"id":123,"name":"Healer","class":"Paladin"}]}}}]}
+                """);
+        var guildStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var timelineStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var guildCanceled = false;
+        using var handler = new CallbackHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/oauth/token")
+                return """{"access_token":"token","expires_in":3600}""";
+            using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+            if (!document.RootElement.GetProperty("query").GetString()!.Contains("CompPlayerGuilds", StringComparison.Ordinal))
+                return roster.ToJsonString();
+            guildStarted.TrySetResult();
+            try { await release.Task.WaitAsync(cancellationToken); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                guildCanceled = true;
+                throw;
+            }
+            return """{"data":{"characterData":{"c123":{"guilds":[{"name":"Raid Guild"}]}}}}""";
+        });
+        var timeline = new RecordingTimeline
+        {
+            Completion = release.Task,
+            OnStart = () => timelineStarted.TrySetResult()
+        };
+        var service = new CompRankingService(fixture.CreateClient(handler), timeline,
+            NullLogger<CompRankingService>.Instance, new WarcraftReferenceData(WorldDataService.Instance));
+        var endpointHandler = new GetDetailsHandler(service, NullLogger<GetDetailsHandler>.Instance);
+        using var cancellation = new CancellationTokenSource();
+        var task = endpointHandler.Handle(new GetDetailsRequest("ReportA", 1, "anniversary"), cancellation.Token);
+        try
+        {
+            await Task.WhenAll(guildStarted.Task, timelineStarted.Task).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(task.IsCompleted);
+            if (cancel)
+            {
+                cancellation.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task.WaitAsync(TimeSpan.FromSeconds(5)));
+                Assert.True(guildCanceled);
+                Assert.Equal(cancellation.Token, timeline.Cancellation);
+                Assert.True(timeline.Cancellation.IsCancellationRequested);
+            }
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
+        if (cancel) return;
+        var report = Assert.IsType<RankingReport>(HttpResultAssertions.Read(await task).Value);
+        var player = Assert.Single(report.Players);
+        Assert.Equal("Raid Guild", player.GuildName);
+        Assert.NotNull(player.Timeline);
     }
 
     [Fact]
@@ -299,12 +411,18 @@ public sealed class CompRankingsTests : IDisposable
     });
     private sealed class RecordingTimeline : IReportTimelineService
     {
-        public Task PopulateRosterTimelinesAsync(RankingReport report, string edition, bool refresh, CancellationToken cancellationToken)
+        public Task Completion { get; init; } = Task.CompletedTask;
+        public Action? OnStart { get; init; }
+        public CancellationToken Cancellation { get; private set; }
+
+        public async Task PopulateRosterTimelinesAsync(RankingReport report, string edition, bool refresh, CancellationToken cancellationToken)
         {
+            Cancellation = cancellationToken;
+            OnStart?.Invoke();
+            await Completion.WaitAsync(cancellationToken);
             foreach (var player in report.Players)
                 player.Timeline = new ReportTimeline(report.ReportId, report.Fights[0].FightId,
                     player.PlayerId, player.Name, report.Duration, true, [], []);
-            return Task.CompletedTask;
         }
         public Task<BossTimeline?> LoadBossAsync(string reportCode, int fightId, string edition, bool cacheOnly, CancellationToken cancellationToken)
         {

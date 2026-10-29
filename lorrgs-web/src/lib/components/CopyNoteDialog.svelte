@@ -64,7 +64,7 @@
     try {
       await navigator.clipboard.writeText(note.text);
       oncopied(timeline.playerName);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Unable to copy raid note', error);
       copyError =
         'Unable to copy note. Select the preview and copy it manually, or check clipboard permissions.';

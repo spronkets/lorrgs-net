@@ -5,7 +5,7 @@ import type { SpecRankingData } from './models/SpecRankingData';
 import type { ReportTimeline } from './models/ReportTimeline';
 import type { BossTimeline } from './models/BossTimeline';
 import type { SpecRankingQueryOptions } from './models/SpecRankingQueryOptions';
-import type { RaidCatalog } from './models/api/RaidCatalog';
+import type { RaidCatalog } from './models/RaidCatalog';
 import type { CompRankingData } from './models/CompRankingData';
 import type { CompRankingQuery } from './models/CompRankingQuery';
 
@@ -175,6 +175,7 @@ export async function getCompRankings(
   if (edition) params.set('edition', edition);
   if (options) {
     params.set('encounterId', String(options.encounterId));
+    if (options.zoneId) params.set('zoneId', String(options.zoneId));
     params.set('difficultyId', String(options.difficultyId));
     params.set('page', String(options.page ?? 1));
     params.set('killtime_min', String(options.minSeconds ?? 0));
@@ -182,8 +183,7 @@ export async function getCompRankings(
     if (options.refresh) params.set('refresh', 'true');
   }
   return get<CompRankingData>(`/rankings/comp/${encodeURIComponent(bossSlug)}?${params}`, {
-    signal,
-    timeoutMs: 120000
+    signal
   });
 }
 

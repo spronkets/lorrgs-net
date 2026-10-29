@@ -42,9 +42,9 @@ stretching each player's fight to the same length.
 - Filters apply to the entire returned ranking page, without client-side pagination.
   Warcraft Logs supports a page argument, not a custom result count; `size` means raid size.
 - Complete cached timelines render immediately. The top three eligible missing
-  timelines then load sequentially. Load another three or individual rows explicitly.
+  timelines load concurrently. Additional timelines can be loaded on demand.
 - Changing filters or sort prioritizes the new top three and reuses loaded rows.
-  Errors pause the queue and offer retry; leaving the workspace cancels pending requests.
+  Failed rows can be retried; leaving the workspace cancels pending requests.
 
 ### Comp Rankings
 
@@ -54,10 +54,9 @@ restore the search automatically.
 
 **Searching and inspecting kills**
 
-- One query retrieves a full upstream page of up to 50 kill summaries, preserving
-  all returned rows and upstream pagination.
-- Only the first three kills are inspected initially. Each remaining row has a
-  **Load kill details** action; there is no bulk "load next three" action.
+- One query retrieves up to 50 kill summaries in upstream ranking order.
+- The first three kills are inspected initially. Use **Load kill details** to
+  inspect remaining rows and retry failed inspections.
 - Role/spec counts support `eq`, `lt`, `gt`, `lte`, and `gte`. All supplied filters
   must match. Blank counts are unrestricted; zero excludes that role/spec.
 - Kill-time fields use masked `m:ss` durations. The API uses seconds, and existing
@@ -65,12 +64,12 @@ restore the search automatically.
 - Duration filters apply immediately. Composition filters apply only to inspected
   rosters; uninspected kills remain visible as **Composition pending**.
 - The initial three kills are not backfilled to find three matches. A page with
-  no inspected matches is not exhaustive: inspect remaining rows or use Next page.
+  no inspected matches is not exhaustive: inspect remaining rows.
 
 **Rankings and rosters**
 
-Loaded rows sort by ascending execution rank, with missing ranks last in their
-original order. Headers show `#<rank> Report name (Top %)`, with speed alongside
+Rows retain upstream ranking order and rank labels when filtered.
+Headers show `#<rank> Report name (Top %)`, with speed alongside
 and total ranked kills in tooltips. Guild, server, and region appear when available.
 Raid size is shown in raid selection, not as a per-kill statistic.
 
@@ -349,7 +348,8 @@ The API is public with unrestricted CORS and no built-in authentication.
 - Composition summaries validate filter syntax but do not discard uninspected
   kills. Consumers must inspect rosters before applying composition filters.
 - Ranking queries target only the selected encounter. Missing encounter mappings
-  use a cached names/IDs lookup rather than querying every boss.
+  use a cached names/IDs lookup rather than querying every boss. Composition searches
+  accept `zoneId` plus the boss slug when no hardcoded `encounterId` is available.
 - Percentile enrichment batches up to ten report codes and restricts data to
   requested fights. Character lookups and phase-only metadata use batches of up
   to twenty; stable ordering avoids unnecessary cache misses.

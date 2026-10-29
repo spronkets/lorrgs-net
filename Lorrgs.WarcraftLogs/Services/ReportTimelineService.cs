@@ -44,8 +44,21 @@ public sealed class ReportTimelineService(
         }
         var groups = reports.Where(report => report.Fights.Any(fight => fight.Phases is null))
             .GroupBy(report => report.ReportId).OrderBy(group => group.Key, StringComparer.Ordinal).ToArray();
-        foreach (var chunk in groups.Chunk(20))
-            await PopulatePhaseChunkAsync(reports, chunk, edition, cancellationToken);
+        await PopulatePhaseChunksAsync(reports, groups.Chunk(20), edition, cancellationToken);
+    }
+
+    private async Task PopulatePhaseChunksAsync(IReadOnlyList<RankingReport> reports,
+        IEnumerable<IGrouping<string, RankingReport>[]> chunks, string edition, CancellationToken cancellationToken)
+    {
+        var results = await Task.WhenAll(chunks.Select(async chunk =>
+        {
+            var localReports = chunk.SelectMany(group => group).ToList();
+            await PopulatePhaseChunkAsync(localReports, chunk, edition, cancellationToken);
+            return (Original: chunk.SelectMany(group => group).ToArray(), Retained: localReports);
+        }));
+        foreach (var result in results)
+            foreach (var report in result.Original.Except(result.Retained))
+                RemoveReport(reports, report);
     }
 
     private async Task PopulatePhaseChunkAsync(IReadOnlyList<RankingReport> reports,
@@ -81,8 +94,9 @@ public sealed class ReportTimelineService(
                 !partialData.TryGetProperty("reportData", out var partialReports) ||
                 partialReports.ValueKind != JsonValueKind.Object)
             {
-                foreach (var group in chunk.Where(group => group.Any(reports.Contains)))
-                    await PopulatePhaseChunkAsync(reports, [group], edition, cancellationToken);
+                await PopulatePhaseChunksAsync(reports,
+                    chunk.Where(group => group.Any(reports.Contains)).Select(group => new[] { group }),
+                    edition, cancellationToken);
                 return;
             }
             data = partialData;
@@ -97,8 +111,8 @@ public sealed class ReportTimelineService(
             else
             {
                 logger.LogWarning(ex, "Retrying failed phase batch individually to identify unavailable reports");
-                foreach (var group in chunk)
-                    await PopulatePhaseChunkAsync(reports, [group], edition, cancellationToken);
+                await PopulatePhaseChunksAsync(reports, chunk.Select(group => new[] { group }),
+                    edition, cancellationToken);
             }
             return;
         }

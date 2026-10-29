@@ -20,7 +20,6 @@ function props() {
     showDeaths: true,
     separateSpells: false,
     loading: false,
-    batchLoading: false,
     onload: vi.fn(),
     oncopy: vi.fn()
   };
@@ -192,7 +191,7 @@ describe('TimelineRow', () => {
   });
 
   it('shows loading feedback in the centered row state without a load button', () => {
-    const { container } = render(TimelineRow, { ...props(), loading: true, batchLoading: true });
+    const { container } = render(TimelineRow, { ...props(), loading: true });
     const message = screen.getByRole('status');
     expect(message).toHaveTextContent('Loading report events…');
     expect(message).toHaveClass('loading-message');

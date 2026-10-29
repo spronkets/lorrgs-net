@@ -7,7 +7,7 @@ import { canLoadTimeline, timelineKey } from './timelineUtils';
 export class TimelineLoader {
   readonly loaded = new SvelteMap<string, ReportTimeline>();
   readonly errors = new SvelteMap<string, string>();
-  loadingKey = $state('');
+  readonly loadingKeys = new SvelteSet<string>();
   batchLoading = $state(false);
   stopped = $state(false);
   private queue: RankingReport[] = [];
@@ -44,25 +44,32 @@ export class TimelineLoader {
       this.active &&
       !this.batchLoading &&
       !this.stopped &&
-      this.queue.slice(0, 3).some((report) => !this.loaded.has(timelineKey(report)))
+      this.queue
+        .slice(0, 3)
+        .some(
+          (report) =>
+            !this.loaded.has(timelineKey(report)) && !this.loadingKeys.has(timelineKey(report))
+        )
     )
       void this.loadNext(true);
   }
 
   private async load(report: RankingReport): Promise<boolean> {
     const key = timelineKey(report);
-    this.loadingKey = key;
+    if (this.loadingKeys.has(key) || this.loaded.has(key) || this.controller.signal.aborted)
+      return false;
+    this.loadingKeys.add(key);
     this.errors.delete(key);
     try {
       const timeline = await getReportTimeline(report, this.getEdition(), this.controller.signal);
       if (this.controller.signal.aborted) return false;
       this.loaded.set(key, timeline);
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       if (this.controller.signal.aborted) return false;
       this.errors.set(key, error instanceof Error ? error.message : 'Unable to load timeline.');
       this.stopped = true;
-      console.error('Ranking timeline failed; remaining automatic loads stopped', {
+      console.error('Ranking timeline failed; further automatic batches stopped', {
         reportCode: report.reportId,
         fightId: report.fights?.[0]?.fightId,
         edition: this.getEdition(),
@@ -70,7 +77,7 @@ export class TimelineLoader {
       });
       return false;
     } finally {
-      this.loadingKey = '';
+      this.loadingKeys.delete(key);
     }
   }
 
@@ -79,30 +86,28 @@ export class TimelineLoader {
     this.batchLoading = true;
     this.stopped = false;
     try {
-      const requestedKeys = automatic
-        ? null
-        : new SvelteSet(this.pending.slice(0, 3).map(timelineKey));
-      while (!this.controller.signal.aborted) {
-        const keys = requestedKeys ?? new SvelteSet(this.queue.slice(0, 3).map(timelineKey));
-        const next = this.queue.find(
-          (report) => !this.loaded.has(timelineKey(report)) && keys.has(timelineKey(report))
-        );
-        if (!next || !(await this.load(next))) break;
-      }
+      const reports = automatic
+        ? this.queue
+            .slice(0, 3)
+            .filter(
+              (report) =>
+                !this.loaded.has(timelineKey(report)) && !this.loadingKeys.has(timelineKey(report))
+            )
+        : this.pending.filter((report) => !this.loadingKeys.has(timelineKey(report))).slice(0, 3);
+      await Promise.all(reports.map((report) => this.load(report)));
     } finally {
+      this.stopped = this.errors.size > 0;
       this.batchLoading = false;
       this.loadAutomatically();
     }
   }
 
   async loadOne(report: RankingReport) {
-    if (this.batchLoading || this.controller.signal.aborted) return;
-    this.batchLoading = true;
-    this.stopped = false;
+    if (this.controller.signal.aborted) return;
     try {
       await this.load(report);
     } finally {
-      this.batchLoading = false;
+      this.stopped = this.errors.size > 0;
       this.loadAutomatically();
     }
   }

@@ -17,8 +17,9 @@ public class RaidCatalogClient(
     private readonly ILogger<RaidCatalogClient> _logger = logger;
     private readonly RaidCatalogOptions _options = raidCatalogOptions.Value;
 
-    public Task<RaidCatalog> GetCatalogAsync()
+    public Task<RaidCatalog> GetCatalogAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _logger.LogInformation("Building raid catalog from local world data");
 
         var catalog = BuildCatalog();

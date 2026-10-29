@@ -21,4 +21,6 @@ public sealed record GetCompRankingRequest(
     [property: FromQuery(Name = "killtime_min")]
     [property: DefaultValue(0)] int MinSeconds = 0,
     [property: FromQuery(Name = "killtime_max")]
-    [property: DefaultValue(0)] int MaxSeconds = 0);
+    [property: DefaultValue(0)] int MaxSeconds = 0,
+    [property: FromQuery(Name = "zoneId")]
+    [property: DefaultValue(0)] int ZoneId = 0);
