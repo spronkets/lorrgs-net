@@ -52,6 +52,43 @@ const rankings: SpecRankingData = {
 };
 
 describe('ranking analytics', () => {
+  it('renders empty rankings and updates when ranking data arrives', async () => {
+    const { container, rerender } = render(RankingsList);
+    expect(container.querySelectorAll('.player-row')).toHaveLength(0);
+    expect(screen.getByText('No loaded reports match these filters.')).toBeInTheDocument();
+    expect(screen.getByLabelText('From date')).toBeVisible();
+    await rerender({ rankings: { ...rankings, reports: [] } });
+    expect(container.querySelectorAll('.player-row')).toHaveLength(0);
+    await rerender({ rankings });
+    expect(screen.getByRole('link', { name: 'Alice' })).toBeInTheDocument();
+    expect(container.querySelectorAll('.player-row')).toHaveLength(2);
+  });
+
+  it('normalizes both kill-time limits on blur and filters by the end date', async () => {
+    render(RankingsList, { rankings });
+    const minimum = screen.getByLabelText('Minimum kill time');
+    const maximum = screen.getByLabelText('Maximum kill time');
+    await fireEvent.input(minimum, { target: { value: '4:00' } });
+    await fireEvent.blur(minimum);
+    await fireEvent.input(maximum, { target: { value: '5:00' } });
+    await fireEvent.blur(maximum);
+    expect(minimum).toHaveValue('4:00');
+    expect(maximum).toHaveValue('5:00');
+    expect(screen.getByRole('link', { name: 'Alice' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Bob' })).toBeInTheDocument();
+
+    await fireEvent.input(screen.getByLabelText('To date'), {
+      target: { value: '2026-10-21' }
+    });
+    expect(screen.getByRole('link', { name: 'Alice' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Bob' })).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    expect(minimum).toHaveValue('');
+    expect(maximum).toHaveValue('');
+    expect(screen.getByLabelText('To date')).toHaveValue('');
+    expect(screen.getByRole('link', { name: 'Bob' })).toBeInTheDocument();
+  });
+
   it('filters locally without a report-count summary and resets', async () => {
     render(RankingsList, { rankings, edition: 'anniversary' });
     expect(screen.queryByText('Sample details')).not.toBeInTheDocument();
