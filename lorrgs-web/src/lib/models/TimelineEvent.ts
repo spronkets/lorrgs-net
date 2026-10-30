@@ -24,7 +24,7 @@ export type TimelineEvent = {
   castResults?: {
     targetId: number;
     targetName: string;
-    kind: 'heal' | 'damage';
+    kind: 'heal' | 'damage' | 'mana-returned';
     amount: number;
   }[] | null;
 };

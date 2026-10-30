@@ -423,8 +423,7 @@
         class="fight-end"
         style={`left: min(calc(100% - 2px), ${(endTime / axisDuration) * 100}%)`}
         role="img"
-        aria-label={endLabel}
-        title={endLabel}><span class="fight-end-label">{timelineTime(endTime)}</span></span
+        aria-label={endLabel}><span class="fight-end-label">{timelineTime(endTime)}</span></span
       >
     {/if}
     {#if timeline}
@@ -511,7 +510,6 @@
               color: resourceColor ?? appearance.color
             })}
           onblur={() => (inspected = null)}
-          {title}
           aria-label={title}
         >
           {#if resourceColor && (event.kind !== 'buff' || event.displayBelow)}
@@ -533,7 +531,7 @@
             >Warcraft Logs returned no cast, buff or death events for this player and fight.</Alert
           >
         </div>
-      {:else if events.length === 0}<div class="track-message">
+      {:else if events.length === 0}<div class="track-message selection-message">
           <Alert compact>No events match the spell / timeline selection.</Alert>
         </div>{/if}
     {:else if loading}
@@ -1028,6 +1026,7 @@
     max-width: calc(100% - 16px);
   }
   .loading-message,
+  .selection-message,
   .unloaded-controls {
     top: 50%;
     transform: translateY(-50%);

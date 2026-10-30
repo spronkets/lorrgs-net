@@ -87,7 +87,6 @@
       if (magnifier?.timestamp == null) return true;
       const time = magnifier.timestamp;
       if (
-        event.kind !== 'cast' &&
         magnifier.hoveredEvent?.kind === event.kind &&
         magnifier.hoveredEvent.spellId === event.spellId &&
         magnifier.hoveredEvent.timestamp === event.timestamp
@@ -108,14 +107,6 @@
         );
       }
       if (event.kind === 'cast') {
-        const hovered = magnifier.hoveredEvent;
-        if (
-          (event.castStart == null || event.castStart === event.timestamp) &&
-          hovered?.kind === event.kind &&
-          hovered.spellId === event.spellId &&
-          hovered.timestamp === event.timestamp
-        )
-          return true;
         return event.castStart != null && event.castStart < event.timestamp
           ? event.castStart <= time && time <= event.timestamp
           : time <= event.timestamp &&
@@ -383,15 +374,24 @@
                 {/each}
               {/if}
               {#if event.kind === 'cast'}
-                <span class="cast-results">
+                <span class="cast-results"
+                  class:resource-results={event.castResults?.some((result) => result.kind === 'mana-returned')}>
+                  {#if event.healthBeforeIsPreviousSnapshot && event.healthBeforePercent != null &&
+                    event.healthAfterPercent != null && event.healthBeforePercent > event.healthAfterPercent}
+                    <span class="resource-value health-loss" title="Health percentage decrease since the previous recorded snapshot; not an exact damage measurement.">
+                      &minus;{Number((event.healthBeforePercent - event.healthAfterPercent).toFixed(2))}% health
+                    </span>
+                  {/if}
                   {#each event.castResults?.filter((result) => Number(result.amount.toFixed(2)) > 0) ?? [] as result (`${result.targetId}-${result.kind}`)}
                     <span
+                      class:resource-value={result.kind === 'mana-returned'}
                       class:health-gain={result.kind === 'heal'}
                       class:health-loss={result.kind === 'damage'}
+                      class:mana-cost={result.kind === 'mana-returned'}
                     >
-                      {result.kind === 'heal' ? '+' : '-'}{result.amount.toLocaleString(undefined, {
+                      {result.kind === 'damage' ? '-' : '+'}{result.amount.toLocaleString(undefined, {
                         maximumFractionDigits: 2
-                      })} to {result.targetName}
+                      })}{result.kind === 'mana-returned' ? ' mana' : ` to ${result.targetName}`}
                     </span>
                   {/each}
                 </span>
@@ -411,17 +411,23 @@
     grid-column: 1 / -1;
     gap: 8px;
     width: 100%;
-    align-items: start;
+    align-items: center;
     line-height: 1.6;
     white-space: nowrap;
   }
   .detail-time {
+    grid-column: 1;
     font-variant-numeric: tabular-nums;
   }
+  .detail-name {
+    grid-column: 2;
+  }
   .detail-result {
+    grid-column: 3;
     text-align: right;
     display: flex;
     justify-content: flex-end;
+    align-items: center;
     gap: 8px;
   }
   .detail-result > span {
@@ -431,6 +437,20 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+  }
+  .detail-result > .cast-results.resource-results {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .resource-value {
+    display: flex;
+    align-items: center;
+    font: inherit;
+    letter-spacing: inherit;
+    font-variant-numeric: tabular-nums;
   }
   .health-result {
     display: inline-flex;

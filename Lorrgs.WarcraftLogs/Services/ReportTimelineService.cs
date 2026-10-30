@@ -753,7 +753,10 @@ public sealed class ReportTimelineService(
                 pendingCast = null;
                 result.Add(new TimelineEvent(spellId, relative,
                     castStart.HasValue ? relative - castStart.Value : null, "cast", CastStart: castStart,
-                    CastResults: castResults.GetValueOrDefault((spellId, timestamp))));
+                    CastResults: castResults.GetValueOrDefault((spellId, timestamp)),
+                    HealthBeforePercent: IsLifeTapSpell(spellId) ? healthBefore : null,
+                    HealthAfterPercent: IsLifeTapSpell(spellId) ? healthAfter : null,
+                    HealthBeforeIsPreviousSnapshot: IsLifeTapSpell(spellId) && healthBefore.HasValue));
                 if (item.TryGetProperty("classResources", out var resources) && resources.ValueKind == JsonValueKind.Array)
                     foreach (var resource in resources.EnumerateArray())
                         if (resource.TryGetProperty("type", out var resourceType) && resourceType.TryGetInt32(out var id) && id == 0 &&
@@ -830,6 +833,12 @@ public sealed class ReportTimelineService(
         var castTargets = castEvents
             .GroupBy(item => (checked((int)Number(item, "abilityGameID")), Number(item, "timestamp")))
             .ToDictionary(group => group.Key, group => checked((int)Number(group.First(), "targetID")));
+        var targetCasts = castEvents
+            .GroupBy(item => (checked((int)Number(item, "abilityGameID")), checked((int)Number(item, "targetID"))))
+            .ToDictionary(group => group.Key, group => group.Select(item => Number(item, "timestamp")).ToArray());
+        var ambiguousCasts = castEvents
+            .GroupBy(item => (checked((int)Number(item, "abilityGameID")), Number(item, "timestamp")))
+            .Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet();
         var results = new Dictionary<(int, double), List<TimelineCastResult>>();
         foreach (var item in events)
         {
@@ -865,8 +874,61 @@ public sealed class ReportTimelineService(
             if (existing < 0) entries.Add(new TimelineCastResult(targetId, targetName, kind, amount));
             else entries[existing] = entries[existing] with { Amount = entries[existing].Amount + amount };
         }
+        // Periodic damage belongs to the latest cast on that target, not a later cast on another target.
+        foreach (var item in events)
+        {
+            var timestamp = Number(item, "timestamp");
+            if (Text(item, "type") != "damage" || Number(item, "sourceID") != actorId ||
+                timestamp < start || timestamp > end ||
+                !item.TryGetProperty("tick", out var tick) || tick.ValueKind != JsonValueKind.True ||
+                !item.TryGetProperty("amount", out var amountValue) || !amountValue.TryGetDouble(out var amount) ||
+                amount <= 0)
+                continue;
+            var spellId = checked((int)Number(item, "abilityGameID"));
+            var targetId = checked((int)Number(item, "targetID"));
+            if (targetId <= 0 || !targetCasts.TryGetValue((spellId, targetId), out var timestamps)) continue;
+            var index = Array.BinarySearch(timestamps, timestamp);
+            if (index < 0) index = ~index - 1;
+            if (index < 0) continue;
+            var key = (spellId, timestamps[index]);
+            if (ambiguousCasts.Contains(key)) continue;
+            if (!results.TryGetValue(key, out var entries))
+                results[key] = entries = [];
+            var existing = entries.FindIndex(entry => entry.TargetId == targetId && entry.Kind == "damage");
+            if (existing < 0)
+                entries.Add(new TimelineCastResult(targetId,
+                    actorNames?.GetValueOrDefault(targetId) ?? $"Actor {targetId}", "damage", amount));
+            else
+                entries[existing] = entries[existing] with { Amount = entries[existing].Amount + amount };
+        }
+        var lifeTaps = castEvents.Where(item => IsLifeTapSpell(checked((int)Number(item, "abilityGameID")))).ToArray();
+        foreach (var item in events)
+        {
+            var timestamp = Number(item, "timestamp");
+            if (Text(item, "type") != "resourcechange" || Number(item, "abilityGameID") != 31818 ||
+                Number(item, "sourceID") != actorId || Number(item, "targetID") != actorId ||
+                Number(item, "resourceChangeType") != 0 || timestamp < start || timestamp > end)
+                continue;
+            var amount = Number(item, "resourceChange") - Number(item, "waste");
+            if (amount <= 0) continue;
+            var cast = lifeTaps.LastOrDefault(cast => Number(cast, "timestamp") <= timestamp);
+            if (cast.ValueKind == JsonValueKind.Undefined || timestamp - Number(cast, "timestamp") > 250) continue;
+            var key = (checked((int)Number(cast, "abilityGameID")), Number(cast, "timestamp"));
+            if (ambiguousCasts.Contains(key)) continue;
+            if (!results.TryGetValue(key, out var entries))
+                results[key] = entries = [];
+            var existing = entries.FindIndex(entry => entry.TargetId == actorId && entry.Kind == "mana-returned");
+            if (existing < 0)
+                entries.Add(new TimelineCastResult(actorId,
+                    actorNames?.GetValueOrDefault(actorId) ?? $"Actor {actorId}", "mana-returned", amount));
+            else
+                entries[existing] = entries[existing] with { Amount = entries[existing].Amount + amount };
+        }
         return results.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<TimelineCastResult>)pair.Value);
     }
+
+    private static bool IsLifeTapSpell(int spellId) =>
+        spellId is 1454 or 1455 or 1456 or 11687 or 11688 or 11689 or 27222 or 57946;
 
     private static JsonElement GetReport(JsonElement data)
     {

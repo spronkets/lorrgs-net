@@ -42,6 +42,7 @@
   });
   const expanded = new SvelteSet<string>();
   let selectedRoles = $state<Record<string, string>>({});
+  let selectedSpecs = $state<Record<string, string>>({});
   const roleNames: Record<string, string> = {
     tank: 'Tanks',
     heal: 'Healers',
@@ -75,7 +76,7 @@
     rankings.reports.filter((report) => durationMatches(report) && !loader.loaded.has(key(report)))
       .length
   );
-  function rosterReports(report: RankingReport, roleFilter: string) {
+  function rosterReports(report: RankingReport, roleFilter: string, specFilter: string) {
     const roleOrder = ['tank', 'heal', 'mdps', 'rdps'];
     const role = (player: NonNullable<RankingReport['players']>[number]) =>
       player.roleCode ??
@@ -85,7 +86,8 @@
       )?.code ??
       '';
     return [...(report.players ?? [])]
-      .filter((player) => !roleFilter || role(player) === roleFilter)
+      .filter((player) => (!roleFilter || role(player) === roleFilter) &&
+        (!specFilter || player.specSlug === specFilter))
       .sort(
         (left, right) =>
           Math.min(2, roleOrder.indexOf(role(left))) -
@@ -137,6 +139,7 @@
       {@const factionId = report.factionId ?? summary.factionId}
       {@const faction = factionId === 1 ? 'Alliance' : factionId === 2 ? 'Horde' : null}
       {@const selectedRole = selectedRoles[key(summary)] ?? ''}
+      {@const selectedSpec = selectedSpecs[key(summary)] ?? ''}
       {@const roles =
         fight?.composition?.roles ?? fight?.roleCounts ?? summary.fights?.[0]?.roleCounts ?? {}}
       {@const playerCount =
@@ -243,14 +246,20 @@
             <div class="roster-filters" role="group" aria-label="Roster roles">
               <button
                 type="button"
-                aria-pressed={!selectedRole}
-                onclick={() => (selectedRoles[key(summary)] = '')}>All: {playerCount}</button
+                aria-pressed={!selectedRole && !selectedSpec}
+                onclick={() => {
+                  selectedRoles[key(summary)] = '';
+                  selectedSpecs[key(summary)] = '';
+                }}>All: {playerCount}</button
               >
               {#each Object.entries(roles) as [code, count] (code)}
                 <button
                   type="button"
                   aria-pressed={selectedRole === code}
-                  onclick={() => (selectedRoles[key(summary)] = code)}
+                  onclick={() => {
+                    selectedRoles[key(summary)] = code;
+                    selectedSpecs[key(summary)] = '';
+                  }}
                   >{worldData.roles?.find((role) => role.code === code)?.name ??
                     roleNames[code] ??
                     code}: {count}</button
@@ -279,8 +288,14 @@
           {:else}
             <div class="composition specs">
               {#each Object.entries(fight?.composition?.specs ?? {}) as [slug, count] (slug)}
-                <span
-                  class:dimmed={!!selectedRole &&
+                <button
+                  type="button"
+                  aria-pressed={selectedSpec === slug}
+                  onclick={() => {
+                    selectedSpecs[key(summary)] = selectedSpec === slug ? '' : slug;
+                    selectedRoles[key(summary)] = '';
+                  }}
+                  class:dimmed={(!!selectedSpec && selectedSpec !== slug) || !!selectedRole &&
                     worldData.roles?.find(
                       (role) =>
                         role.id ===
@@ -291,7 +306,7 @@
                       src={specIcon(slug)}
                       alt=""
                     />{/if}{worldData.specs?.find((spec) => spec.fullNameSlug === slug)?.fullName ??
-                    slug} ×{count}</span
+                    slug} ×{count}</button
                 >
               {/each}
             </div>
@@ -306,7 +321,7 @@
                 <div class="roster-content">
                   {#key `${edition}:${key(report)}:${rankings.updated}`}
                     <RankingsTimeline
-                      reports={rosterReports(report, selectedRole)}
+                      reports={rosterReports(report, selectedRole, selectedSpec)}
                       {edition}
                       bossSlug={rankings.bossSlug}
                       difficulty={rankings.difficulty}
@@ -481,13 +496,25 @@
     margin: 0.5rem 0;
     font-size: 0.8rem;
   }
-  .composition span {
+  .composition button {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
     padding: 0.2rem 0.4rem;
     border: 1px solid #687e94;
     border-radius: 0.3rem;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+  }
+  .composition button[aria-pressed='true'] {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    box-shadow: inset 0 -2px currentColor;
+  }
+  .composition button:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
   }
   .composition img {
     width: 20px;

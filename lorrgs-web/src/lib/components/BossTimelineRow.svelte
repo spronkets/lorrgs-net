@@ -107,7 +107,6 @@
             type="button"
             class="boss-event"
             style={`left: ${(event.timestamp / axisDuration) * 100}%`}
-            {title}
             aria-label={title}
           >
             {#if showIcons && spellIconUrl(spell?.icon ?? null)}

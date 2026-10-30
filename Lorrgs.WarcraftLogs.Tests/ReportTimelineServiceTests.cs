@@ -387,9 +387,89 @@ public sealed class ReportTimelineServiceTests : IDisposable
                 """);
             var casts = ReportTimelineService.NormalizeEvents(events, 7, 0, 10000, true);
             Assert.Equal(2, casts.Count);
-            Assert.Equal(3091, Assert.Single(casts[0].CastResults!).Amount);
+            Assert.Equal(4090, Assert.Single(casts[0].CastResults!).Amount);
             Assert.Equal(6395, Assert.Single(casts[1].CastResults!).Amount);
         }
+    [Fact]
+    public void LifeTapLinksItsSeparateManaEffectAndRecordedHealthSnapshotChange()
+    {
+        var events = ParseEvents("""
+            [{"type":"cast","timestamp":1000,"sourceID":7,"abilityGameID":27209,"resourceActor":1,"hitPoints":93,"maxHitPoints":100},
+             {"type":"cast","timestamp":1001,"sourceID":7,"abilityGameID":27222,"resourceActor":1,"hitPoints":75,"maxHitPoints":100},
+             {"type":"resourcechange","timestamp":1009,"sourceID":7,"targetID":7,"abilityGameID":31818,"resourceChangeType":0,"resourceChange":1907,"waste":7},
+             {"type":"resourcechange","timestamp":1010,"sourceID":8,"targetID":7,"abilityGameID":31818,"resourceChangeType":0,"resourceChange":999},
+             {"type":"resourcechange","timestamp":1010,"sourceID":7,"targetID":8,"abilityGameID":31818,"resourceChangeType":0,"resourceChange":999},
+             {"type":"resourcechange","timestamp":1010,"sourceID":7,"targetID":7,"abilityGameID":99,"resourceChangeType":0,"resourceChange":999},
+             {"type":"resourcechange","timestamp":1252,"sourceID":7,"targetID":7,"abilityGameID":31818,"resourceChangeType":0,"resourceChange":999}]
+            """);
+        var tap = Assert.Single(ReportTimelineService.NormalizeEvents(events, 7, 0, 10000, true),
+            item => item.Kind == "cast" && item.SpellId == 27222);
+        Assert.Equal(new TimelineCastResult(7, "Actor 7", "mana-returned", 1900), Assert.Single(tap.CastResults!));
+        Assert.Equal(93, tap.HealthBeforePercent);
+        Assert.Equal(75, tap.HealthAfterPercent);
+        Assert.True(tap.HealthBeforeIsPreviousSnapshot);
+    }
+
+    [Fact]
+    public void LifeTapDoesNotInventMissingHealthOrMatchUnrelatedMana()
+    {
+        var events = ParseEvents("""
+            [{"type":"resourcechange","timestamp":500,"sourceID":7,"targetID":7,"abilityGameID":31818,"resourceChangeType":0,"resourceChange":999},
+             {"type":"cast","timestamp":1000,"sourceID":7,"abilityGameID":27222},
+             {"type":"resourcechange","timestamp":1001,"sourceID":7,"targetID":7,"abilityGameID":31818,"resourceChangeType":0,"resourceChange":999,"waste":999}]
+            """);
+        var tap = Assert.Single(ReportTimelineService.NormalizeEvents(events, 7, 0, 10000, true),
+            item => item.Kind == "cast");
+        Assert.Null(tap.CastResults);
+        Assert.Null(tap.HealthBeforePercent);
+        Assert.Null(tap.HealthAfterPercent);
+    }
+
+    [Fact]
+    public void PeriodicDamageTotalsFollowTheLatestCastOnEachRecordedTarget()
+    {
+        var events = ParseEvents("""
+            [{"type":"damage","timestamp":500,"sourceID":7,"targetID":98,"abilityGameID":27216,"amount":999,"tick":true},
+             {"type":"cast","timestamp":1000,"sourceID":7,"targetID":98,"abilityGameID":27216},
+             {"type":"cast","timestamp":2000,"sourceID":7,"targetID":99,"abilityGameID":27216},
+             {"type":"damage","timestamp":4000,"sourceID":7,"targetID":98,"abilityGameID":27216,"amount":600,"tick":true},
+             {"type":"damage","timestamp":5000,"sourceID":7,"targetID":99,"abilityGameID":27216,"amount":400,"tick":true},
+             {"type":"damage","timestamp":7000,"sourceID":7,"targetID":98,"abilityGameID":27216,"amount":650,"tick":true},
+             {"type":"cast","timestamp":8000,"sourceID":7,"targetID":98,"abilityGameID":27216},
+             {"type":"damage","timestamp":11000,"sourceID":7,"targetID":98,"abilityGameID":27216,"amount":700,"tick":true},
+             {"type":"damage","timestamp":14000,"sourceID":7,"targetID":98,"abilityGameID":27216,"amount":750,"tick":true},
+             {"type":"damage","timestamp":14000,"sourceID":8,"targetID":98,"abilityGameID":27216,"amount":999,"tick":true},
+             {"type":"damage","timestamp":14000,"sourceID":7,"targetID":100,"abilityGameID":27216,"amount":999,"tick":true},
+             {"type":"damage","timestamp":14000,"sourceID":7,"targetID":98,"abilityGameID":27217,"amount":999,"tick":true},
+             {"type":"heal","timestamp":14000,"sourceID":7,"targetID":98,"abilityGameID":27216,"amount":999,"tick":true},
+             {"type":"damage","timestamp":14000,"sourceID":7,"targetID":98,"abilityGameID":27216,"amount":0,"tick":true},
+             {"type":"damage","timestamp":16000,"sourceID":7,"targetID":98,"abilityGameID":27216,"amount":999,"tick":true}]
+            """);
+        var casts = ReportTimelineService.NormalizeEvents(events, 7, 0, 15000, true,
+            new Dictionary<int, string> { [98] = "Zul'jin", [99] = "Other target" });
+        Assert.Equal(3, casts.Count);
+        Assert.Equal(new TimelineCastResult(98, "Zul'jin", "damage", 1250), Assert.Single(casts[0].CastResults!));
+        Assert.Equal(new TimelineCastResult(99, "Other target", "damage", 400), Assert.Single(casts[1].CastResults!));
+        Assert.Equal(new TimelineCastResult(98, "Zul'jin", "damage", 1450), Assert.Single(casts[2].CastResults!));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PeriodicDamageDoesNotGuessMissingTargetsOrAmbiguousCasts(bool ambiguous)
+    {
+        var events = ParseEvents(ambiguous ? """
+            [{"type":"cast","timestamp":1000,"sourceID":7,"targetID":98,"abilityGameID":27216},
+             {"type":"cast","timestamp":1000,"sourceID":7,"targetID":98,"abilityGameID":27216},
+             {"type":"damage","timestamp":4000,"sourceID":7,"targetID":98,"abilityGameID":27216,"amount":600,"tick":true}]
+            """ : """
+            [{"type":"cast","timestamp":1000,"sourceID":7,"abilityGameID":27216},
+             {"type":"damage","timestamp":4000,"sourceID":7,"targetID":98,"abilityGameID":27216,"amount":600,"tick":true}]
+            """);
+        Assert.All(ReportTimelineService.NormalizeEvents(events, 7, 0, 10000, true),
+            cast => Assert.Null(cast.CastResults));
+    }
+
     [Fact]
     public async Task LoadFetchesAndCachesImmediateCastResults()
     {
@@ -402,6 +482,26 @@ public sealed class ReportTimelineServiceTests : IDisposable
         var service = CreateService(handler);
         var fresh = await service.LoadAsync("castResults", 1, 7, "Player", "anniversary", default);
         var cached = await service.TryLoadCachedAsync("castResults", 1, 7, "Player", "anniversary", default);
+        var expected = new TimelineCastResult(98, "Zul'jin", "damage", 1250);
+        Assert.Equal(expected, Assert.Single(Assert.Single(fresh.Events).CastResults!));
+        Assert.NotNull(cached);
+        Assert.Equal(expected, Assert.Single(Assert.Single(cached.Events).CastResults!));
+        Assert.Equal(2, handler.GraphQlRequests);
+    }
+
+    [Fact]
+    public async Task LoadIncludesCorruptionTickTotalsFromFreshAndCachedEvents()
+    {
+        using var handler = new QueueHandler(
+            TimelineMetadata("""[{"id":7,"name":"Player","type":"Player"},{"id":98,"name":"Zul'jin","type":"NPC"}]"""),
+            EventPage("""
+                [{"type":"cast","timestamp":2000,"sourceID":7,"targetID":98,"abilityGameID":27216},
+                 {"type":"damage","timestamp":5000,"sourceID":7,"targetID":98,"abilityGameID":27216,"amount":600,"tick":true},
+                 {"type":"damage","timestamp":8000,"sourceID":7,"targetID":98,"abilityGameID":27216,"amount":650,"tick":true}]
+                """));
+        var service = CreateService(handler);
+        var fresh = await service.LoadAsync("corruptionTicks", 1, 7, "Player", "anniversary", default);
+        var cached = await service.TryLoadCachedAsync("corruptionTicks", 1, 7, "Player", "anniversary", default);
         var expected = new TimelineCastResult(98, "Zul'jin", "damage", 1250);
         Assert.Equal(expected, Assert.Single(Assert.Single(fresh.Events).CastResults!));
         Assert.NotNull(cached);

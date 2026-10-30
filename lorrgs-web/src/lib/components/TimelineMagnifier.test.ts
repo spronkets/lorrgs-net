@@ -317,6 +317,53 @@ describe('TimelineMagnifier', () => {
     await rerender({ ...input, magnifier: { ...input.magnifier, timestamp: 16000 } });
     expect(screen.getByText('Health 17,000')).toBeInTheDocument();
   });
+  it.each([null, 2000, 1999, 1000])(
+    'keeps hovered Corruption visible outside its recorded cast interval starting at %s',
+    (castStart) => {
+    const timeline = response(rows[0].report);
+    timeline.spells = [{ id: 27216, name: 'Corruption', icon: null }];
+    timeline.events = [{
+      spellId: 27216, timestamp: 2000, castStart,
+      duration: castStart == null ? null : 2000 - castStart, kind: 'cast',
+      castResults: [{ targetId: 98, targetName: "Zul'jin", kind: 'damage', amount: 1250 }]
+    }];
+    const { container } = render(TimelineMagnifier, {
+      magnifier: { timeline, timestamp: 2430, hoveredEvent: timeline.events[0],
+        start: 0, span: 10000, x: 200, y: 400, zoom: 800 },
+      inspected: null, hidden: new Set<number>(), castSpellIds: new Set([27216]),
+      showCasts: true, showBuffs: true, showDeaths: true, showDamageTaken: false
+    });
+    expect(container.querySelector('.detail-name')).toHaveTextContent('Corruption');
+    expect(container.querySelector('.cast-results > .health-loss')).toHaveTextContent("-1,250 to Zul'jin");
+    expect(container.querySelector('.magnified-event')?.getAttribute('style'))
+      .toContain('--spell-color: #ff6969');
+  });
+  it('shows Life Tap health loss and effective mana gain even with received events hidden', () => {
+    const timeline = response(rows[0].report);
+    timeline.spells = [{ id: 27222, name: 'Life Tap', icon: null }];
+    timeline.events = [{
+      spellId: 27222, timestamp: 2000, duration: null, kind: 'cast',
+      healthBeforePercent: 93, healthAfterPercent: 75, healthBeforeIsPreviousSnapshot: true,
+      castResults: [{ targetId: 7, targetName: timeline.playerName, kind: 'mana-returned', amount: 1907 }]
+    }];
+    const { container } = render(TimelineMagnifier, {
+      magnifier: { timeline, timestamp: 2000, hoveredEvent: timeline.events[0],
+        start: 0, span: 10000, x: 200, y: 400, zoom: 800 },
+      inspected: null, hidden: new Set<number>(), castSpellIds: new Set([27222]),
+      showCasts: true, showBuffs: true, showDeaths: true,
+      showDamageTaken: false, showManaReceived: false
+    });
+    expect(container.querySelector('.cast-results .health-loss')).toHaveTextContent('\u221218% health');
+    expect(container.querySelector('.cast-results .health-loss')).toHaveAttribute('title',
+      expect.stringContaining('not an exact damage measurement'));
+    expect(container.querySelector('.cast-results .mana-cost')).toHaveTextContent('+1,907 mana');
+    expect(container.querySelector('.cast-results .mana-cost')).not.toHaveClass('health-loss');
+    expect(container.querySelector('.cast-results')).toHaveClass('resource-results');
+    const resultColumn = container.querySelector('.detail-result');
+    expect(resultColumn?.querySelector('.health-loss')?.parentElement)
+      .toBe(resultColumn?.querySelector('.mana-cost')?.parentElement);
+    expect(container.querySelector('.detail-row')?.children).toHaveLength(3);
+  });
   it('shows each recorded target result throughout the cast hover interval', async () => {
     const timeline = response(rows[0].report);
     timeline.spells = [{ id: 1, name: 'Holy Shock', icon: null }];
@@ -358,6 +405,7 @@ describe('TimelineMagnifier', () => {
     };
     const { container, rerender } = render(TimelineMagnifier, input);
     expect(container.querySelectorAll('.cast-results > .health-gain')).toHaveLength(2);
+    expect(container.querySelector('.cast-results')).not.toHaveClass('resource-results');
     expect(container.querySelectorAll('.cast-results > .health-gain')[0]).toHaveTextContent(
       '+1,250 to Ally'
     );

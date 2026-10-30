@@ -34,6 +34,10 @@ describe('TimelineRow', () => {
     for (const selector of ['.event.cast', '.cast-connectors', '.cast-window'])
       expect(container.querySelector(selector)).toHaveStyle({ '--spell-color': '#69d98b' });
     expect(container.querySelector('.event.cast img')).not.toBeNull();
+    expect(container.querySelector('.event.cast')).not.toHaveAttribute('title');
+    expect(container.querySelector('.event.cast')).toHaveAttribute('aria-label',
+      expect.stringContaining('Chain Heal'));
+    expect(container.querySelector('.fight-end')).not.toHaveAttribute('title');
   });
   it('collapses unused lower-lane space as incoming effects are toggled', async () => {
     const input = props();

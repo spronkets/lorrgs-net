@@ -25,6 +25,10 @@
 # Amount excludes wasted gains. Missing resource costs/passive regeneration are not inferred.
 # Show mana received toggles effective gains and is off by default.
 # Recorded cast costs appear in muted amber beside the zoom ability name as -250.
+# Life Tap casts include effective self mana gains from recorded Life Tap effect 31818
+# within 250ms, even with received-mana icons hidden. Zoom shows these in blue.
+# Life Tap health percentage drops use the prior snapshot within one second;
+# they are explicitly snapshot changes, not inferred absolute damage amounts.
 # Mana spent does not have a separate UI toggle or timeline icon.
 # Zoom mana event amounts use blue +amount for gains and muted amber -amount for losses.
 # Timeline and zoom lines/icon borders share semantic colors: healing casts/received green,
@@ -44,13 +48,19 @@
 # Completed casts may include castResults, grouped by target and damage/healing.
 # Zoom lists each target result on a separate line: +amount to Target for healing.
 # Recorded outcomes remain visible while hovering the cast interval, not just completion.
+# Hovering a cast icon keeps its detail row visible even outside the measured interval.
 # Healing amounts are effective healing; zero results and fully overhealed targets are omitted.
 # Zoom also hides values that round to zero at two decimal places.
 # Non-periodic effects from the same actor and spell within 250ms after completion qualify.
 # Delayed direct damage may match the latest completed same-spell cast up to 3 seconds later,
 # requiring the same recorded target, no AoE flag, and no prior damage result for that target.
 # Ambiguous simultaneous same-spell casts have no attached results.
-# Missing effects, longer delays, periodic ticks and different-spell procs are not attributed.
+# Periodic damage is totaled on the latest completed same-actor, same-spell cast
+# with the same recorded target, up to the next cast on that target or fight end.
+# Casts on other targets do not steal ticks. Missing target IDs and ambiguous casts
+# are not guessed; ticks before the first matching cast are not attributed.
+# Periodic healing remains excluded from cast results.
+# Missing effects, longer direct-hit delays and different-spell procs are not attributed.
 # Timeline master data includes all actor types so NPC/pet targets use recorded names.
 # Anniversary NPC 23863 is named Zul'jin rather than the upstream Daakara label.
 # Buff uptime requires recorded application and removal events. An unmatched

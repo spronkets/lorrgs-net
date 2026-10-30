@@ -68,6 +68,10 @@ restore the search automatically.
 
 **Rankings and rosters**
 
+Click a spec in a kill's **Raid composition** to focus its roster and cooldown
+timelines on that spec. Click it again or **All** to restore everyone. Role and
+spec focus replace each other and apply only to that kill.
+
 Rows retain upstream ranking order and rank labels when filtered.
 Headers show `#<rank> Report name (Top %)`, with speed alongside
 and total ranked kills in tooltips. Guild, server, and region appear when available.
