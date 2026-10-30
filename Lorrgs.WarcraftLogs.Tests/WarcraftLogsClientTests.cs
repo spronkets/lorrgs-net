@@ -7,8 +7,10 @@ public sealed class WarcraftLogsClientTests : IDisposable
     private readonly TestClientFixture fixture = new();
     public void Dispose() => fixture.Dispose();
 
-    [Fact]
-    public async Task PrivateReportErrorsPreservePartialDataAndAreNotCached()
+    [Theory]
+    [InlineData("You do not have permission to view this report", false)]
+    [InlineData("This report has been archived. Subscribing users can access the report content via the /user API endpoint.", true)]
+    public async Task PrivateReportErrorsPreservePartialDataAndAreNotCached(string message, bool archived)
     {
         const string query = """
             query Mixed { reportData {
@@ -19,13 +21,16 @@ public sealed class WarcraftLogsClientTests : IDisposable
             {"data":{"reportData":{"r0":null,"r1":{"code":"healthy"}}},
              "errors":[{"message":"You do not have permission to view this report","path":["reportData","r0"]}]}
             """;
-        using var handler = new QueueHandler(partial, """{"data":{"ok":true}}""");
+        using var handler = new QueueHandler(
+            partial.Replace("You do not have permission to view this report", message),
+            """{"data":{"ok":true}}""");
         var client = fixture.CreateClient(handler);
 
         var failure = await Assert.ThrowsAsync<WarcraftLogsReportPrivateException>(() =>
             client.QueryGraphQLAsync(query));
 
         Assert.True(failure.IsReportAccessFailure);
+        Assert.Equal(archived, failure.IsArchived);
         Assert.Contains("r0", failure.InaccessibleReportAliases);
         var error = Assert.Single(failure.Errors);
         Assert.Equal(["reportData", "r0"], error.Path.Select(item => item.GetString()));

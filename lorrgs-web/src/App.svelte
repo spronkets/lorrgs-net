@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from './lib/components/Button.svelte';
   import * as WorldDataApi from './lib/worldDataApi';
   import * as HttpApi from './lib/common/http/apiClient';
 
@@ -9,11 +10,13 @@
   import HomePage from './pages/HomePage.svelte';
   import LandingPage from './pages/LandingPage.svelte';
   import CompRankingsPage from './pages/CompRankingsPage.svelte';
+  import ReportsPage from './pages/ReportsPage.svelte';
   import WorldDataPage from './pages/WorldDataPage.svelte';
   import RotationAnalyzerPage from './pages/RotationAnalyzerPage.svelte';
   import { getApiEditionSlug, getRaidsForEdition } from './lib/raidCatalog';
   import type { WorldDataSnapshot } from './lib/models/WorldDataSnapshot';
   import type { RaidCatalog } from './lib/models/RaidCatalog';
+  import { MANUAL_REPORT_QUERY_KEYS } from './lib/manualReports';
 
   let currentPage = 'home';
   let worldData: Required<WorldDataSnapshot> = {
@@ -45,7 +48,7 @@
 
   const THEME_STORAGE_KEY = 'lorrgs-theme';
   const PAGE_QUERY_KEY = 'page';
-  const APP_PAGES = new Set(['home', 'spec', 'comp', 'worlddata', 'rotation']);
+  const APP_PAGES = new Set(['home', 'spec', 'comp', 'reports', 'worlddata', 'rotation']);
 
   function applyTheme(nextTheme: string) {
     theme = nextTheme === 'dark' ? 'dark' : 'light';
@@ -167,6 +170,12 @@
   }
 
   function changeEdition(version: string) {
+    if (currentPage === 'reports' && version !== selectedVersion) {
+      const url = new URL(window.location.href);
+      for (const key of MANUAL_REPORT_QUERY_KEYS) url.searchParams.delete(key);
+      url.searchParams.set('edition', version);
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    }
     selectedVersion = version;
     loadWorldData();
   }
@@ -184,45 +193,63 @@
 <div class="app" class:theme-dark={theme === 'dark'} class:theme-light={theme === 'light'}>
   <header class="app-header">
     <nav class="app-nav" aria-label="Main navigation">
-      <button
-        class="brand-toggle"
+      <Button
+        variant="unstyled"
+        class={['app-button', `brand-toggle`]}
         type="button"
-        on:click={() => (currentPage = 'home')}
+        onclick={() => (currentPage = 'home')}
         aria-label="LorrgsNET home"
       >
         LorrgsNET
-      </button>
-      <button
-        class:active={currentPage === 'spec'}
+      </Button>
+      <Button
+        variant="unstyled"
+        class={['app-button', { active: currentPage === 'spec' }]}
         aria-current={currentPage === 'spec' ? 'page' : undefined}
-        on:click={() => openRankings('spec')}
+        onclick={() => openRankings('spec')}
       >
         Spec Rankings
-      </button>
-      <button
-        class:active={currentPage === 'comp'}
+      </Button>
+      <Button
+        variant="unstyled"
+        class={['app-button', { active: currentPage === 'comp' }]}
         aria-current={currentPage === 'comp' ? 'page' : undefined}
-        on:click={() => openRankings('comp')}
+        onclick={() => openRankings('comp')}
       >
         Comp Rankings
-      </button>
+      </Button>
+      <Button
+        variant="unstyled"
+        class={['app-button', { active: currentPage === 'reports' }]}
+        aria-current={currentPage === 'reports' ? 'page' : undefined}
+        onclick={() => (currentPage = 'reports')}>Load Report</Button
+      >
       <details class="tools-menu" bind:this={toolsMenu}>
         <summary class:active={currentPage === 'worlddata' || currentPage === 'rotation'}
           >Tools</summary
         >
         <div class="tools-options">
-          <button class:active={currentPage === 'worlddata'} on:click={() => openTool('worlddata')}>
+          <Button
+            variant="unstyled"
+            class={['app-button', { active: currentPage === 'worlddata' }]}
+            onclick={() => openTool('worlddata')}
+          >
             World Data
-          </button>
-          <button class:active={currentPage === 'rotation'} on:click={() => openTool('rotation')}>
+          </Button>
+          <Button
+            variant="unstyled"
+            class={['app-button', { active: currentPage === 'rotation' }]}
+            onclick={() => openTool('rotation')}
+          >
             Rotation Analyzer
-          </button>
+          </Button>
         </div>
       </details>
-      <button
+      <Button
+        variant="unstyled"
         type="button"
-        class="theme-toggle"
-        on:click={toggleTheme}
+        class={['app-button', `theme-toggle`]}
+        onclick={toggleTheme}
         aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
       >
@@ -243,7 +270,7 @@
             <path d="M20 15.5A9 9 0 0 1 8.5 4 9 9 0 1 0 20 15.5Z" />
           {/if}
         </svg>
-      </button>
+      </Button>
     </nav>
   </header>
 
@@ -274,6 +301,15 @@
         />
       {:else if currentPage === 'worlddata'}
         <WorldDataPage {worldData} />
+      {:else if currentPage === 'reports'}
+        {#key selectedVersion}
+          <ReportsPage
+            {worldData}
+            edition={getApiEditionSlug(selectedVersion)}
+            {selectedVersion}
+            oneditionchange={changeEdition}
+          />
+        {/key}
       {:else if currentPage === 'rotation'}
         <RotationAnalyzerPage edition={getApiEditionSlug(selectedVersion)} />
       {/if}
@@ -372,7 +408,7 @@
     z-index: 10;
   }
 
-  .brand-toggle {
+  :global(.brand-toggle.app-button) {
     margin: 0;
     padding: 0;
     border: none;
@@ -387,21 +423,21 @@
       transform 0.15s;
   }
 
-  .brand-toggle:hover {
+  :global(.brand-toggle.app-button:hover) {
     color: #2a8e8f;
   }
 
-  .brand-toggle:focus-visible {
+  :global(.brand-toggle.app-button:focus-visible) {
     outline: 2px solid #2a8e8f;
     outline-offset: 3px;
     border-radius: 0.35rem;
   }
 
-  .app.theme-dark .brand-toggle:hover {
+  .app.theme-dark :global(.brand-toggle.app-button:hover) {
     color: #8bddd6;
   }
 
-  .app.theme-dark .brand-toggle:focus-visible {
+  .app.theme-dark :global(.brand-toggle.app-button:focus-visible) {
     outline-color: #8bddd6;
   }
 
@@ -414,7 +450,7 @@
     align-items: center;
   }
 
-  .app-nav .brand-toggle {
+  .app-nav :global(.brand-toggle.app-button) {
     border: 0;
     background: transparent;
     padding: 0;
@@ -450,10 +486,10 @@
     border-radius: 6px;
     box-shadow: 0 6px 20px #0003;
   }
-  .tools-options button {
+  .tools-options :global(button.app-button) {
     text-align: left;
   }
-  .app-nav .theme-toggle {
+  .app-nav :global(.theme-toggle.app-button) {
     display: flex;
     padding: 6px;
     border-radius: 4px;
@@ -471,7 +507,7 @@
     color: inherit;
   }
 
-  .app-nav button {
+  .app-nav :global(button.app-button) {
     background: var(--nav-bg);
     border: 1px solid var(--nav-line);
     color: var(--nav-text);
@@ -483,13 +519,13 @@
     transition: all 0.2s;
   }
 
-  .app-nav button:hover {
+  .app-nav :global(button.app-button:hover) {
     border-color: var(--nav-hover-line);
     background: var(--nav-hover-bg);
     transform: translateY(-1px);
   }
 
-  .app-nav button.active {
+  .app-nav :global(button.active.app-button) {
     background: linear-gradient(135deg, #1c6f7e, #2a8e8f);
     border-color: #1a6a77;
     color: #effaf9;
@@ -519,12 +555,12 @@
       .app-nav {
         gap: 6px;
       }
-      .app-nav .brand-toggle {
+      .app-nav :global(.brand-toggle.app-button) {
         flex: 1;
         margin: 0;
         text-align: left;
       }
-      .app-nav > button:not(.brand-toggle):not(.theme-toggle) {
+      .app-nav > :global(button.app-button:not(.brand-toggle):not(.theme-toggle)) {
         order: 2;
         flex: 1 0 calc(50% - 6px);
         min-height: 40px;
@@ -533,7 +569,7 @@
         margin-left: 0;
       }
       .tools-menu summary,
-      .app-nav .theme-toggle {
+      .app-nav :global(.theme-toggle.app-button) {
         min-height: 40px;
         padding: 10px;
       }

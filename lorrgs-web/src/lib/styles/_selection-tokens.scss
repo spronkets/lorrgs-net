@@ -6,17 +6,15 @@
   letter-spacing: 0.08em;
 }
 
-@mixin selection-control {
+@mixin control-base {
   box-sizing: border-box;
   min-height: 44px;
   min-width: 0;
-  padding: var(--select-padding-y, 0.52rem) var(--select-padding-x, 0.62rem);
-  border: 1px solid var(--select-border);
+  padding: var(--select-padding-y, 0.3rem) var(--select-padding-x, 0.6rem);
+  border: 1px solid;
   border-radius: var(--radius-md, 0.58rem);
-  background-color: var(--select-bg);
-  color: var(--select-text);
   font-family: inherit;
-  font-size: var(--control-font-size, 0.95rem);
+  font-size: var(--control-font-size, 0.85rem);
   font-weight: 400;
   text-transform: none;
   letter-spacing: normal;
@@ -25,6 +23,14 @@
     border-color var(--transition-fast, 0.15s),
     box-shadow var(--transition-fast, 0.15s),
     background-color var(--transition-fast, 0.15s);
+}
+
+@mixin selection-control {
+  @include control-base;
+
+  border-color: var(--select-border);
+  background-color: var(--select-bg);
+  color: var(--select-text);
 
   &:hover:not(:disabled) {
     border-color: var(--select-hover-border);
@@ -83,7 +89,7 @@
   --radius-lg: 0.75rem;
   --radius-xl: 0.8rem;
 
-  --control-font-size: 0.95rem;
+  --control-font-size: 0.85rem;
   --label-font-size: 0.9rem;
   --meta-font-size: 0.82rem;
 
@@ -95,8 +101,8 @@
 
   --select-chevron-size: 0.72rem;
   --select-chevron-offset: 0.72rem;
-  --select-padding-y: 0.52rem;
-  --select-padding-x: 0.62rem;
+  --select-padding-y: 0.3rem;
+  --select-padding-x: 0.6rem;
   --select-padding-right: 2.1rem;
 
   --hero-title: #13243a;

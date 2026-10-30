@@ -1,6 +1,8 @@
 <script lang="ts">
+  import Button from './Button.svelte';
   import { maska } from 'maska/svelte';
   import { killTimeMask } from '../killTimeMask';
+  import Input from './Input.svelte';
   import Alert from './Alert.svelte';
   import { getRankingFilterError, toKillTimeInput, selectRankingReports } from '../rankingUtils';
   import type { RankingFilters } from '../models/rankings/RankingFilters';
@@ -28,7 +30,6 @@
   $: apiReports = Array.isArray(rankings?.reports) ? rankings.reports : ([] as RankingReport[]);
   $: filterError = getRankingFilterError(filters);
   $: visibleReports = selectRankingReports(apiReports, filters, sort);
-  $: activeFilterCount = Object.values(filters).filter(Boolean).length + (sort !== 'rank' ? 1 : 0);
 </script>
 
 <div class="rankings-list">
@@ -37,58 +38,60 @@
       <fieldset class="filter-group region-filter">
         <legend>Region</legend>
         {#each ['', 'us', 'eu', 'kr', 'tw', 'cn'] as region (region)}
-          <button
+          <Button
+            variant="secondary-outline"
+            size="small"
+            class={['rankings-list-button']}
             type="button"
             aria-label={region ? `Region ${region.toUpperCase()}` : 'All regions'}
             aria-pressed={filters.region === region}
-            on:click={() => (filters.region = region)}
-            >{region ? region.toUpperCase() : 'All'}</button
+            onclick={() => (filters.region = region)}
+            >{region ? region.toUpperCase() : 'All'}</Button
           >
         {/each}
       </fieldset>
       <fieldset class="filter-group duration-filter">
         <legend>Kill time</legend>
-        <input
+        <Input
           aria-label="Minimum kill time"
-          use:maska={killTimeMask}
+          action={(node) => maska(node, killTimeMask)}
           type="text"
           placeholder="m:ss"
           bind:value={filters.minDuration}
-          on:blur={() => (filters.minDuration = toKillTimeInput(filters.minDuration))}
-          class="kill-time"
+          onblur={() => (filters.minDuration = toKillTimeInput(filters.minDuration))}
         />
         <span aria-hidden="true">–</span>
-        <input
+        <Input
           aria-label="Maximum kill time"
-          use:maska={killTimeMask}
+          action={(node) => maska(node, killTimeMask)}
           type="text"
           placeholder="m:ss"
           bind:value={filters.maxDuration}
-          on:blur={() => (filters.maxDuration = toKillTimeInput(filters.maxDuration))}
-          class="kill-time"
+          onblur={() => (filters.maxDuration = toKillTimeInput(filters.maxDuration))}
         />
       </fieldset>
-      <details class="advanced-filters">
-        <summary>Filters{activeFilterCount ? ` (${activeFilterCount} active)` : ''}</summary>
-        <div class="advanced-options">
-          <fieldset class="filter-group">
-            <legend>Date range</legend>
-            <input aria-label="From date" type="date" bind:value={filters.fromDate} />
-            <span aria-hidden="true">–</span>
-            <input aria-label="To date" type="date" bind:value={filters.toDate} />
-          </fieldset>
-          <label
-            >Sort by
-            <select bind:value={sort}>
-              <option value="rank">Original rank</option>
-              <option value="performance">Performance (highest)</option>
-              <option value="duration">Kill time (shortest)</option>
-              <option value="date">Date (newest)</option>
-            </select>
-          </label>
-          <button type="button" on:click={resetFilters}>Reset filters</button>
-        </div>
-      </details>
+      <fieldset class="filter-group date-filter">
+        <legend>Date range</legend>
+        <Input aria-label="From date" type="date" bind:value={filters.fromDate} />
+        <span aria-hidden="true">–</span>
+        <Input aria-label="To date" type="date" bind:value={filters.toDate} />
+      </fieldset>
+      <label
+        >Sort by
+        <select bind:value={sort}>
+          <option value="rank">Original rank</option>
+          <option value="performance">Performance (highest)</option>
+          <option value="duration">Kill time (shortest)</option>
+          <option value="date">Date (newest)</option>
+        </select>
+      </label>
+      <Button
+        variant="secondary-outline"
+        size="small"
+        class={['rankings-list-button']}
+        type="button"
+        onclick={resetFilters}>Reset filters</Button
+      >
     </div>
     {#if filterError}<Alert variant="error">{filterError}</Alert>{/if}
   </section>
@@ -129,34 +132,20 @@
     .analytics .filter-group legend {
       margin-bottom: 5px;
     }
-    .analytics .filter-group button {
+    .analytics .filter-group :global(button.rankings-list-button) {
       flex: 1;
       min-width: 34px;
-      min-height: 38px;
+      min-height: 44px;
     }
-    .analytics .duration-filter input {
+    .analytics .duration-filter > :global(.form-field) {
       flex: 1;
       width: 0;
       min-width: 0;
     }
-    .analytics .advanced-filters[open] {
-      grid-column: 1 / -1;
-    }
-    .analytics .advanced-filters summary {
-      min-height: 38px;
-      box-sizing: border-box;
-      padding: 10px;
-      border: 1px solid currentColor;
-      border-radius: 4px;
-    }
-    .analytics .advanced-options {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    .analytics .advanced-options .filter-group {
+    .analytics .date-filter {
       flex-wrap: wrap;
     }
-    .analytics .advanced-options input {
+    .analytics .date-filter > :global(.form-field) {
       min-width: 0;
       flex: 1;
     }
@@ -175,33 +164,8 @@
 
     margin-bottom: 3px;
   }
-  .filter-group button[aria-pressed='true'] {
-    border-color: #c64a85;
-    box-shadow: inset 0 -2px #c64a85;
-  }
-  .analytics-filters button {
-    cursor: pointer;
-    transition:
-      background 120ms,
-      border-color 120ms,
-      box-shadow 120ms;
-  }
-  .analytics-filters button:hover {
-    background: #e2edf6;
-    border-color: #687e94;
-  }
-  .analytics-filters button:focus-visible {
-    outline: 2px solid #687e94;
-    outline-offset: 2px;
-  }
-  :global(.theme-dark) .analytics-filters button:hover {
-    background: #33465b;
-    border-color: #a4b8cb;
-  }
-  :global(.theme-dark) .analytics-filters button:focus-visible {
-    outline-color: #a4b8cb;
-  }
-  .kill-time {
+
+  .duration-filter > :global(.form-field) {
     width: 105px;
   }
   .analytics {
@@ -227,32 +191,8 @@
     gap: 0.3rem;
   }
 
-  .analytics-filters button {
-    padding: 0.3rem;
-    border: 1px solid #8fc1e4;
-    border-radius: 0.3rem;
-    background: #f3f9ff;
-    color: #2a4b69;
-  }
-
-  .analytics-filters input {
-    @include selectionTokens.selection-control;
-  }
   .analytics-filters select {
     @include selectionTokens.selection-dropdown;
-  }
-
-  .advanced-filters summary {
-    cursor: pointer;
-    font-size: 0.8rem;
-    padding: 0.3rem;
-  }
-  .advanced-options {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: end;
-    gap: 0.5rem;
-    padding: 0.5rem 0;
   }
 
   .rankings-list {
@@ -273,12 +213,5 @@
   :global(.theme-dark) .analytics {
     background: transparent;
     color: #c9e4f8;
-  }
-
-  :global(.theme-dark) .analytics-filters button {
-    background: #102032;
-    border-color: #355472;
-    color: #c9e4f8;
-    color-scheme: dark;
   }
 </style>

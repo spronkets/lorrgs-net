@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '../lib/components/Button.svelte';
   import Alert from '../lib/components/Alert.svelte';
   import Spinner from '../lib/components/Spinner.svelte';
   import { onMount, tick } from 'svelte';
@@ -340,8 +341,12 @@
           </h2>
         </div>
       </div>
-      <button class="edit-selection" type="button" on:click={expandSelections}
-        >Change selection</button
+      <Button
+        variant="secondary-outline"
+        size="small"
+        class={['home-page-button', `edit-selection`]}
+        type="button"
+        onclick={expandSelections}>Change selection</Button
       >
     </div>
   {:else}
@@ -360,12 +365,15 @@
         </h3>
         <div class="spec-grid">
           {#each specs as spec (spec.fullNameSlug)}
-            <button
-              class="spec-card"
-              class:disabled={!selectedBoss}
-              class:active={selectedSpec === spec.fullNameSlug}
+            <Button
+              variant="unstyled"
+              class={[
+                'home-page-button',
+                `spec-card`,
+                { disabled: !selectedBoss, active: selectedSpec === spec.fullNameSlug }
+              ]}
               style="--class-accent: {getSpecClassColor(spec)}"
-              on:click={() => selectSpec(spec)}
+              onclick={() => selectSpec(spec)}
               title={selectedBoss ? `View ${spec.fullName}` : 'Select a boss first'}
             >
               <div class="spec-media">
@@ -383,7 +391,7 @@
                 />
               </div>
               <span class="spec-name">{spec.fullName}</span>
-            </button>
+            </Button>
           {/each}
         </div>
       </div>
@@ -444,7 +452,7 @@
     width: 20px;
     height: 20px;
   }
-  .comparison-open .edit-selection {
+  .comparison-open :global(.edit-selection.home-page-button) {
     margin: 0;
     padding: 6px 10px;
     font-size: 12px;
@@ -469,7 +477,7 @@
     gap: var(--space-3);
   }
 
-  .spec-card {
+  :global(.spec-card.home-page-button) {
     width: 100%;
     border: 1px solid
       color-mix(in srgb, var(--class-accent, var(--select-border)) 22%, var(--select-border));
@@ -494,7 +502,7 @@
       transform var(--transition-fast);
   }
 
-  .spec-card:hover:not(.disabled) {
+  :global(.spec-card.home-page-button:hover:not(.disabled)) {
     border-color: color-mix(
       in srgb,
       var(--class-accent, var(--select-hover-border)) 48%,
@@ -505,7 +513,7 @@
     transform: translateY(-1px);
   }
 
-  .spec-card.active {
+  :global(.spec-card.active.home-page-button) {
     border-color: color-mix(
       in srgb,
       var(--class-accent, var(--select-focus-border)) 72%,
@@ -521,7 +529,7 @@
       var(--select-focus-ring);
   }
 
-  .spec-card.disabled {
+  :global(.spec-card.disabled.home-page-button) {
     background: linear-gradient(160deg, var(--disabled-bg), var(--disabled-bg-alt));
     border-color: var(--disabled-border);
     color: var(--disabled-text);
@@ -532,18 +540,18 @@
       0 1px 2px rgba(67, 88, 111, 0.12);
   }
 
-  .spec-card.disabled .spec-icon {
+  :global(.spec-card.disabled.home-page-button) .spec-icon {
     border-color: var(--disabled-border);
     filter: grayscale(0.78) saturate(0.2) brightness(0.9);
   }
 
-  .spec-card.disabled .class-icon {
+  :global(.spec-card.disabled.home-page-button) .class-icon {
     border-color: var(--disabled-icon-bg);
     background: var(--disabled-icon-bg);
     filter: grayscale(0.78) saturate(0.2) brightness(0.9);
   }
 
-  .spec-card.disabled .spec-name {
+  :global(.spec-card.disabled.home-page-button) .spec-name {
     color: var(--disabled-text);
     font-weight: 500;
   }
@@ -582,7 +590,7 @@
     color: color-mix(in srgb, currentColor 82%, var(--class-accent, currentColor) 18%);
   }
 
-  .spec-card.active .spec-name {
+  :global(.spec-card.active.home-page-button) .spec-name {
     color: color-mix(in srgb, currentColor 62%, var(--class-accent, currentColor) 38%);
   }
 
@@ -665,23 +673,9 @@
     gap: 0.5rem;
   }
 
-  .edit-selection {
+  :global(.edit-selection.home-page-button) {
     justify-self: start;
     margin-top: var(--space-2);
-    padding: 0.45rem 0.7rem;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--select-border);
-    background: var(--select-bg);
-    color: var(--select-text);
-    cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-
-  .edit-selection:hover {
-    border-color: var(--select-hover-border);
-    background: var(--select-hover-bg);
-    box-shadow: var(--select-hover-ring);
   }
 
   @media (max-width: 700px) {
@@ -726,7 +720,7 @@
       text-align: center;
       font-size: 0.8rem;
     }
-    .comparison-open .edit-selection {
+    .comparison-open :global(.edit-selection.home-page-button) {
       position: absolute;
       top: 0;
       right: 0;
@@ -737,7 +731,7 @@
     }
   }
 
-  :global(.theme-dark) .spec-card.disabled {
+  :global(.theme-dark) :global(.spec-card.disabled.home-page-button) {
     background: linear-gradient(160deg, var(--disabled-bg), var(--disabled-bg-alt));
     border-color: var(--disabled-border);
     color: var(--disabled-text);
@@ -746,18 +740,18 @@
     box-shadow: var(--disabled-icon-ring);
   }
 
-  :global(.theme-dark) .spec-card.disabled .spec-icon {
+  :global(.theme-dark) :global(.spec-card.disabled.home-page-button) .spec-icon {
     border-color: var(--disabled-border);
     filter: grayscale(0.68) saturate(0.28) brightness(0.85);
   }
 
-  :global(.theme-dark) .spec-card.disabled .class-icon {
+  :global(.theme-dark) :global(.spec-card.disabled.home-page-button) .class-icon {
     border-color: var(--disabled-icon-bg);
     background: var(--disabled-icon-bg);
     filter: grayscale(0.68) saturate(0.28) brightness(0.85);
   }
 
-  :global(.theme-dark) .spec-card.disabled .spec-name {
+  :global(.theme-dark) :global(.spec-card.disabled.home-page-button) .spec-name {
     color: var(--disabled-text);
     font-weight: 500;
   }

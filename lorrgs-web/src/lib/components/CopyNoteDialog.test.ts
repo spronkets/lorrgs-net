@@ -36,6 +36,8 @@ describe('copy note editor', () => {
     render(CopyNoteDialog, props);
     expect(screen.getByRole('dialog', { name: 'Copy Note' })).toHaveAttribute('open');
     const preview = screen.getByRole('textbox', { name: 'Note preview' });
+    expect(preview).toHaveClass('monospace');
+    expect(preview).toHaveStyle('min-height: 260px');
     expect(preview).toHaveValue('{time:00:10.0} - {spell:31884}');
     await fireEvent.input(screen.getByRole('textbox', { name: 'Name or Nickname' }), {
       target: { value: 'Me' }

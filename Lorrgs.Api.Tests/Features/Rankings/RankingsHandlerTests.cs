@@ -468,15 +468,17 @@ public sealed class RankingsHandlerTests : IDisposable
         Assert.Equal(0, timelines.BossLoads);
     }
 
-    [Fact]
-    public async Task PercentileEnrichmentKeepsHealthyPartialDataAndDropsOnlyMissingReports()
+    [Theory]
+    [InlineData("This report does not exist.")]
+    [InlineData("This report has been archived. Subscribing users can access the report content via the /user API endpoint.")]
+    public async Task PercentileEnrichmentKeepsHealthyPartialDataAndDropsOnlyMissingReports(string message)
     {
         const string partial = """
             {"data":{"reportData":{"r0":null,"r1":{"title":"Healthy title",
             "fights":[{"id":2,"startTime":0,"endTime":10000,"phaseTransitions":[]}],"rankings":[]}}},
             "errors":[{"message":"This report does not exist.","path":["reportData","r0"]}]}
             """;
-        using var handler = new QueueHandler(partial);
+        using var handler = new QueueHandler(partial.Replace("This report does not exist.", message));
         var reports = new List<RankingReport> { Report("aEnrichmentMissing", 1), Report("bEnrichmentHealthy", 2) };
 
         await Enrich(fixture.CreateClient(handler), reports);

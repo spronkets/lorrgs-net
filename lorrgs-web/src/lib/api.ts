@@ -234,8 +234,8 @@ export async function markRankingDirty(
 }
 
 // Rotation analysis endpoints
-export async function lookupReport(reportCode: string) {
-  return get(`/warcraftlogs/reports/${reportCode}/lookup`);
+export async function lookupReport(reportCode: string, signal?: AbortSignal) {
+  return get(`/warcraftlogs/reports/${encodeURIComponent(reportCode)}/lookup`, { signal });
 }
 
 export async function analyzeRotation(payload: unknown) {

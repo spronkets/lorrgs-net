@@ -52,8 +52,8 @@ export class CompDetailLoader {
             ...summaryFight,
             ...detailFight,
             startTime: summaryFight?.startTime ?? report.startTime,
-            deaths: summaryFight?.deaths,
-            damageTaken: summaryFight?.damageTaken
+            deaths: detailFight.deaths ?? summaryFight?.deaths,
+            damageTaken: detailFight.damageTaken ?? summaryFight?.damageTaken
           }
         ]
       });

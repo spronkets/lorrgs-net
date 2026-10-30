@@ -173,19 +173,41 @@ public sealed class CompRankingsTests : IDisposable
         Assert.NotNull(player.Timeline);
     }
 
-    [Fact]
-    public async Task DetailLoadsOnlyRequestedFightWithCompositionAndObservedPhases()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DetailLoadsOnlyRequestedFightWithCompositionAndObservedPhases(bool kill)
     {
-        using var handler = new QueueHandler(Roster(7));
+        var payload = System.Text.Json.Nodes.JsonNode.Parse(Roster(7))!;
+        payload["data"]!["reportData"]!["report"]!["fights"]![0]!["kill"] = kill;
+        using var handler = new QueueHandler(payload.ToJsonString());
         var report = await Service(handler).LoadDetailsAsync("ReportA", 7, "anniversary", false, default);
         Assert.Equal(1, handler.GraphQlRequests);
         Assert.Equal(7, Assert.Single(report.Fights).FightId);
+        Assert.Equal(kill, report.Fights[0].IsKill);
         Assert.Equal(1, report.Fights[0].Composition!.Roles["heal"]);
         Assert.Equal(1, report.Fights[0].Composition!.Specs["holy-paladin"]);
         Assert.NotNull(report.Fights[0].Phases);
         Assert.Equal("Healer", Assert.Single(report.Players).Name);
         Assert.True(Assert.Single(report.Players).Timeline!.IsComplete);
         Assert.Equal(7, handler.Requests[0].GetProperty("variables").GetProperty("fightIds")[0].GetInt32());
+    }
+
+    [Theory]
+    [InlineData(true, 2)]
+    [InlineData(false, 0)]
+    public async Task DetailsIncludeDamageTakenAndDeathsFromSummaryTable(bool hasDeaths, int expectedDeaths)
+    {
+        var payload = System.Text.Json.Nodes.JsonNode.Parse(Roster(7))!;
+        var summary = payload["data"]!["reportData"]!["report"]!["table"]!["data"]!;
+        summary["damageTaken"] = System.Text.Json.Nodes.JsonNode.Parse("""[{"total":1200},{"total":345}]""");
+        summary["deathEvents"] = hasDeaths
+            ? System.Text.Json.Nodes.JsonNode.Parse("""[{"id":7,"deathTime":100},{"id":7,"deathTime":200}]""")
+            : null;
+        using var handler = new QueueHandler(payload.ToJsonString());
+        var report = await Service(handler).LoadDetailsAsync("ReportA", 7, "anniversary", false, default);
+        Assert.Equal(1545, report.Fights[0].DamageTaken);
+        Assert.Equal(expectedDeaths, report.Fights[0].Deaths);
     }
 
     [Theory]
@@ -218,8 +240,11 @@ public sealed class CompRankingsTests : IDisposable
         Assert.Equal(1, handler.GraphQlRequests);
     }
 
-    [Fact]
-    public async Task DetailsIncludeParseRegionAndUnambiguousCharacterGuild()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task DetailsIncludeParseRegionAndUnambiguousCharacterGuild(bool approximate, bool numericStrings)
     {
         var roster = System.Text.Json.Nodes.JsonNode.Parse(Roster(7))!;
         var metadata = roster["data"]!["reportData"]!["report"]!;
@@ -233,6 +258,21 @@ public sealed class CompRankingsTests : IDisposable
                "server":{"name":"Spineshatter","region":"EU"}}
             ]}}}]}
             """);
+        if (approximate)
+        {
+            var ranking = metadata["healingRankings"]!["data"]![1]!;
+            ranking["speed"]!["rank"] = "~3";
+            ranking["execution"]!["rank"] = "~2";
+            ranking["execution"]!["best"] = "~1";
+        }
+        if (numericStrings)
+        {
+            var ranking = metadata["healingRankings"]!["data"]![1]!;
+            ranking["speed"]!["rank"] = "3";
+            ranking["speed"]!["best"] = "2";
+            ranking["execution"]!["rank"] = "2";
+            ranking["execution"]!["best"] = "1";
+        }
         using var handler = new QueueHandler(roster.ToJsonString(),
             """{"data":{"characterData":{"c123":{"guilds":[{"name":"Raid Guild"}]}}}}""");
         var service = Service(handler);
@@ -242,18 +282,37 @@ public sealed class CompRankingsTests : IDisposable
         Assert.Equal("EU", player.ServerRegion);
         Assert.Equal("Raid Guild", player.GuildName);
         var fight = Assert.Single(report.Fights);
-        Assert.Equal(new RaidFightRanking(3, 2, 1175, 99), fight.Speed);
+        Assert.Equal(new RaidFightRanking(3, 2, 1175, 99) { IsApproximate = approximate }, fight.Speed);
         Assert.Equal("Raid Guild", report.GuildName);
         Assert.Equal(2, report.FactionId);
         Assert.Equal("Thunderstrike", report.ServerName);
         Assert.Equal("EU", report.ServerRegion);
-        Assert.Equal(new RaidFightRanking(2, 1, 1175, 99.5), fight.Execution);
+        Assert.Equal(new RaidFightRanking(2, 1, 1175, 99.5)
+        { IsApproximate = approximate, IsBestApproximate = approximate }, fight.Execution);
         var json = JsonSerializer.SerializeToElement(report, JsonSerializerOptions.Web);
         Assert.Equal(1175, json.GetProperty("fights")[0].GetProperty("speed").GetProperty("totalParses").GetInt32());
         Assert.Equal(99.5, json.GetProperty("fights")[0].GetProperty("execution").GetProperty("rankPercent").GetDouble());
         Assert.Equal(2, handler.GraphQlRequests);
         await service.LoadDetailsAsync("ReportA", 7, "anniversary", false, default);
         Assert.Equal(2, handler.GraphQlRequests);
+    }
+
+    [Theory]
+    [InlineData("\"invalid\"")]
+    [InlineData("2147483648")]
+    [InlineData("1.5")]
+    [InlineData("true")]
+    [InlineData("-1")]
+    public async Task DetailsRejectInvalidRaidRanksExplicitly(string rank)
+    {
+        var roster = System.Text.Json.Nodes.JsonNode.Parse(Roster(7))!;
+        roster["data"]!["reportData"]!["report"]!["healingRankings"] =
+            System.Text.Json.Nodes.JsonNode.Parse(
+                """{"data":[{"fightID":7,"speed":{"rank":RANK}}]}""".Replace("RANK", rank));
+        using var handler = new QueueHandler(roster.ToJsonString());
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            Service(handler).LoadDetailsAsync("ReportA", 7, "anniversary", false, default));
+        Assert.Contains("invalid raid ranking rank", error.Message);
     }
 
     [Fact]

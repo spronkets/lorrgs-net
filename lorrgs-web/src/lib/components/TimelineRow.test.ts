@@ -490,6 +490,10 @@ describe('TimelineRow', () => {
       )
     ).toBeInTheDocument();
     expect(screen.queryByText(/traceId/)).not.toBeInTheDocument();
+    const retry = screen.getByRole('button', { name: 'Retry' });
+    expect(retry.closest('.alert')).toHaveAttribute('data-variant', 'warning');
+    expect(retry).toHaveAttribute('data-tone', 'warning');
+    expect(retry).toHaveAttribute('data-outline', 'true');
     await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(input.onload).toHaveBeenCalledWith(input.report);
   });

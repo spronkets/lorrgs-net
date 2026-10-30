@@ -13,3 +13,11 @@ it('shows only the HTTP error summary without response bodies or trace IDs', () 
   expect(timelineErrorSummary('Rate limited')).toBe('Rate limited');
   expect(timelineErrorSummary('{"traceId":"private"}')).toBe('Unable to load timeline');
 });
+
+it('explains archived report access without exposing upstream response data', () => {
+  expect(timelineErrorSummary(
+    'API Error: 403 Forbidden - This Warcraft Logs report is archived. Its timeline requires subscriber access through Warcraft Logs and cannot be loaded by this app.'
+  )).toBe('Archived report — timeline requires Warcraft Logs subscriber access.');
+  expect(timelineErrorSummary('API Error: 403 Forbidden - This Warcraft Logs report is private.'))
+    .toBe('Forbidden');
+});

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Alert from './Alert.svelte';
+  import Button from './Button.svelte';
   import Spinner from './Spinner.svelte';
   import { onMount, tick, untrack } from 'svelte';
   import Toast from './Toast.svelte';
@@ -165,13 +166,13 @@
           ? showDamageTaken && event.isManaDrain
           : event.kind === 'mana-returned'
             ? showManaReceived
-          : event.kind === 'heal'
-            ? showDirectHeals
-            : event.kind === 'hot'
-              ? showHots
-              : event.kind === 'damage'
-                ? showDamageTaken
-                : true
+            : event.kind === 'heal'
+              ? showDirectHeals
+              : event.kind === 'hot'
+                ? showHots
+                : event.kind === 'damage'
+                  ? showDamageTaken
+                  : true
       );
       const healingIds = new Set(
         timeline.events
@@ -229,7 +230,6 @@
     axisDuration
   ]);
   const queue = $derived(reports.map(({ report }) => report).filter(canLoadTimeline));
-  const pending = $derived(queue.filter((report) => !loader.loaded.has(timelineKey(report))));
   $effect(() => {
     const current = queue;
     untrack(() => loader.setReports(current));
@@ -272,37 +272,41 @@
     <fieldset>
       <legend>Timeline</legend>
       {#each [{ name: 'Spell icons', key: 'icons' }, { name: 'Casts', key: 'casts' }, { name: 'Buff durations', key: 'buffs' }, { name: 'Deaths', key: 'deaths' }, { name: 'Show received buffs', key: 'received-buffs' }, { name: 'Show healing received', key: 'health' }, { name: 'Show damage taken', key: 'damage' }, { name: 'Show mana received', key: 'mana-received' }] as option (option.key)}
-        <label class="option-toggle" title={option.name}>
-          <input
-            type="checkbox"
-            aria-label={option.name}
-            checked={option.key === 'icons'
-              ? showIcons
-              : option.key === 'casts'
-                ? showCasts
-                : option.key === 'buffs'
-                  ? showBuffs
-                  : option.key === 'deaths'
-                    ? showDeaths
-                    : option.key === 'health'
-                      ? showDirectHeals
-                      : option.key === 'received-buffs'
-                        ? showReceivedBuffs
-                        : option.key === 'damage'
+        {@const selected =
+          option.key === 'icons'
+            ? showIcons
+            : option.key === 'casts'
+              ? showCasts
+              : option.key === 'buffs'
+                ? showBuffs
+                : option.key === 'deaths'
+                  ? showDeaths
+                  : option.key === 'health'
+                    ? showDirectHeals
+                    : option.key === 'received-buffs'
+                      ? showReceivedBuffs
+                      : option.key === 'damage'
                         ? showDamageTaken
                         : showManaReceived}
-            onchange={(event) => {
-              const checked = event.currentTarget.checked;
-              if (option.key === 'icons') showIcons = checked;
-              else if (option.key === 'casts') showCasts = checked;
-              else if (option.key === 'buffs') showBuffs = checked;
-              else if (option.key === 'deaths') showDeaths = checked;
-              else if (option.key === 'health') showDirectHeals = checked;
-              else if (option.key === 'received-buffs') showReceivedBuffs = checked;
-              else if (option.key === 'damage') showDamageTaken = checked;
-              else if (option.key === 'mana-received') showManaReceived = checked;
-            }}
-          />
+        <Button
+          variant="secondary-outline"
+          size="small"
+          class="option-toggle"
+          title={option.name}
+          aria-label={option.name}
+          aria-pressed={selected}
+          onclick={() => {
+            const checked = !selected;
+            if (option.key === 'icons') showIcons = checked;
+            else if (option.key === 'casts') showCasts = checked;
+            else if (option.key === 'buffs') showBuffs = checked;
+            else if (option.key === 'deaths') showDeaths = checked;
+            else if (option.key === 'health') showDirectHeals = checked;
+            else if (option.key === 'received-buffs') showReceivedBuffs = checked;
+            else if (option.key === 'damage') showDamageTaken = checked;
+            else if (option.key === 'mana-received') showManaReceived = checked;
+          }}
+        >
           <span aria-hidden="true">
             <svg
               width="18"
@@ -326,10 +330,14 @@
               {:else if option.key === 'deaths'}
                 <path d="M12 3v18M6 9h12" />
               {:else if option.key === 'health'}
-                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" />
+                <path
+                  d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"
+                />
                 <path d="M8 12h8m-4-4v8" />
               {:else if option.key === 'received-buffs'}
-                <path d="m12 3 2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5L12 3Zm7 13v6m-3-3h6" />
+                <path
+                  d="m12 3 2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5L12 3Zm7 13v6m-3-3h6"
+                />
               {:else if option.key === 'damage'}
                 <path d="M12 3s-7 8-7 12a7 7 0 0 0 14 0c0-4-7-12-7-12Z" />
                 <path d="M9 16a3 3 0 0 0 3 3" />
@@ -339,7 +347,7 @@
               {/if}
             </svg>
           </span>
-        </label>
+        </Button>
       {/each}
     </fieldset>
     <label class="zoom"
@@ -352,10 +360,6 @@
     </label>
     {#if loader.batchLoading}
       <span role="status" aria-label="Loading timelines"><Spinner inline /></span>
-    {:else if pending.length}
-      <button type="button" onclick={() => loader.loadNext()}>
-        {loader.stopped ? 'Resume timeline loading' : 'Load next 3 timelines'}
-      </button>
     {/if}
   </div>
   <SpellSelection
@@ -369,7 +373,7 @@
   {#if loader.stopped}
     <Alert variant="warning">
       Further automatic timeline batches are paused. Other in-flight requests can finish. Use Retry
-      or Resume timeline loading when you're ready.
+      on a failed row or Load report on another row when you're ready.
     </Alert>
   {/if}
   {#if clipboardNotification}
@@ -580,8 +584,9 @@
     gap: 8px;
     min-width: 0;
   }
-  .option-toggle {
-    position: relative;
+  .timeline-controls :global(.option-toggle) {
+    width: 44px;
+    padding: 0;
   }
   .timeline-panel {
     min-width: 0;
@@ -596,33 +601,12 @@
   .mobile-timeline-hint {
     display: none;
   }
-  .option-toggle input {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    opacity: 0;
-    cursor: pointer;
-  }
-  .option-toggle span {
+  .timeline-controls :global(.option-toggle span) {
     display: grid;
     place-items: center;
-    width: 30px;
-    height: 28px;
-    border: 1px solid var(--line);
-    border-radius: 3px;
-    opacity: 0.45;
   }
-  .option-toggle svg {
+  .timeline-controls :global(.option-toggle svg) {
     display: block;
-  }
-  .option-toggle input:checked + span {
-    opacity: 1;
-    background: var(--line);
-  }
-  .option-toggle input:focus-visible + span {
-    outline: 2px solid var(--text);
-    outline-offset: 2px;
   }
   .spell-inspector {
     display: flex;
@@ -682,14 +666,15 @@
     display: flex;
     flex-wrap: wrap;
     gap: 3px;
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    padding: 6px 10px;
+    border: 0;
+    padding: 0;
     margin: 0;
   }
   legend {
-    font-size: 12px;
-    font-weight: 600;
+    @include selectionTokens.selection-label;
+
+    padding: 0;
+    margin-bottom: 4px;
   }
   label {
     font-size: 12px;
@@ -702,28 +687,8 @@
 
     display: grid;
   }
-  button {
-    color: var(--text);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 3px;
-    padding: 5px 8px;
-    font: inherit;
-    font-size: 12px;
-  }
   select {
     @include selectionTokens.selection-dropdown;
-  }
-  button {
-    cursor: pointer;
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: wait;
-  }
-  button:hover:not(:disabled),
-  button:focus-visible {
-    border-color: var(--accent);
   }
   .timeline-scroll {
     overflow: auto;
@@ -810,13 +775,12 @@
       box-sizing: border-box;
       flex-wrap: nowrap;
     }
-    .option-toggle span {
-      width: 36px;
-      height: 36px;
+    .timeline-controls :global(.option-toggle) {
+      width: 44px;
+      min-height: 44px;
     }
-    .timeline-controls button,
     .timeline-controls select {
-      min-height: 40px;
+      min-height: 44px;
     }
   }
 </style>

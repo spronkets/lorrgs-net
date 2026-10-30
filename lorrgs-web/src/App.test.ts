@@ -43,7 +43,9 @@ describe('App version mapping', () => {
   it('does not replace the current edition data with an older in-flight response', async () => {
     mockWorldData();
     history.replaceState({}, '', '/?edition=Anniversary');
-    let resolveOlder: (value: Awaited<ReturnType<typeof WorldDataApi.getBosses>>) => void = () => {};
+    let resolveOlder: (
+      value: Awaited<ReturnType<typeof WorldDataApi.getBosses>>
+    ) => void = () => {};
     vi.mocked(WorldDataApi.getBosses).mockImplementation((edition) =>
       edition === 'midnight'
         ? new Promise((resolve) => {
@@ -66,6 +68,26 @@ describe('App version mapping', () => {
   it('uses the retail catalog key and retail icon for the Retail option', () => {
     expect(getEditionSlug('Retail')).toBe('retail');
     expect(getVersionIconUrl('Retail')).toBe('/images/wow/editions/midnight.png');
+  });
+
+  it('opens manual reports from navigation and supports direct links and edition changes', async () => {
+    mockWorldData();
+    history.replaceState({}, '', '/?page=reports&edition=Anniversary');
+    render(App);
+    await screen.findByRole('heading', { name: 'Load Report' });
+    expect(screen.getByRole('button', { name: 'Load Report' })).toHaveAttribute('aria-current', 'page');
+    history.replaceState({}, '', '/?page=reports&edition=Anniversary&report=ReportA&reportBoss=ReportA:10&pull=ReportA:1&loadedPull=ReportA:1');
+    await fireEvent.click(screen.getByRole('button', { name: 'Era' }));
+    await waitFor(() => expect(WorldDataApi.getClasses).toHaveBeenLastCalledWith('era'));
+    await screen.findByRole('heading', { name: 'Load Report' });
+    expect(new URLSearchParams(location.search).get('edition')).toBe('Era');
+    for (const key of ['report', 'reportBoss', 'pull', 'loadedPull'])
+      expect(new URLSearchParams(location.search).has(key)).toBe(false);
+    await fireEvent.click(screen.getByRole('button', { name: 'LorrgsNET home' }));
+    await screen.findByRole('heading', { name: 'Compare raid cooldowns' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Load Report' }));
+    await screen.findByRole('heading', { name: 'Load Report' });
+    expect(new URLSearchParams(location.search).get('page')).toBe('reports');
   });
 
   it.each([true, false])(

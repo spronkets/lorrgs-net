@@ -10,6 +10,8 @@
 # Lookup and analysis require configured WCL credentials and consume upstream quota.
 # Replace fightId/sourceId/playerName with identities visible in the selected report.
 # Lookup: 200, 400, 429, 500. The report code is trimmed before the WCL call.
+# Lookup returns report startTime, zone, and fights with encounterID, kill,
+# difficulty, startTime and endTime for the manual Reports page.
 # Analysis: 200, 400, 404, 429, 500. Errors contain "error"; 500 also includes "detail".
 # Analysis requires reportCode. Optional fightId/sourceId/playerName select the subject;
 # omitted selections use the service's default fight/actor resolution.

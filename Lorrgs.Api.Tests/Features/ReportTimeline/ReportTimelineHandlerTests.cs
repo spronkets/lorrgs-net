@@ -97,6 +97,27 @@ public sealed class ReportTimelineHandlerTests
     }
 
     [Fact]
+    public async Task ArchivedReportsReturnActionableSubscriberAccessErrorForBothTimelines()
+    {
+        var handlers = Handlers(new TimelineService
+        {
+            Failure = new WarcraftLogsReportPrivateException("This report has been archived.")
+        });
+        var results = new[]
+        {
+            await handlers.Player.Handle(new GetPlayerTimelineRequest("report", 22, null, "Markofmir", "era")),
+            await handlers.Boss.Handle(new GetBossTimelineRequest("report", 22, "era"))
+        };
+        foreach (var result in results)
+        {
+            var problem = Assert.IsType<ProblemDetails>(HttpResultAssertions.Status(403, result).Value);
+            Assert.Contains("archived", problem.Detail);
+            Assert.Contains("subscriber access", problem.Detail);
+            Assert.DoesNotContain("Make it public", problem.Detail);
+        }
+    }
+
+    [Fact]
     public async Task GetBossReturnsBadGatewayWhenReferenceCannotBeLoaded()
     {
         var result = await Handlers(new TimelineService { Boss = null }).Boss.Handle(new GetBossTimelineRequest("report", 1));

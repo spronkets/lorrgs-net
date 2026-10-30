@@ -70,7 +70,47 @@ beforeEach(() => {
 });
 afterEach(() => vi.resetAllMocks());
 
-it('shows deaths only when the count is positive', async () => {
+it('renders archived report errors with the shared alert icon and allows retrying', async () => {
+  const message = 'Archived report — timeline requires Warcraft Logs subscriber access.';
+  vi.mocked(getCompRankingDetails).mockRejectedValueOnce(new Error(message));
+  render(CompRankingsResults, {
+    rankings: { ...rankings, reports: summaries.slice(0, 1) },
+    worldData: {},
+    edition: 'anniversary'
+  });
+
+  const notice = await screen.findByText(message);
+  const alert = notice.closest('[role="alert"]');
+  expect(alert).toHaveClass('alert');
+  expect(alert).toHaveAttribute('data-variant', 'error');
+  expect(alert?.querySelector('svg.icon')).toHaveAttribute('aria-hidden', 'true');
+  expect(screen.getAllByRole('alert')).toHaveLength(2);
+  for (const errorAlert of screen.getAllByRole('alert')) {
+    expect(errorAlert.querySelector('svg.icon')).toBeInTheDocument();
+  }
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Retry loading report' }));
+  await waitFor(() => expect(screen.queryByText(message)).not.toBeInTheDocument());
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(getCompRankingDetails).toHaveBeenCalledTimes(2);
+});
+
+it('preserves approximate speed and execution rank indicators', async () => {
+  vi.mocked(getCompRankingDetails).mockImplementation(async (summary) => {
+    const report = detail(summary);
+    report.fights![0].speed = { rank: 3246, best: 1175, totalParses: 4572, rankPercent: 29, isApproximate: true };
+    report.fights![0].execution = { rank: 3520, best: 591, totalParses: 4572, rankPercent: 23, isApproximate: true };
+    return report;
+  });
+  const { container } = render(CompRankingsResults, {
+    rankings: { ...rankings, reports: summaries.slice(0, 1) },
+    worldData: {}, edition: 'anniversary'
+  });
+  await waitFor(() => expect(container.querySelector('.speed-summary')).toHaveTextContent('#~3246'));
+  expect(container.querySelector('.efficiency-summary')).toHaveTextContent('#~3520');
+});
+
+it('shows explicit zero and positive death counts', async () => {
   const reports = [0, 2].map((deaths, index) => ({
     ...summaries[index],
     fights: [{ ...summaries[index].fights![0], deaths }]
@@ -82,8 +122,30 @@ it('shows deaths only when the count is positive', async () => {
   });
   await waitFor(() => expect(container.querySelectorAll('article')).toHaveLength(2));
   const stats = container.querySelectorAll('.stats');
-  expect(stats[0]).not.toHaveTextContent('deaths');
-  expect(stats[1]).toHaveTextContent('(2 deaths)');
+  expect(stats[0]).toHaveTextContent('0 deaths');
+  expect(stats[1]).toHaveTextContent('2 deaths');
+});
+
+it('preserves detail totals when manual summaries have none and labels unavailable totals honestly', async () => {
+  const reports = summaries.slice(0, 2).map((report) => ({
+    ...report,
+    fights: [{ ...report.fights![0], damageTaken: undefined, deaths: undefined }]
+  }));
+  vi.mocked(getCompRankingDetails).mockImplementation(async (summary) => {
+    const result = detail(summary);
+    if (summary.reportId === reports[0].reportId) {
+      result.fights![0].damageTaken = 123456;
+      result.fights![0].deaths = 4;
+    }
+    return result;
+  });
+  const { container } = render(CompRankingsResults, {
+    rankings: { ...rankings, reports }, worldData: {}, edition: 'anniversary'
+  });
+  await waitFor(() => expect(container.querySelectorAll('article')).toHaveLength(2));
+  const stats = container.querySelectorAll('.stats');
+  expect(stats[0]).toHaveTextContent('123,456 damage taken · 4 deaths');
+  expect(stats[1]).toHaveTextContent('Damage taken unavailable · Deaths unavailable');
 });
 
 it('shows summary faction and identity below linked titles without extra requests', async () => {
@@ -214,7 +276,7 @@ it('retains upstream rank positions instead of reordering by loaded report ranks
   expect(first.querySelector('.date-line')).toHaveTextContent('Kill time 3:20 Speed #5 (Top 5%)');
   expect(first.querySelector('.date-line')).not.toHaveTextContent('·');
   expect(first.querySelector('.stats')).toHaveTextContent('1 damage taken');
-  expect(first.querySelector('.stats')).not.toHaveTextContent('deaths');
+  expect(first.querySelector('.stats')).toHaveTextContent('0 deaths');
   expect(within(first).queryByText('Execution')).not.toBeInTheDocument();
   expect(first.querySelector('.speed-summary')).toHaveAttribute(
     'title',

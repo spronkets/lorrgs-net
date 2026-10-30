@@ -3,6 +3,15 @@ query ReportLookup($code: String!) {
     report(code: $code) {
       code
       title
+      startTime
+      guild {
+        name
+        faction { id }
+        server {
+          name
+          region { slug }
+        }
+      }
       zone {
         id
         name
@@ -12,6 +21,9 @@ query ReportLookup($code: String!) {
         name
         kill
         difficulty
+        encounterID
+        startTime
+        endTime
       }
       masterData {
         actors(type: "Player") {

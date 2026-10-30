@@ -42,7 +42,7 @@
     --alert-bg: #edf5fc;
     --alert-border: #8db4d5;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 10px;
     box-sizing: border-box;
     min-width: 0;
@@ -90,7 +90,6 @@
     width: 18px;
     height: 18px;
     flex-shrink: 0;
-    margin-top: 1px;
   }
   .content {
     min-width: 0;

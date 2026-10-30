@@ -3,11 +3,13 @@ import { getReportTimeline } from './api';
 import type { RankingReport } from './models/RankingReport';
 import type { ReportTimeline } from './models/ReportTimeline';
 import { canLoadTimeline, timelineKey } from './timelineUtils';
+import { isArchivedReportError } from './timelineError';
 
 export class TimelineLoader {
   readonly loaded = new SvelteMap<string, ReportTimeline>();
   readonly errors = new SvelteMap<string, string>();
   readonly loadingKeys = new SvelteSet<string>();
+  private readonly archivedReports = new SvelteSet<string>();
   batchLoading = $state(false);
   stopped = $state(false);
   private queue: RankingReport[] = [];
@@ -17,7 +19,15 @@ export class TimelineLoader {
   constructor(private readonly getEdition: () => string) {}
 
   get pending() {
-    return this.queue.filter((report) => !this.loaded.has(timelineKey(report)));
+    return this.available.filter((report) => !this.loaded.has(timelineKey(report)));
+  }
+
+  private get available() {
+    return this.queue.filter((report) => !this.archivedReports.has(report.reportId));
+  }
+
+  private get hasBlockingErrors() {
+    return [...this.errors.values()].some((message) => !isArchivedReportError(message));
   }
 
   setReports(reports: RankingReport[]) {
@@ -44,7 +54,7 @@ export class TimelineLoader {
       this.active &&
       !this.batchLoading &&
       !this.stopped &&
-      this.queue
+      this.available
         .slice(0, 3)
         .some(
           (report) =>
@@ -67,7 +77,13 @@ export class TimelineLoader {
       return true;
     } catch (error: unknown) {
       if (this.controller.signal.aborted) return false;
-      this.errors.set(key, error instanceof Error ? error.message : 'Unable to load timeline.');
+      const message = error instanceof Error ? error.message : 'Unable to load timeline.';
+      this.errors.set(key, message);
+      if (isArchivedReportError(message)) {
+        this.archivedReports.add(report.reportId);
+        console.warn('Skipping archived ranking report', { reportCode: report.reportId });
+        return false;
+      }
       this.stopped = true;
       console.error('Ranking timeline failed; further automatic batches stopped', {
         reportCode: report.reportId,
@@ -87,7 +103,7 @@ export class TimelineLoader {
     this.stopped = false;
     try {
       const reports = automatic
-        ? this.queue
+        ? this.available
             .slice(0, 3)
             .filter(
               (report) =>
@@ -96,7 +112,7 @@ export class TimelineLoader {
         : this.pending.filter((report) => !this.loadingKeys.has(timelineKey(report))).slice(0, 3);
       await Promise.all(reports.map((report) => this.load(report)));
     } finally {
-      this.stopped = this.errors.size > 0;
+      this.stopped = this.hasBlockingErrors;
       this.batchLoading = false;
       this.loadAutomatically();
     }
@@ -107,7 +123,7 @@ export class TimelineLoader {
     try {
       await this.load(report);
     } finally {
-      this.stopped = this.errors.size > 0;
+      this.stopped = this.hasBlockingErrors;
       this.loadAutomatically();
     }
   }

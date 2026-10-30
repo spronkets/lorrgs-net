@@ -22,10 +22,12 @@ public sealed class TimelineLoader(IReportTimelineService service, ILogger<Timel
             return TypedResults.Ok(await service.LoadAsync(reportCode, fightId, sourceId, playerName, edition,
                 cancellationToken, specId));
         }
-        catch (WarcraftLogsReportPrivateException)
+        catch (WarcraftLogsReportPrivateException ex)
         {
-            logger.LogWarning("Timeline report is private");
-            return TypedResults.Problem(statusCode: 403, detail: "This Warcraft Logs report is private. Make it public to load its timeline.");
+            logger.LogWarning("Timeline report access restricted archived={Archived}", ex.IsArchived);
+            return TypedResults.Problem(statusCode: 403, detail: ex.IsArchived
+                ? "This Warcraft Logs report is archived. Its timeline requires subscriber access through Warcraft Logs and cannot be loaded by this app."
+                : "This Warcraft Logs report is private. Make it public to load its timeline.");
         }
         catch (WarcraftLogsReportNotFoundException)
         {

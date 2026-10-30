@@ -13,6 +13,49 @@ beforeEach(() => {
 });
 
 describe('TimelineLoader', () => {
+  it('skips consecutive archived reports and loads the top three accessible timelines', async () => {
+    vi.mocked(getReportTimeline).mockImplementation(async (report) => {
+      if (['Report1', 'Report2'].includes(report.reportId))
+        throw new Error('API Error: 403 Forbidden - This Warcraft Logs report is archived.');
+      return response(report);
+    });
+    const loader = new TimelineLoader(() => 'era');
+    try {
+      loader.setReports(rows.map(({ report }) => report));
+      loader.start();
+      await waitFor(() => expect(loader.loaded.size).toBe(3));
+      await waitFor(() => expect(loader.batchLoading).toBe(false));
+      expect(getReportTimeline).toHaveBeenCalledTimes(5);
+      expect(loader.stopped).toBe(false);
+      expect(loader.errors.size).toBe(2);
+      expect(loader.pending).toHaveLength(0);
+      loader.setReports(rows.map(({ report }) => report));
+      await loader.loadNext();
+      expect(getReportTimeline).toHaveBeenCalledTimes(5);
+    } finally {
+      loader.dispose();
+    }
+  });
+
+  it('does not backfill private reports or other non-archive failures', async () => {
+    vi.mocked(getReportTimeline).mockImplementation(async (report) => {
+      if (report.reportId === 'Report1')
+        throw new Error('API Error: 403 Forbidden - This Warcraft Logs report is private.');
+      return response(report);
+    });
+    const loader = new TimelineLoader(() => 'era');
+    try {
+      loader.setReports(rows.map(({ report }) => report));
+      loader.start();
+      await waitFor(() => expect(loader.batchLoading).toBe(false));
+      expect(getReportTimeline).toHaveBeenCalledTimes(3);
+      expect(loader.stopped).toBe(true);
+      expect(loader.loaded.size).toBe(2);
+    } finally {
+      loader.dispose();
+    }
+  });
+
   it('displays cached rows outside the top three without making live requests for them', async () => {
     const reports = rows.map(({ report }, index) => ({
       ...report,

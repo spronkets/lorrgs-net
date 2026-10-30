@@ -37,12 +37,14 @@ casts, buff intervals, deaths, and fight-specific phase transitions rather than
 stretching each player's fight to the same length.
 
 - Filter by region, kill time, and date; sort by performance, duration, or date.
+  All filters, sorting, and reset are always visible without an additional disclosure.
   Original ranks are preserved. Date ranges include the entire final day in the
   browser's local timezone.
 - Filters apply to the entire returned ranking page, without client-side pagination.
   Warcraft Logs supports a page argument, not a custom result count; `size` means raid size.
 - Complete cached timelines render immediately. The top three eligible missing
-  timelines load concurrently. Additional timelines can be loaded on demand.
+  timelines load concurrently. Additional timelines load individually through each row's
+  **Load report** action; there is no batch-load button.
 - Changing filters or sort prioritizes the new top three and reuses loaded rows.
   Failed rows can be retried; leaving the workspace cancels pending requests.
 
@@ -51,6 +53,66 @@ stretching each player's fight to the same length.
 Search execution-ranked kills by edition, raid, boss, difficulty, and composition.
 Entering from navigation waits for **Search**; shared URLs containing `compPage`
 restore the search automatically.
+
+### Load Report
+
+All buttons use `Button.svelte`, including navigation, icon-only actions, and timeline controls.
+Action buttons support `primary`, `secondary`, `success`, `warning`, or `danger`
+variants and their `-outline` equivalents. Warning uses amber; danger uses red.
+Primary/secondary outline toggles use solid primary when pressed and secondary-outline
+when unpressed, without dimming the unselected state.
+Specialized cards, tabs, and timeline markers use `unstyled` to preserve their custom
+layout and appearance without inheriting action-button dimensions. Conditional classes
+are forwarded, and `bind:element` exposes the native button for keyboard focus.
+Sizes are `small`, `medium` (default), and
+`large`; native button attributes and event handlers are forwarded. The default
+type is `button`, so form actions must explicitly use `type="submit"`.
+Styled buttons and inputs share control geometry, typography, and theme tokens.
+Standard inputs, selects, and styled buttons of every size have a 44px minimum height,
+matching the boss selector with its 30px icon. Secondary-outline buttons also share
+the input surface, border, hover, and focus styling. Semantic button colors remain distinct.
+Text/number/date fields use `Input.svelte` and multiline fields use
+`Textarea.svelte`. Both accept an optional `label`, automatically associate it
+with a unique control ID, support `bind:value`, and forward native attributes.
+Their shared `FormField.svelte` owns label styling and selection-theme tokens;
+pages own layout rather than overriding control appearance. Input actions
+(such as kill-time masking) can be supplied through the `action` prop.
+`Textarea` supports a `monospace` option for note/code previews while retaining
+the shared input theme and vertical resizing.
+Labeled checkbox controls use `Checkbox.svelte` with `bind:checked`, retaining native
+checkbox semantics. Only the checkbox square is bordered; its label has no outer input frame.
+Optional `prefix` and `suffix` snippets group icons or select affixes with the
+input inside one shared border/focus ring. Composition filters use an icon prefix,
+an unclipped count/`Any` field, and a comparison-select suffix.
+
+Open **Load Report** to load your own Warcraft Logs reports without searching rankings.
+Select the edition, enter one or multiple report codes or Warcraft Logs URLs
+(separated by spaces, commas, or newlines), and click **Load reports**.
+Each report identifies its raid and immediately loads every boss pull's details,
+including kills and wipes. The boss selector filters the displayed pulls without
+reloading details. Full raid composition and roster timelines use the same role/spec focus,
+spell selection, zoom, and note export as Comp Rankings.
+Loading progress is shown once per report for the displayed boss's pulls, rather
+than repeating a separate counter for every attempt.
+The report header shows its linked guild name, faction, parenthesized report
+title, and region/server when available, using the same identity component as
+Comp Rankings. Personal reports show their linked report title instead.
+Each loaded pull has a collapsible header showing its kill/wipe number,
+duration, and date without repeating report/guild identity.
+Expand a pull to inspect its composition and roster timeline controls.
+
+Different reports and bosses can be displayed together. Duplicate codes are ignored;
+failed overviews show individual errors and can be retried without losing successful
+reports. Remove a report to remove its pulls and results. Lookups and loading
+pulls consume Warcraft Logs quota; existing shared report caching is reused.
+The URL saves the edition and one `report=CODE:ENCOUNTER_ID` entry per report,
+combining its code and displayed boss without repeating the code. A report without
+boss pulls uses `report=CODE`. Older separate `reportBoss` links remain readable.
+Refreshing, sharing the URL, or returning to Load Report reloads entire reports
+and all their boss-pull details. No per-pull URL parameters or extra load step are
+needed. Changing edition clears the report selections.
+
+### Comp Rankings details
 
 **Searching and inspecting kills**
 
@@ -78,6 +140,8 @@ and total ranked kills in tooltips. Guild, server, and region appear when availa
 Raid size is shown in raid selection, not as a per-kill statistic.
 
 Raid speed/execution values come from the selected fight's WCL rankings:
+Approximate upstream ranks (for example `~3246`) are accepted and retain their
+approximation indicator rather than preventing the entire pull from loading.
 `rank`, `best`, `totalParses`, and `rankPercent`. They are not calculated from
 individual player parses; unavailable values remain null.
 
@@ -91,7 +155,11 @@ The report's guild is not assumed to be every player's guild. Unknown specs rema
 in rosters with their upstream spec name and role.
 
 Private, deleted, or archived reports retain summary rows with explanatory errors
-and retry actions. Any detail failure, including HTTP 429, pauses automatic loading
+and retry actions when their timeline cannot be fetched. Archived-event access requires WCL subscriber
+user authorization, which this app's client-credentials integration does not provide.
+Archived reports are skipped when choosing the top three automatic player timelines;
+the next ranked accessible report replaces them, while the archived row retains its error.
+Other detail failures, including HTTP 429, pause automatic loading
 without silently requesting replacement kills. Navigation and edition changes
 cancel outstanding work.
 
@@ -274,10 +342,10 @@ docker compose down
 
 Once both services are running, open the web URL in a browser:
 
-| Service | Default URL |
-|---|---|
-| Web application | http://localhost:5173 |
-| API | http://localhost:5247 |
+| Service               | Default URL                   |
+| --------------------- | ----------------------------- |
+| Web application       | http://localhost:5173         |
+| API                   | http://localhost:5247         |
 | Swagger (Development) | http://localhost:5247/swagger |
 
 The web and API ports are the same for the local and Compose setups.
@@ -393,13 +461,13 @@ availability depends on Warcraft Logs and reference data.
 
 Ranking rows supply optional `specId` metadata for these timeline corrections:
 
-| Specialization | Treatment |
-|---|---|
-| Marksmanship | Removes Explosive Shot recasts within 10 seconds |
-| Restoration Druid | Removes Tree of Life recasts within 120 seconds |
+| Specialization     | Treatment                                                                                                              |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Marksmanship       | Removes Explosive Shot recasts within 10 seconds                                                                       |
+| Restoration Druid  | Removes Tree of Life recasts within 120 seconds                                                                        |
 | Restoration Shaman | Labels measured Ascendance intervals under 13 seconds as Deeply Rooted Elements, excluding fight-end-clipped intervals |
-| Preservation | Measures Stasis store-to-release durations and excludes Dream Breath replays within one second of release |
-| Devourer | Uses explicitly inferred Void Metamorphosis end markers, not synthetic casts |
+| Preservation       | Measures Stasis store-to-release durations and excludes Dream Breath replays within one second of release              |
+| Devourer           | Uses explicitly inferred Void Metamorphosis end markers, not synthetic casts                                           |
 
 A missing Stasis store may produce an inferred interval only in a complete stream.
 Inferred events are labeled and excluded from note exports. Unknown specs and
@@ -480,15 +548,15 @@ on artifact upload.
 
 ### Project structure
 
-| Path | Purpose |
-|---|---|
-| `Lorrgs.Api/` | Minimal API features, HTTP contracts, and static World Data (`net10.0`) |
-| `Lorrgs.WarcraftLogs/` | WCL client, GraphQL documents, data models, loading, caching, and enrichment; no API-project dependency |
-| `lorrgs-web/` | Svelte 5 + Vite frontend |
-| `lorrgs-web/src/pages/` | Application screens with sibling functional tests; navigation is composed in `App.svelte` |
-| `lorrgs-web/src/lib/` | Shared frontend components, models, API clients, and utilities |
-| `Lorrgs.Api.Tests/`, `Lorrgs.WarcraftLogs.Tests/` | Backend tests |
-| `docker-compose.yml` | API and web containers |
+| Path                                              | Purpose                                                                                                 |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `Lorrgs.Api/`                                     | Minimal API features, HTTP contracts, and static World Data (`net10.0`)                                 |
+| `Lorrgs.WarcraftLogs/`                            | WCL client, GraphQL documents, data models, loading, caching, and enrichment; no API-project dependency |
+| `lorrgs-web/`                                     | Svelte 5 + Vite frontend                                                                                |
+| `lorrgs-web/src/pages/`                           | Application screens with sibling functional tests; navigation is composed in `App.svelte`               |
+| `lorrgs-web/src/lib/`                             | Shared frontend components, models, API clients, and utilities                                          |
+| `Lorrgs.Api.Tests/`, `Lorrgs.WarcraftLogs.Tests/` | Backend tests                                                                                           |
+| `docker-compose.yml`                              | API and web containers                                                                                  |
 
 ### License
 

@@ -80,7 +80,7 @@ export function getRaidBossOptions(raid: RaidInstance | null | undefined): RaidB
   });
 }
 
-function slugifyBossName(name: string): string {
+export function slugifyBossName(name: string): string {
   return String(name || '')
     .toLowerCase()
     .replace(/['’]/g, '')

@@ -238,7 +238,7 @@ public class WarcraftLogsClient(
                 (segment.GetString() == "report" || IsReportAlias(segment.GetString())));
         if (!reportPath && !message.Contains("report", StringComparison.OrdinalIgnoreCase)) return null;
         if (ContainsAny(message, "private", "permission", "not authorized", "not allowed",
-                "access denied", "not have access", "forbidden"))
+                "access denied", "not have access", "forbidden", "report has been archived", "report is archived"))
             return WarcraftLogsReportFailureKind.Private;
         if (ContainsAny(message, "report not found", "report code not found", "no report found",
                 "could not find report", "report does not exist", "unknown report", "report was not found"))

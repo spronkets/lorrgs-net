@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '../lib/components/Button.svelte';
   import { onMount } from 'svelte';
   import type { WorldDataSnapshot } from '../lib/models/WorldDataSnapshot';
   import type { RaidCatalog } from '../lib/models/RaidCatalog';
@@ -51,11 +52,21 @@
     {oneditionchange}
   />
   <div class="ranking-flows">
-    <button type="button" disabled={!selectedBoss} on:click={() => onnavigate?.('spec')}
-      >Spec Rankings</button
+    <Button
+      variant="primary-outline"
+      size="small"
+      class={['landing-page-button']}
+      type="button"
+      disabled={!selectedBoss}
+      onclick={() => onnavigate?.('spec')}>Spec Rankings</Button
     >
-    <button type="button" disabled={!selectedBoss} on:click={() => onnavigate?.('comp')}
-      >Comp Rankings</button
+    <Button
+      variant="primary-outline"
+      size="small"
+      class={['landing-page-button']}
+      type="button"
+      disabled={!selectedBoss}
+      onclick={() => onnavigate?.('comp')}>Comp Rankings</Button
     >
   </div>
   <section class="about" aria-labelledby="about-heading">
@@ -104,19 +115,7 @@
     flex-wrap: wrap;
     gap: 16px;
   }
-  button {
-    padding: 12px 24px;
-    border: 1px solid currentColor;
-    border-radius: 6px;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+
   .about,
   .disclaimer {
     margin-top: 32px;

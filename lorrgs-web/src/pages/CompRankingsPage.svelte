@@ -1,7 +1,9 @@
 <script lang="ts">
+  import Button from '../lib/components/Button.svelte';
   import { onMount, onDestroy, tick } from 'svelte';
   import { maska } from 'maska/svelte';
   import { killTimeMask } from '../lib/killTimeMask';
+  import Input from '../lib/components/Input.svelte';
   import Alert from '../lib/components/Alert.svelte';
   import Spinner from '../lib/components/Spinner.svelte';
   import EncounterFilters from '../lib/components/EncounterFilters.svelte';
@@ -303,26 +305,22 @@
           {#if selectedVersion === 'Retail'}<option value={5}>Mythic</option>{/if}
         </select>
       </label>
-      <label
-        >Minimum kill time<input
-          aria-label="Minimum kill time"
-          use:maska={killTimeMask}
-          type="text"
-          placeholder="m:ss"
-          bind:value={minTime}
-          on:blur={() => (minTime = toKillTimeInput(minTime))}
-        /></label
-      >
-      <label
-        >Maximum kill time<input
-          aria-label="Maximum kill time"
-          use:maska={killTimeMask}
-          type="text"
-          placeholder="m:ss"
-          bind:value={maxTime}
-          on:blur={() => (maxTime = toKillTimeInput(maxTime))}
-        /></label
-      >
+      <Input
+        label="Minimum kill time"
+        action={(node) => maska(node, killTimeMask)}
+        type="text"
+        placeholder="m:ss"
+        bind:value={minTime}
+        onblur={() => (minTime = toKillTimeInput(minTime))}
+      />
+      <Input
+        label="Maximum kill time"
+        action={(node) => maska(node, killTimeMask)}
+        type="text"
+        placeholder="m:ss"
+        bind:value={maxTime}
+        onblur={() => (maxTime = toKillTimeInput(maxTime))}
+      />
     </div>
     {#snippet countControl(
       type: Filter['type'],
@@ -335,34 +333,39 @@
         class="composition-control"
         class:active={filters.some((filter) => filter.type === type && filter.key === key)}
       >
-        <div class="filter-identity" title={label}>
-          {#if icon}<img src={icon} alt="" />{/if}
-          {#if !icon}<span>{shortLabel}</span>{/if}
-        </div>
         {#each countFilters(type, key, filters) as filter (filter.id)}
-          <div class="count-inputs">
-            <select
-              aria-label={`${label} comparison`}
-              value={filter.op}
-              disabled={filter.id === -1}
-              on:change={(event) =>
-                (filters = filters.map((item) =>
-                  item.id === filter.id ? { ...item, op: event.currentTarget.value } : item
-                ))}
-            >
-              {#each operators as op (op.value)}<option value={op.value}>{op.label}</option>{/each}
-            </select>
-            <input
-              aria-label={`${label} count`}
-              type="number"
-              min="0"
-              max="100"
-              step="1"
-              placeholder="Any"
-              value={filter.count ?? ''}
-              on:input={(event) => updateCount(type, key, filter.id, event.currentTarget.value)}
-            />
-          </div>
+          <Input
+            compact
+            aria-label={`${label} count`}
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            placeholder="Any"
+            value={filter.count ?? ''}
+            oninput={(event) => updateCount(type, key, filter.id, event.currentTarget.value)}
+          >
+            {#snippet prefix()}
+              <span class="filter-identity" title={label}>
+                {#if icon}<img src={icon} alt="" />{:else}<span>{shortLabel}</span>{/if}
+              </span>
+            {/snippet}
+            {#snippet suffix()}
+              <select
+                class="comparison"
+                aria-label={`${label} comparison`}
+                value={filter.op}
+                disabled={filter.id === -1}
+                on:change={(event) =>
+                  (filters = filters.map((item) =>
+                    item.id === filter.id ? { ...item, op: event.currentTarget.value } : item
+                  ))}
+              >
+                {#each operators as op (op.value)}<option value={op.value}>{op.label}</option
+                  >{/each}
+              </select>
+            {/snippet}
+          </Input>
         {/each}
       </div>
     {/snippet}
@@ -397,19 +400,34 @@
         </section>
       </div>
       <div class="actions clear-actions">
-        <button
+        <Button
+          variant="secondary-outline"
+          size="small"
+          class={['comp-rankings-page-button']}
           type="button"
-          on:click={() => {
+          onclick={() => {
             filters = [];
             minTime = '';
             maxTime = '';
-          }}>Clear filters</button
+          }}>Clear filters</Button
         >
       </div>
     </section>
     <div class="actions">
-      <button class="primary" type="submit" disabled={!selectedBoss}>Search compositions</button>
-      {#if loading}<button type="button" on:click={invalidate}>Cancel</button>{/if}
+      <Button
+        variant="primary"
+        size="small"
+        class={['comp-rankings-page-button', `primary`]}
+        type="submit"
+        disabled={!selectedBoss}>Search compositions</Button
+      >
+      {#if loading}<Button
+          variant="secondary-outline"
+          size="small"
+          class={['comp-rankings-page-button']}
+          type="button"
+          onclick={invalidate}>Cancel</Button
+        >{/if}
     </div>
   </form>
   {#if loading}<Spinner loadingText="Loading fight summaries…" />
@@ -467,7 +485,6 @@
   .search-fields > label {
     min-width: 0;
   }
-  .search-fields input,
   .search-fields select {
     width: 100%;
   }
@@ -493,7 +510,7 @@
   }
   .composition-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, 145px);
+    grid-template-columns: repeat(auto-fill, 120px);
     gap: 0.4rem;
   }
   .composition-columns {
@@ -509,16 +526,12 @@
   .composition-control {
     min-width: 0;
     display: grid;
-    grid-template-columns: 28px minmax(0, 1fr);
     align-items: center;
     gap: 0.25rem;
-    padding: 0.2rem;
-    border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
-    border-radius: 0.4rem;
-    background: color-mix(in srgb, currentColor 3%, transparent);
   }
   .composition-control.active {
-    border-color: #c64a85;
+    outline: 1px solid #c64a85;
+    border-radius: 0.58rem;
   }
   .filter-identity {
     display: flex;
@@ -534,73 +547,31 @@
     height: 28px;
     border-radius: 3px;
   }
-  .count-inputs {
-    display: flex;
-    gap: 0.2rem;
-    min-width: 0;
-  }
-  .count-inputs + .count-inputs {
-    grid-column: 2;
-  }
-  .count-inputs input,
-  .count-inputs select {
+  select.comparison {
     min-height: 32px;
     padding: 0.2rem;
     box-sizing: border-box;
     font-size: 0.8rem;
-  }
-  .count-inputs select {
-    width: 42px;
+    width: 36px;
     flex-shrink: 0;
     padding-right: 12px;
     background-position: right 3px center;
     background-size: 8px;
-  }
-  .count-inputs input[type='number'] {
-    width: 0;
-    min-width: 0;
-    flex: 1;
+    border: 0;
+    border-radius: 0 0.58rem 0.58rem 0;
+    background-color: transparent;
   }
   .clear-actions {
     margin-top: 1rem;
   }
-  .count-inputs select:disabled {
+  select.comparison:disabled {
     opacity: 0.5;
-  }
-  input {
-    @include selectionTokens.selection-control;
   }
   select {
     @include selectionTokens.selection-dropdown;
   }
-  input::placeholder {
-    color: var(--select-text);
-    opacity: 0.6;
-  }
-  button {
-    font: inherit;
-    color: inherit;
-    background: var(--color-surface, #f3f9ff);
-    border: 1px solid #687e94;
-    border-radius: 0.3rem;
-    padding: 0.45rem 0.65rem;
-    min-height: 44px;
-  }
-  input[type='number'] {
-    width: 80px;
-  }
-  button {
-    cursor: pointer;
-  }
-  button:hover:not(:disabled),
-  .primary {
-    border-color: #c64a85;
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-  :global(.theme-dark) button {
+
+  :global(.theme-dark) :global(button.comp-rankings-page-button) {
     background: #243447;
     color: #e6edf5;
   }
@@ -608,16 +579,14 @@
     .search-fields {
       grid-template-columns: minmax(0, 1fr);
     }
-    input,
     select {
       width: 100%;
       box-sizing: border-box;
     }
     .composition-grid {
-      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      grid-template-columns: repeat(auto-fill, 120px);
     }
-    .count-inputs input,
-    .count-inputs select {
+    select.comparison {
       min-height: 44px;
     }
   }

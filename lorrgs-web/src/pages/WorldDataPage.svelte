@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '../lib/components/Button.svelte';
   import { getBlizzardClassColor } from '../lib/classColors';
   import { getWowheadIconUrl } from '../lib/wowheadIcons';
   import { getClassIconUrl, getRoleIconUrl, getSpecIconUrl } from '../lib/wowAssets';
@@ -19,9 +20,13 @@
 
   <div class="tabs">
     {#each tabs as tab (tab)}
-      <button class:active={activeTab === tab} on:click={() => (activeTab = tab)}>
+      <Button
+        variant="unstyled"
+        class={['world-data-page-button', { active: activeTab === tab }]}
+        onclick={() => (activeTab = tab)}
+      >
         {tab.charAt(0).toUpperCase() + tab.slice(1)}
-      </button>
+      </Button>
     {/each}
   </div>
 
@@ -214,7 +219,7 @@
     border-bottom: 1px solid #333;
   }
 
-  .tabs button {
+  .tabs :global(button.world-data-page-button) {
     background: transparent;
     border: none;
     border-bottom: 2px solid transparent;
@@ -225,11 +230,11 @@
     transition: all 0.2s;
   }
 
-  .tabs button:hover {
+  .tabs :global(button.world-data-page-button:hover) {
     color: #ccc;
   }
 
-  .tabs button.active {
+  .tabs :global(button.active.world-data-page-button) {
     color: #fff;
     border-bottom-color: #666;
   }

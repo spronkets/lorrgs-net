@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Button from './Button.svelte';
+  import Input from './Input.svelte';
+  import Textarea from './Textarea.svelte';
   import Alert from './Alert.svelte';
   import { onMount } from 'svelte';
   import type { RankingReport } from '../models/RankingReport';
@@ -75,7 +78,14 @@
 <dialog bind:this={dialog} aria-labelledby="copy-note-title" {onclose}>
   <header>
     <h2 id="copy-note-title">Copy Note</h2>
-    <button type="button" aria-label="Close copy note" onclick={() => dialog.close()}>Close</button>
+    <Button
+      variant="secondary-outline"
+      size="small"
+      class={['copy-note-dialog-button']}
+      type="button"
+      aria-label="Close copy note"
+      onclick={() => dialog.close()}>Close</Button
+    >
   </header>
   <p class="source">{timeline.playerName} · {bossName || fight?.name || 'Boss'}</p>
   <div class="options">
@@ -87,23 +97,27 @@
       </select>
     </label>
     {#if target === 'name'}
-      <label
-        >Name or Nickname
-        <input bind:value={playerName} placeholder={timeline.playerName} />
-      </label>
+      <Input label="Name or Nickname" bind:value={playerName} placeholder={timeline.playerName} />
     {:else}
-      <label
-        >Spec tag
-        <input readonly value={specNoteTag(specId, format) ?? 'Unavailable'} />
-      </label>
+      <Input label="Spec tag" readonly value={specNoteTag(specId, format) ?? 'Unavailable'} />
     {/if}
     <fieldset>
       <legend>Note format</legend>
-      <button type="button" aria-pressed={format === 'mrt'} onclick={() => (format = 'mrt')}
-        >MRT</button
+      <Button
+        variant="secondary-outline"
+        size="small"
+        class={['copy-note-dialog-button']}
+        type="button"
+        aria-pressed={format === 'mrt'}
+        onclick={() => (format = 'mrt')}>MRT</Button
       >
-      <button type="button" aria-pressed={format === 'nsrt'} onclick={() => (format = 'nsrt')}
-        >NSRT</button
+      <Button
+        variant="secondary-outline"
+        size="small"
+        class={['copy-note-dialog-button']}
+        type="button"
+        aria-pressed={format === 'nsrt'}
+        onclick={() => (format = 'nsrt')}>NSRT</Button
       >
     </fieldset>
     <label class="dynamic">
@@ -124,19 +138,30 @@
   {#if !timeline.isComplete}
     <Alert variant="warning" compact>Partial timeline: this note may be missing casts.</Alert>
   {/if}
-  <label class="preview"
-    >Note preview
-    <textarea
+  <div class="preview">
+    <Textarea
+      label="Note preview"
+      monospace
+      style="min-height: 260px"
+      rows="12"
       readonly
       value={note.text}
       spellcheck="false"
-      onclick={(event) => event.currentTarget.select()}></textarea>
-  </label>
+      onclick={(event) => event.currentTarget.select()}
+    />
+  </div>
   {#if note.error}<Alert variant="error">{note.error}</Alert>{/if}
   {#if copyError}<Alert variant="error">{copyError}</Alert>{/if}
   <footer>
     <span>{note.count} selected casts</span>
-    <button type="button" disabled={Boolean(note.error)} onclick={copy}>Copy to clipboard</button>
+    <Button
+      variant="primary"
+      size="small"
+      class={['copy-note-dialog-button']}
+      type="button"
+      disabled={Boolean(note.error)}
+      onclick={copy}>Copy to clipboard</Button
+    >
   </footer>
   <p class="hint">Only casts for spells currently shown in the timeline are included.</p>
   <Alert variant="warning" compact>
@@ -207,43 +232,13 @@
   legend {
     font-size: 12px;
   }
-  button,
-  textarea {
-    font: inherit;
-    color: inherit;
-    border: 1px solid var(--line, #bdc9d4);
-    border-radius: 3px;
-    background: var(--panel);
-    padding: 6px 8px;
-  }
-  input:not([type='checkbox']) {
-    @include selectionTokens.selection-control;
-  }
+
   select {
     @include selectionTokens.selection-dropdown;
   }
-  button {
-    cursor: pointer;
-  }
-  button[aria-pressed='true'] {
-    border-color: var(--accent);
-    box-shadow: inset 0 -2px var(--accent);
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-  button:focus-visible,
-  textarea:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
+
+
   .preview {
     margin: 14px 0;
-  }
-  textarea {
-    min-height: 260px;
-    resize: vertical;
-    font: 12px/1.6 monospace;
   }
 </style>

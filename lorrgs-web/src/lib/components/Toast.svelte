@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from './Button.svelte';
   type Props = {
     message: string;
     variant?: 'success' | 'error';
@@ -14,13 +15,32 @@
   });
 </script>
 
-<div class="toast" class:error={variant === 'error'} role={variant === 'error' ? 'alert' : 'status'} aria-atomic="true">
+<div
+  class="toast"
+  class:error={variant === 'error'}
+  role={variant === 'error' ? 'alert' : 'status'}
+  aria-atomic="true"
+>
   <span>{message}</span>
-  <button type="button" aria-label="Dismiss notification" onclick={onclose}>
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+  <Button
+    variant="unstyled"
+    class={['toast-button']}
+    type="button"
+    aria-label="Dismiss notification"
+    onclick={onclose}
+  >
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      aria-hidden="true"
+    >
       <path d="m6 6 12 12M18 6 6 18" />
     </svg>
-  </button>
+  </Button>
 </div>
 
 <style>
@@ -49,7 +69,7 @@
   .toast.error {
     border-color: #ce4141;
   }
-  button {
+  :global(button.toast-button) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -63,8 +83,8 @@
     border-radius: 3px;
     cursor: pointer;
   }
-  button:hover,
-  button:focus-visible {
+  :global(button.toast-button:hover),
+  :global(button.toast-button:focus-visible) {
     border-color: var(--accent, #a32662);
   }
 </style>

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Button from './Button.svelte';
+  import Input from './Input.svelte';
+  import Checkbox from './Checkbox.svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import type { ReportTimeline } from '../models/ReportTimeline';
   import type { InspectedSpell } from '../models/InspectedSpell';
@@ -84,41 +87,58 @@
 <details class="spell-selection" open>
   <summary>Spell selection · {spells.length - hidden.size} / {spells.length}</summary>
   <div class="spell-actions">
-    <input aria-label="Search timeline spells" bind:value={search} placeholder="Find a spell…" />
-    <label><input type="checkbox" bind:checked={showSpellNames} /> Spell names</label>
+    <Input aria-label="Search timeline spells" bind:value={search} placeholder="Find a spell…" />
+    <Checkbox label="Spell names" bind:checked={showSpellNames} />
     <div class="spell-presets" role="group" aria-label="Spell presets">
       {#each presets as option (option.key)}
-        <button
+        <Button
+          variant="secondary-outline"
+          size="small"
+          class={['spell-selection-button']}
           type="button"
           aria-pressed={preset === option.key}
           onclick={() => (preset = preset === option.key ? 'None' : option.key)}
-          ><img src={option.icon} alt="" />{option.label}</button
+          ><img src={option.icon} alt="" />{option.label}</Button
         >
       {/each}
     </div>
-    <button type="button" onclick={() => (preset = 'None')}>Clear spells</button>
+    <Button
+      variant="secondary-outline"
+      size="small"
+      class={['spell-selection-button']}
+      type="button"
+      onclick={() => (preset = 'None')}>Clear spells</Button
+    >
   </div>
   <div class="spell-group-row">
     {#each spellGroups as group (group.label)}
       <div class="spell-group" role="group" aria-label={group.label}>
-        <button
-          class="group-toggle"
+        <Button
+          variant="secondary-outline"
+          size="small"
+          class={['spell-selection-button', `group-toggle`]}
           type="button"
           aria-label={`Toggle ${group.label}`}
           aria-pressed={group.spells.every((spell) => !hidden.has(spell.id))}
           onclick={() => toggleGroup(group.spells.map((spell) => spell.id))}
-          title={`Show / hide ${group.label}`}>{group.label}</button
+          title={`Show / hide ${group.label}`}>{group.label}</Button
         >
         <div class="spell-buttons">
           {#each group.spells as spell (spell.id)}
             {@const appearance = spellAppearance(spell, castSpellIds.has(spell.id))}
-            <button
+            <Button
+              variant="unstyled"
+              class={[
+                'spell-selection-button',
+                {
+                  'power-window': isPowerWindow(spell),
+                  muted: hidden.has(spell.id),
+                  'spell-dimmed': inspected !== null && inspected.id !== spell.id,
+                  'spell-highlighted': inspected?.id === spell.id
+                }
+              ]}
               type="button"
               style={`--spell-color: ${appearance.color}`}
-              class:power-window={isPowerWindow(spell)}
-              class:muted={hidden.has(spell.id)}
-              class:spell-dimmed={inspected !== null && inspected.id !== spell.id}
-              class:spell-highlighted={inspected?.id === spell.id}
               onmouseenter={() =>
                 (inspected = {
                   id: spell.id,
@@ -144,7 +164,7 @@
                 <img src={spellIconUrl(spell.icon)} alt="" loading="lazy" />
               {/if}
               {#if showSpellNames || !spellIconUrl(spell.icon)}<span>{spell.name}</span>{/if}
-            </button>
+            </Button>
           {/each}
         </div>
       </div>
@@ -163,18 +183,18 @@
     .spell-selection .spell-actions {
       margin-bottom: 6px;
     }
-    .spell-selection .spell-actions > input {
+    .spell-selection .spell-actions > :global(.form-field) {
       min-width: 0;
       width: 55%;
     }
     .spell-selection .spell-presets {
       width: 100%;
     }
-    .spell-selection .spell-presets button,
-    .spell-selection .spell-actions > button {
-      min-height: 36px;
+    .spell-selection .spell-presets :global(button.spell-selection-button),
+    .spell-selection .spell-actions > :global(button.spell-selection-button) {
+      min-height: 44px;
     }
-    .spell-selection .spell-buttons button {
+    .spell-selection .spell-buttons :global(button.spell-selection-button) {
       min-width: 32px;
       min-height: 32px;
       justify-content: center;
@@ -188,28 +208,19 @@
   .spell-group {
     min-width: 0;
   }
-  .spell-group .group-toggle {
-    display: block;
-    font-size: 11px;
+  .spell-group :global(.group-toggle.spell-selection-button) {
     margin: 6px 0 3px;
-    padding: 0;
-    background: transparent;
-    border: 0;
-    color: var(--muted);
   }
-  .group-toggle[aria-pressed='false'] {
-    text-decoration: underline dotted;
-  }
-  .spell-buttons button.spell-highlighted {
+  .spell-buttons :global(button.spell-highlighted.spell-selection-button) {
     outline: 2px solid var(--text);
     outline-offset: 2px;
     opacity: 1;
     z-index: 4;
   }
-  .spell-buttons button.spell-dimmed {
+  .spell-buttons :global(button.spell-dimmed.spell-selection-button) {
     opacity: 0.18;
   }
-  .spell-buttons button.power-window {
+  .spell-buttons :global(button.power-window.spell-selection-button) {
     box-shadow: inset 0 -2px var(--spell-color);
   }
   .spell-actions,
@@ -223,13 +234,7 @@
     font-size: 12px;
     font-weight: 600;
   }
-  label {
-    font-size: 12px;
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-  }
-  button {
+  :global(button.spell-selection-button:where([data-tone='unstyled'])) {
     color: var(--text);
     background: var(--panel);
     border: 1px solid var(--line);
@@ -238,18 +243,15 @@
     font: inherit;
     font-size: 12px;
   }
-  input:not([type='checkbox']) {
-    @include selectionTokens.selection-control;
-  }
-  button {
+  :global(button.spell-selection-button:where([data-tone='unstyled'])) {
     cursor: pointer;
   }
-  button:disabled {
+  :global(button.spell-selection-button:where([data-tone='unstyled']):disabled) {
     opacity: 0.5;
     cursor: wait;
   }
-  button:hover:not(:disabled),
-  button:focus-visible {
+  :global(button.spell-selection-button:where([data-tone='unstyled']):hover:not(:disabled)),
+  :global(button.spell-selection-button:where([data-tone='unstyled']):focus-visible) {
     border-color: var(--accent);
   }
   .spell-selection {
@@ -272,7 +274,7 @@
       overflow-y: visible;
     }
   }
-  .spell-buttons button {
+  .spell-buttons :global(button.spell-selection-button) {
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -285,7 +287,7 @@
     height: 23px;
     border-radius: 2px;
   }
-  .spell-buttons .muted {
+  .spell-buttons :global(.muted.spell-selection-button) {
     opacity: 0.45;
     filter: grayscale(1);
     border-color: var(--line);
@@ -295,11 +297,7 @@
     flex-wrap: wrap;
     gap: 4px;
   }
-  .spell-presets button[aria-pressed='true'] {
-    background: var(--line);
-    border-color: var(--text);
-  }
-  .spell-presets button {
+  .spell-presets :global(button.spell-selection-button) {
     display: inline-flex;
     align-items: center;
     gap: 5px;

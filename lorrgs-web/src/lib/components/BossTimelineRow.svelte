@@ -1,5 +1,6 @@
 <script lang="ts">
   import Alert from './Alert.svelte';
+  import Button from './Button.svelte';
   import Spinner from './Spinner.svelte';
   import { untrack } from 'svelte';
   import { timelineErrorSummary } from '../timelineError';
@@ -92,9 +93,11 @@
       <span class="message" role="status"><Spinner inline />Loading boss events…</span>
     {:else if error}
       <div class="message">
-        <Alert variant="error" compact>
+        <Alert variant="warning" compact>
           <span>{timelineErrorSummary(error)}</span>
-          <button type="button" onclick={() => attempt++}>Retry boss timeline</button>
+          <Button variant="warning-outline" size="small" onclick={() => attempt++}
+            >Retry boss timeline</Button
+          >
         </Alert>
       </div>
     {:else if timeline}
@@ -103,16 +106,17 @@
         {#each timeline.events as event, index (index)}
           {@const spell = timeline.spells.find((item) => item.id === event.spellId)}
           {@const title = `${timelineTime(event.timestamp)} · ${spell?.name || `Spell ${event.spellId}`}`}
-          <button
+          <Button
+            variant="unstyled"
             type="button"
-            class="boss-event"
+            class={['boss-timeline-row-button', `boss-event`]}
             style={`left: ${(event.timestamp / axisDuration) * 100}%`}
             aria-label={title}
           >
             {#if showIcons && spellIconUrl(spell?.icon ?? null)}
               <img src={spellIconUrl(spell?.icon ?? null)} alt="" loading="lazy" />
             {:else}<span aria-hidden="true">◆</span>{/if}
-          </button>
+          </Button>
         {/each}
       {/if}
       <span
@@ -209,7 +213,7 @@
     z-index: 1;
     max-width: calc(100% - 16px);
   }
-  button {
+  :global(button.boss-timeline-row-button) {
     color: var(--text);
     background: var(--panel);
     border: 1px solid var(--line);
@@ -217,7 +221,7 @@
     cursor: pointer;
     font: inherit;
   }
-  .boss-event {
+  :global(.boss-event.boss-timeline-row-button) {
     position: absolute;
     top: 23px;
     width: 22px;
@@ -229,14 +233,14 @@
     background: transparent;
     z-index: 2;
   }
-  .boss-event img {
+  :global(.boss-event.boss-timeline-row-button) img {
     display: block;
     width: 22px;
     height: 22px;
     border: 1px solid var(--muted);
     border-radius: 2px;
   }
-  .boss-event:focus-visible {
+  :global(.boss-event.boss-timeline-row-button:focus-visible) {
     outline: 2px solid var(--text);
     outline-offset: 2px;
     z-index: 4;

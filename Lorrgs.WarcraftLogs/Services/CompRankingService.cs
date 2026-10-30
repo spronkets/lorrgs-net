@@ -87,18 +87,8 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
     public async Task<RankingReport> LoadDetailsAsync(string code, int fightId, string edition,
         bool refresh, CancellationToken cancellationToken)
     {
-        JsonElement data;
-        try
-        {
-            data = await client.QueryGraphQLAsync(RosterQuery, new { code, fightIds = new[] { fightId } },
-                edition, refresh, cancellationToken);
-        }
-        catch (WarcraftLogsGraphQlException ex) when (ex.Errors.Count > 0 && ex.Errors.All(error =>
-            error.Message?.Contains("report has been archived", StringComparison.OrdinalIgnoreCase) == true))
-        {
-            logger.LogWarning("Composition report archived");
-            throw new WarcraftLogsReportPrivateException("This Warcraft Logs report is archived.");
-        }
+        var data = await client.QueryGraphQLAsync(RosterQuery, new { code, fightIds = new[] { fightId } },
+            edition, refresh, cancellationToken);
         var metadata = data.GetProperty("reportData").GetProperty("report");
         if (metadata.ValueKind == JsonValueKind.Null)
             throw new WarcraftLogsReportNotFoundException("Warcraft Logs report not found.");
@@ -119,7 +109,8 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
         var fight = new RankingFight
         {
             FightId = fightId, Name = EncounterName((int)Number(fightData, "encounterID"), Text(fightData, "name")), Duration = duration,
-            EncounterId = (int)Number(fightData, "encounterID"), IsKill = true,
+            EncounterId = (int)Number(fightData, "encounterID"),
+            IsKill = fightData.TryGetProperty("kill", out var kill) && kill.ValueKind == JsonValueKind.True,
             StartTime = DateTimeOffset.FromUnixTimeMilliseconds((long)(Number(metadata, "startTime") + start)).UtcDateTime,
             Composition = BuildComposition(players)
         };
@@ -128,6 +119,16 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
             ReportId = code, Title = Text(metadata, "title"),
             Duration = duration, StartTime = fight.StartTime, Fights = [fight], Players = players
         };
+        var summaryData = metadata.GetProperty("table").GetProperty("data");
+        if (summaryData.TryGetProperty("damageTaken", out var damageTaken) && damageTaken.ValueKind == JsonValueKind.Array)
+            fight.DamageTaken = damageTaken.EnumerateArray().Sum(entry => Number(entry, "total"));
+        if (summaryData.TryGetProperty("deathEvents", out var deathEvents))
+        {
+            if (deathEvents.ValueKind == JsonValueKind.Array)
+                fight.Deaths = deathEvents.GetArrayLength();
+            else if (deathEvents.ValueKind == JsonValueKind.Null)
+                fight.Deaths = 0;
+        }
         ApplyRaidRankings(fight, metadata);
         foreach (var field in new[] { "damageRankings", "healingRankings" })
         {
@@ -183,11 +184,39 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
             foreach (var entry in fights.EnumerateArray().Where(item => Number(item, "fightID") == fight.FightId))
             {
                 if (entry.TryGetProperty("speed", out var speed) && speed.ValueKind == JsonValueKind.Object)
-                    fight.Speed ??= speed.Deserialize<RaidFightRanking>(JsonSerializerOptions.Web);
+                    fight.Speed ??= ParseRaidRanking(speed);
                 if (entry.TryGetProperty("execution", out var execution) && execution.ValueKind == JsonValueKind.Object)
-                    fight.Execution ??= execution.Deserialize<RaidFightRanking>(JsonSerializerOptions.Web);
+                    fight.Execution ??= ParseRaidRanking(execution);
             }
         }
+    }
+
+    private static RaidFightRanking ParseRaidRanking(JsonElement ranking)
+    {
+        var (rank, approximate) = ParseRankPosition(ranking, "rank");
+        var (best, bestApproximate) = ParseRankPosition(ranking, "best");
+        return new RaidFightRanking(rank,
+            best,
+            ranking.TryGetProperty("totalParses", out var total) && total.ValueKind != JsonValueKind.Null ? total.GetInt32() : null,
+            ranking.TryGetProperty("rankPercent", out var percent) && percent.ValueKind != JsonValueKind.Null ? percent.GetDouble() : null)
+        { IsApproximate = approximate, IsBestApproximate = bestApproximate };
+    }
+
+    private static (int? Rank, bool Approximate) ParseRankPosition(JsonElement ranking, string field)
+    {
+        if (!ranking.TryGetProperty(field, out var value) || value.ValueKind == JsonValueKind.Null)
+            return (null, false);
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) && number >= 0)
+            return (number, false);
+        if (value.ValueKind == JsonValueKind.String && value.GetString() is { } text)
+        {
+            var approximate = text.StartsWith('~');
+            var digits = approximate ? text.AsSpan(1) : text.AsSpan();
+            if (int.TryParse(digits, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                return (parsed, approximate);
+        }
+        throw new InvalidDataException($"Warcraft Logs returned an invalid raid ranking {field}.");
     }
 
     internal List<RankingPlayer> ParseRoster(JsonElement table)

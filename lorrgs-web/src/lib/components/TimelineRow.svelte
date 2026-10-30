@@ -2,6 +2,7 @@
   import { withResourceLanes } from '../spellClassification';
   import type { TimelineEvent } from '../models/TimelineEvent';
   import Alert from './Alert.svelte';
+  import Button from './Button.svelte';
   import Spinner from './Spinner.svelte';
   import { getBlizzardClassColor, getBlizzardClassColors } from '../classColors';
   import { getSpecIconUrl } from '../wowAssets';
@@ -322,9 +323,10 @@
             >{/if}
           {#if getRotationAnalyzerLink(report)}
             {#if onreference}
-              <button
+              <Button
+                variant="unstyled"
                 type="button"
-                class="reference-target copy-note"
+                class={['timeline-row-button', `reference-target copy-note`]}
                 aria-label="Use as boss reference"
                 aria-pressed={isReference}
                 disabled={isReference}
@@ -346,7 +348,7 @@
                   <circle cx="12" cy="12" r="2" />
                   <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
                 </svg>
-              </button>
+              </Button>
             {/if}
             <a
               class="analyzer-link copy-note"
@@ -473,21 +475,27 @@
             aria-label={title}
           ></span>
         {/if}
-        <button
+        <Button
+          variant="unstyled"
           type="button"
-          class="event"
+          class={[
+            'timeline-row-button',
+            `event`,
+            {
+              buff: event.kind === 'buff' && !event.displayBelow,
+              below: event.displayBelow,
+              death: event.kind === 'death',
+              cast: event.kind === 'cast' || event.kind === 'marker',
+              'cast-icon': event.kind === 'cast' || isResourceHit(event) || event.displayBelow,
+              healing: event.kind === 'heal' || event.kind === 'hot',
+              'damage-taken': event.kind === 'damage',
+              'mana-event': event.kind === 'mana-spent' || event.kind === 'mana-returned',
+              'power-window': powerWindow,
+              'spell-dimmed': inspected !== null && inspected.id !== event.spellId,
+              'spell-highlighted': inspected?.id === event.spellId
+            }
+          ]}
           data-event-index={index}
-          class:buff={event.kind === 'buff' && !event.displayBelow}
-          class:below={event.displayBelow}
-          class:death={event.kind === 'death'}
-          class:cast={event.kind === 'cast' || event.kind === 'marker'}
-          class:cast-icon={event.kind === 'cast' || isResourceHit(event) || event.displayBelow}
-          class:healing={event.kind === 'heal' || event.kind === 'hot'}
-          class:damage-taken={event.kind === 'damage'}
-          class:mana-event={event.kind === 'mana-spent' || event.kind === 'mana-returned'}
-          class:power-window={powerWindow}
-          class:spell-dimmed={inspected !== null && inspected.id !== event.spellId}
-          class:spell-highlighted={inspected?.id === event.spellId}
           style={`--spell-color: ${resourceColor ?? appearance.color}; left: ${(event.timestamp / axisDuration) * 100}%; top: ${timelineEventTop(event)}px; width: ${event.kind === 'buff' && !event.displayBelow ? `max(2px, ${((event.duration ?? 0) / axisDuration) * 100}%)` : event.kind === 'death' ? '2px' : '22px'}`}
           onmouseenter={(mouse) => {
             updateMagnifier(mouse);
@@ -520,7 +528,7 @@
             {:else}<span class="cast-dot">◆</span>{/if}
           {:else if event.kind === 'marker'}<span class="cast-dot" aria-hidden="true">◇</span>
           {:else if event.kind === 'death'}<span class="death-label">†</span>{/if}
-        </button>
+        </Button>
       {/each}
       {#if !timeline.isComplete}<div class="incomplete">
           <Alert variant="warning" compact>Partial timeline — event limit reached</Alert>
@@ -540,16 +548,24 @@
       >
     {:else if error}
       <div class="track-message error-message">
-        <Alert variant="error" compact>
+        <Alert variant="warning" compact>
           <span>{timelineErrorSummary(error)}</span>
-          <button type="button" onclick={() => onload(report)}>Retry</button>
+          <Button variant="warning-outline" size="small" onclick={() => onload(report)}
+            >Retry</Button
+          >
         </Alert>
       </div>
     {:else if canLoadTimeline(report)}
       <div class="unloaded-controls">
-        <button class="load-row" type="button" onclick={() => onload(report)}>
+        <Button
+          variant="secondary-outline"
+          size="small"
+          class={['timeline-row-button', `load-row`]}
+          type="button"
+          onclick={() => onload(report)}
+        >
           Load report {report.title || report.reportId}
-        </button>
+        </Button>
       </div>
     {:else}
       <div class="track-message">
@@ -557,8 +573,9 @@
       </div>
     {/if}
     {#if timeline}
-      <button
-        class="copy-note timeline-copy"
+      <Button
+        variant="unstyled"
+        class={['timeline-row-button', `copy-note timeline-copy`]}
         style={`left: calc(${(endTime / axisDuration) * 100}% + 4px)`}
         type="button"
         aria-label="Copy note"
@@ -577,7 +594,7 @@
           <rect x="8" y="8" width="12" height="13" rx="2" />
           <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3" />
         </svg>
-      </button>
+      </Button>
     {/if}
   </div>
 </div>
@@ -593,70 +610,70 @@
     color: var(--resource-color);
     font-size: 10px;
   }
-  .mana-event {
+  :global(.mana-event.timeline-row-button) {
     color: #69aaff;
     background: #203d68;
   }
   .survival-row {
     border-top: 1px dashed var(--line);
   }
-  .event.healing,
-  .event.damage-taken,
-  .event.mana-event {
+  :global(.event.healing.timeline-row-button),
+  :global(.event.damage-taken.timeline-row-button),
+  :global(.event.mana-event.timeline-row-button) {
     height: 22px;
     color: var(--spell-color);
     background: transparent;
   }
-  .event.healing img,
-  .event.damage-taken img,
-  .event.mana-event img {
+  :global(.event.healing.timeline-row-button) img,
+  :global(.event.damage-taken.timeline-row-button) img,
+  :global(.event.mana-event.timeline-row-button) img {
     width: 22px;
     height: 22px;
     border: 2px solid var(--spell-color);
     border-radius: 2px;
   }
-  .damage-taken {
+  :global(.damage-taken.timeline-row-button) {
     color: #ff6969;
     background: #612b2b;
   }
-  .healing {
+  :global(.healing.timeline-row-button) {
     color: #69d98b;
     background: #245c35;
   }
-  .reference-target[aria-pressed='true'] {
+  :global(.reference-target[aria-pressed='true'].timeline-row-button) {
     color: var(--panel);
     border-color: var(--accent);
     background: var(--accent);
     opacity: 1;
     cursor: default;
   }
-  .event.spell-highlighted,
-  .event:focus-visible {
+  :global(.event.spell-highlighted.timeline-row-button),
+  :global(.event.timeline-row-button:focus-visible) {
     outline: 2px solid var(--text);
     outline-offset: 2px;
     opacity: 1;
     z-index: 4;
   }
-  .event.spell-dimmed {
+  :global(.event.spell-dimmed.timeline-row-button) {
     opacity: 0.18;
   }
-  .event.buff.spell-highlighted {
+  :global(.event.buff.spell-highlighted.timeline-row-button) {
     min-height: 12px;
   }
-  .event.buff.power-window {
+  :global(.event.buff.power-window.timeline-row-button) {
     background: var(--spell-color);
     opacity: 0.9;
     height: 12px;
     z-index: 3;
     border: 1px solid var(--spell-color);
   }
-  .event.cast.power-window img {
+  :global(.event.cast.power-window.timeline-row-button) img {
     border: 2px solid var(--spell-color);
   }
-  .event.power-window .cast-dot {
+  :global(.event.power-window.timeline-row-button) .cast-dot {
     color: var(--spell-color);
   }
-  button {
+  :global(button.timeline-row-button:where([data-tone='unstyled'])) {
     color: var(--text);
     background: var(--panel);
     border: 1px solid var(--line);
@@ -665,15 +682,15 @@
     font: inherit;
     font-size: 12px;
   }
-  button {
+  :global(button.timeline-row-button:where([data-tone='unstyled'])) {
     cursor: pointer;
   }
-  button:disabled {
+  :global(button.timeline-row-button:where([data-tone='unstyled']):disabled) {
     opacity: 0.5;
     cursor: wait;
   }
-  button:hover:not(:disabled),
-  button:focus-visible {
+  :global(button.timeline-row-button:where([data-tone='unstyled']):hover:not(:disabled)),
+  :global(button.timeline-row-button:where([data-tone='unstyled']):focus-visible) {
     border-color: var(--accent);
   }
   .player-row {
@@ -693,7 +710,7 @@
     .player-row .track {
       width: calc(100% - 34px);
     }
-    .player-row .copy-note {
+    .player-row :is(.copy-note, :global(.copy-note.timeline-row-button)) {
       min-width: 30px;
       min-height: 30px;
       box-sizing: border-box;
@@ -835,7 +852,7 @@
     font-size: 10px;
     color: var(--muted);
   }
-  .copy-note {
+  :is(.copy-note, :global(.copy-note.timeline-row-button)) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -848,7 +865,7 @@
     gap: 4px;
     flex-shrink: 0;
   }
-  .timeline-copy {
+  :global(.timeline-copy.timeline-row-button) {
     position: absolute;
     bottom: 2px;
     z-index: 4;
@@ -903,7 +920,7 @@
     opacity: 0.2;
     pointer-events: none;
   }
-  .event {
+  :global(.event.timeline-row-button) {
     position: absolute;
     transform: translateY(-50%);
     z-index: 1;
@@ -949,7 +966,7 @@
     background: color-mix(in srgb, var(--spell-color) 25%, transparent);
     pointer-events: none;
   }
-  .cast-icon {
+  :global(.cast-icon.timeline-row-button) {
     transform: translateX(-100%);
   }
   .cast-connectors {
@@ -972,21 +989,21 @@
     border-top: 0;
     border-bottom: 1px solid var(--spell-color);
   }
-  .event.below {
+  :global(.event.below.timeline-row-button) {
     height: 22px;
     border: 1px solid var(--spell-color);
     background: var(--panel);
     z-index: 2;
   }
-  .event.below img {
+  :global(.event.below.timeline-row-button) img {
     width: 22px;
     height: 22px;
   }
-  .cast {
+  :global(.cast.timeline-row-button) {
     height: 22px;
     z-index: 2;
   }
-  .cast img {
+  :global(.cast.timeline-row-button) img {
     width: 22px;
     height: 22px;
     border: 1px solid var(--spell-color);
@@ -995,14 +1012,14 @@
   .cast-dot {
     color: var(--spell-color);
   }
-  .buff {
+  :global(.buff.timeline-row-button) {
     transform: translateY(calc(4px - 50%));
     height: 8px;
     background: var(--spell-color);
     opacity: 0.5;
     border-radius: 2px;
   }
-  .death {
+  :global(.death.timeline-row-button) {
     background: #e35d5d;
     height: 52px;
     z-index: 2;
@@ -1037,7 +1054,7 @@
     gap: 12px;
     max-width: calc(100% - 16px);
   }
-  .load-row {
+  :global(.load-row.timeline-row-button) {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;

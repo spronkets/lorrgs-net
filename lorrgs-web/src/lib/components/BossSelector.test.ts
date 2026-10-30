@@ -14,6 +14,7 @@ describe('BossSelector', () => {
       value: 'unknown'
     });
     const trigger = screen.getByRole('button', { name: 'Boss' });
+    expect(trigger.querySelector('.boss-portrait')).toHaveStyle({ width: '30px', height: '30px' });
     expect(trigger.querySelector('img')).toHaveAttribute(
       'src',
       'https://wow.zamimg.com/images/icons/boss.gif'

@@ -173,12 +173,19 @@ describe('SpellSelection', () => {
       edition: 'anniversary'
     });
     const wrath = screen.getByRole('button', { name: 'Avenging Wrath' });
+    const group = screen.getByRole('button', { name: 'Toggle DPS / power windows' });
+    expect(group).toHaveAttribute('data-tone', 'primary');
+    expect(group).toHaveAttribute('data-outline', 'false');
+    expect(group).toHaveAttribute('data-size', 'small');
+    expect(group).toHaveAttribute('aria-pressed', 'true');
     await fireEvent.click(wrath);
+    expect(group).toHaveAttribute('aria-pressed', 'false');
     expect(wrath.getAttribute('aria-pressed')).toBe('false');
     expect(screen.getByRole('button', { name: 'Everything' }).getAttribute('aria-pressed')).toBe(
       'false'
     );
     await fireEvent.click(screen.getByRole('button', { name: 'Toggle DPS / power windows' }));
+    expect(group).toHaveAttribute('aria-pressed', 'true');
     expect(wrath.getAttribute('aria-pressed')).toBe('true');
     await fireEvent.input(screen.getByRole('textbox', { name: 'Search timeline spells' }), {
       target: { value: 'absent' }

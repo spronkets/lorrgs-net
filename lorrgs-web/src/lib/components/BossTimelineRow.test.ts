@@ -78,8 +78,11 @@ describe('BossTimelineRow', () => {
     vi.mocked(getBossTimeline).mockRejectedValueOnce(new Error('Rate limited'));
     try {
       const { rerender } = render(BossTimelineRow, props());
-      await screen.findByRole('alert');
+      const notice = await screen.findByText('Rate limited');
+      expect(notice.closest('.alert')).toHaveAttribute('data-variant', 'warning');
       expect(screen.getByText('Rate limited')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Retry boss timeline' })).toHaveAttribute('data-tone', 'warning');
+      expect(screen.getByRole('button', { name: 'Retry boss timeline' })).toHaveAttribute('data-outline', 'true');
       await fireEvent.click(screen.getByRole('button', { name: 'Retry boss timeline' }));
       await screen.findByRole('button', { name: '0:30 · Boss Strike' });
       await rerender({

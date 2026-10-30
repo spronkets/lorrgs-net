@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from './Button.svelte';
   export let versions: string[] = [];
   export let selectedVersion = '';
   export let getVersionIconUrl: (_version: string) => string;
@@ -29,11 +30,14 @@
 {:else}
   <div class="icon-strip" aria-label="Edition selection">
     {#each versions as version (version)}
-      <button
-        class="icon-card"
-        class:version-card={true}
-        class:active={selectedVersion === version}
-        on:click={() => onSelect(version)}
+      <Button
+        variant="unstyled"
+        class={[
+          'edition-selector-button',
+          `icon-card`,
+          { 'version-card': true, active: selectedVersion === version }
+        ]}
+        onclick={() => onSelect(version)}
         title={version}
         type="button"
       >
@@ -52,12 +56,19 @@
             />
           </span>
         </span>
-      </button>
+      </Button>
     {/each}
   </div>
 {/if}
 
 <style lang="scss">
+  @use '../styles/selection-tokens' as selectionTokens;
+
+  .edition-select-wrap,
+  .icon-strip {
+    @include selectionTokens.apply-selection-tokens;
+  }
+
   .edition-select-wrap {
     width: 100%;
   }
@@ -125,7 +136,7 @@
     gap: var(--space-4, 0.75rem);
   }
 
-  .icon-card {
+  :global(.icon-card.edition-selector-button) {
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -138,7 +149,7 @@
     transition: none;
   }
 
-  .icon-card.version-card {
+  :global(.icon-card.version-card.edition-selector-button) {
     align-items: stretch;
     padding: 0;
     border: none;
@@ -193,47 +204,49 @@
     mix-blend-mode: multiply;
   }
 
-  .icon-card.version-card:not(.active):hover .banner-frame {
+  :global(.icon-card.version-card.edition-selector-button:not(.active):hover) .banner-frame {
     border-color: var(--select-hover-border);
     box-shadow: var(--select-hover-ring);
     background: var(--select-hover-bg);
   }
 
-  .icon-card.version-card:not(.active):hover .selector-icon.banner-base {
+  :global(.icon-card.version-card.edition-selector-button:not(.active):hover)
+    .selector-icon.banner-base {
     filter: var(--edition-logo-hover-filter, none);
   }
 
-  .icon-card.version-card:not(.active):hover .selector-icon.banner-text-boost {
+  :global(.icon-card.version-card.edition-selector-button:not(.active):hover)
+    .selector-icon.banner-text-boost {
     filter: var(--edition-logo-boost-hover-filter, var(--edition-logo-boost-filter, none));
   }
 
-  .icon-card.version-card:hover {
+  :global(.icon-card.version-card.edition-selector-button:hover) {
     transform: none;
   }
 
-  .icon-card.version-card.active .banner-frame {
+  :global(.icon-card.version-card.active.edition-selector-button) .banner-frame {
     border-color: var(--edition-card-active-border, var(--select-focus-border));
     box-shadow: var(--edition-card-active-ring, var(--select-focus-ring));
     background: var(--edition-card-bg, var(--select-bg));
   }
 
-  .icon-card.version-card.active .selector-icon.banner-base {
+  :global(.icon-card.version-card.active.edition-selector-button) .selector-icon.banner-base {
     filter: var(--edition-logo-hover-filter, none);
   }
 
-  .icon-card.version-card.active .selector-icon.banner-text-boost {
+  :global(.icon-card.version-card.active.edition-selector-button) .selector-icon.banner-text-boost {
     filter: var(--edition-logo-boost-hover-filter, var(--edition-logo-boost-filter, none));
   }
 
-  .icon-card.version-card:focus {
+  :global(.icon-card.version-card.edition-selector-button:focus) {
     outline: none;
   }
 
-  .icon-card.version-card:focus-visible {
+  :global(.icon-card.version-card.edition-selector-button:focus-visible) {
     outline: none;
   }
 
-  .icon-card.version-card:focus-visible .banner-frame {
+  :global(.icon-card.version-card.edition-selector-button:focus-visible) .banner-frame {
     border-color: var(--edition-card-active-border, var(--select-focus-border));
     box-shadow: var(--edition-card-active-ring, var(--select-focus-ring));
     background: var(--edition-card-bg, var(--select-bg));

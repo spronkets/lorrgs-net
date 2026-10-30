@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from './Button.svelte';
   import { tick } from 'svelte';
   import BossIcon from './BossIcon.svelte';
 
@@ -79,16 +80,17 @@
 
 <div class="boss-selector" bind:this={root}>
   <span class="field-label">{label}</span>
-  <button
+  <Button
+    variant="unstyled"
     type="button"
-    class="trigger"
-    bind:this={trigger}
+    class={['boss-selector-button', `trigger`]}
+    bind:element={trigger}
     {disabled}
     aria-label={label}
     aria-haspopup="listbox"
     aria-expanded={open}
-    on:click={() => (open ? (open = false) : expand())}
-    on:keydown={(event) => {
+    onclick={() => (open ? (open = false) : expand())}
+    onkeydown={(event) => {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
         void expand();
@@ -100,7 +102,7 @@
     <svg class="chevron" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor">
       <path d="m4 6 4 4 4-4" />
     </svg>
-  </button>
+  </Button>
   {#if open}
     <div
       class="options"
@@ -133,6 +135,8 @@
   @use '../styles/selection-tokens' as selectionTokens;
 
   .boss-selector {
+    @include selectionTokens.apply-selection-tokens;
+
     position: relative;
     min-width: 0;
     display: flex;
@@ -141,12 +145,12 @@
     color: var(--section-heading);
   }
   .field-label {
-    font-size: var(--meta-font-size, 0.82rem);
+    font-size: 1rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     font-weight: 600;
   }
-  .trigger {
+  :global(.trigger.boss-selector-button) {
     @include selectionTokens.selection-control;
 
     display: flex;

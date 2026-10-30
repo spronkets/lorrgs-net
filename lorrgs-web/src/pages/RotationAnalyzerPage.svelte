@@ -1,8 +1,10 @@
 <script lang="ts">
+  import Button from '../lib/components/Button.svelte';
   import * as WorldDataApi from '../lib/worldDataApi';
 
   import Alert from '../lib/components/Alert.svelte';
   import Spinner from '../lib/components/Spinner.svelte';
+  import Input from '../lib/components/Input.svelte';
   import { onMount } from 'svelte';
   import * as API from '../lib/api';
 
@@ -250,14 +252,17 @@
   </p>
 
   <div class="panel">
-    <label>
-      Report Code
-      <input bind:value={reportCode} placeholder="e.g. abcDEF123xyz" />
-    </label>
-    <button on:click={runLookup} disabled={loadingLookup}>
+    <Input label="Report Code" bind:value={reportCode} placeholder="e.g. abcDEF123xyz" />
+    <Button
+      variant="primary"
+      size="small"
+      class={['rotation-analyzer-page-button']}
+      onclick={runLookup}
+      disabled={loadingLookup}
+    >
       {#if loadingLookup}<Spinner inline />{/if}
       {loadingLookup ? 'Looking up...' : 'Lookup Report'}
-    </button>
+    </Button>
   </div>
 
   {#if lookup}
@@ -280,20 +285,33 @@
         </select>
       </label>
 
-      <label>
-        Parse Percentile (optional)
-        <input bind:value={parsePercentile} type="number" min="0" max="100" placeholder="0-100" />
-      </label>
+      <Input
+        label="Parse Percentile (optional)"
+        bind:value={parsePercentile}
+        type="number"
+        min="0"
+        max="100"
+        placeholder="0-100"
+      />
 
-      <label>
-        Item Level (optional)
-        <input bind:value={itemLevel} type="number" min="1" placeholder="e.g. 525" />
-      </label>
+      <Input
+        label="Item Level (optional)"
+        bind:value={itemLevel}
+        type="number"
+        min="1"
+        placeholder="e.g. 525"
+      />
 
-      <button on:click={runAnalysis} disabled={loadingAnalysis}>
+      <Button
+        variant="primary"
+        size="small"
+        class={['rotation-analyzer-page-button']}
+        onclick={runAnalysis}
+        disabled={loadingAnalysis}
+      >
         {#if loadingAnalysis}<Spinner inline />{/if}
         {loadingAnalysis ? 'Analyzing...' : 'Analyze Rotation'}
-      </button>
+      </Button>
     </div>
   {/if}
 
@@ -376,27 +394,8 @@
     gap: 0.35rem;
   }
 
-  button {
-    background: #262626;
-    color: #f1f1f1;
-    border: 1px solid #454545;
-    border-radius: 0.4rem;
-    padding: 0.5rem 0.65rem;
-  }
-  input {
-    @include selectionTokens.selection-control;
-  }
   select {
     @include selectionTokens.selection-dropdown;
-  }
-
-  button {
-    cursor: pointer;
-  }
-
-  button:disabled {
-    opacity: 0.6;
-    cursor: default;
   }
 
   .table {

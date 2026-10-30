@@ -10,10 +10,14 @@ query CompRoster($code: String!, $fightIds: [Int!]!) {
       fights(fightIDs: $fightIds) {
         id
         encounterID
+        kill
         name
         startTime
         endTime
-        phaseTransitions { id startTime }
+        phaseTransitions {
+          id
+          startTime
+        }
       }
     }
   }
