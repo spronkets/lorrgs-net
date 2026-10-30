@@ -25,6 +25,22 @@ function props() {
 }
 
 describe('TimelineRow', () => {
+  it('links the player name to their profile separately from the report', () => {
+    const input = props();
+    render(TimelineRow, {
+      ...input,
+      report: {
+        ...input.report,
+        players: [{ ...input.report.players[0], serverRegion: 'EU', serverName: 'Thunderstrike' }]
+      }
+    });
+    expect(screen.getByRole('link', { name: 'Player0' })).toHaveAttribute(
+      'href', 'https://fresh.warcraftlogs.com/character/eu/thunderstrike/player0'
+    );
+    expect(screen.getByRole('link', { name: 'Open report in Warcraft Logs' })).toHaveAttribute(
+      'href', 'https://fresh.warcraftlogs.com/reports/Report0#fight=1'
+    );
+  });
   it('uses green on healing cast icons and their measured connectors', () => {
     const input = props();
     const timeline = response(input.report);
@@ -226,17 +242,17 @@ describe('TimelineRow', () => {
       report: {
         ...input.report,
         players: [
-          { ...input.report.players![0], factionId, serverRegion: 'EU', guildName: 'Raid Guild' }
+          { ...input.report.players![0], factionId, serverRegion: 'EU', serverName: 'Thunderstrike', guildName: 'Raid Guild' }
         ]
       }
     });
-    const icon = screen.getByRole('img', { name: faction });
-    expect(icon).toHaveAttribute('src', `/images/wow/shared/factions/${faction.toLowerCase()}.png`);
-    expect(icon.parentElement).toHaveTextContent(/Raid Guild\s+EU/);
-    expect(icon.parentElement?.firstElementChild).toBe(icon);
-    expect(icon).toHaveAttribute('title', faction);
-    expect(icon.parentElement).not.toHaveTextContent(faction);
-    expect(icon.parentElement?.querySelector('.guild-name')).toHaveClass(faction.toLowerCase());
+    const name = screen.getByText('Raid Guild');
+    expect(name).toHaveClass('faction-name', faction.toLowerCase());
+    expect(name).toHaveAttribute('title', faction);
+    expect(name).toHaveTextContent('Raid Guild');
+    expect(screen.getByText('Thunderstrike EU')).not.toHaveClass('faction-name', 'alliance', 'horde');
+    expect(name.parentElement?.firstElementChild).toBe(name);
+    expect(screen.queryByRole('img', { name: faction })).not.toBeInTheDocument();
   });
 
   it('does not invent a faction icon when faction is unknown', () => {
@@ -261,7 +277,8 @@ describe('TimelineRow', () => {
         percentile: null
       }
     });
-    expect(screen.getByRole('link', { name: 'Unknown player' })).toBeInTheDocument();
+    expect(screen.getByText('Unknown player').closest('a')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Open report in Warcraft Logs' })).toBeInTheDocument();
     expect(screen.getByText('0 (N/A)')).toBeInTheDocument();
     expect(container.querySelector('.player-spec-icon')).toBeNull();
     expect(container.querySelector('.report-time')).toBeNull();
@@ -289,6 +306,8 @@ describe('TimelineRow', () => {
     const onreference = vi.fn();
     const { rerender } = render(TimelineRow, { ...input, onreference });
     const button = screen.getByRole('button', { name: 'Use as boss reference' });
+    expect(button.parentElement).toHaveClass('player-heading');
+    expect(button.parentElement?.lastElementChild).toBe(button);
     expect(button).toHaveAttribute('aria-pressed', 'false');
     await fireEvent.click(button);
     expect(onreference).toHaveBeenCalledWith(input.report);
@@ -319,7 +338,7 @@ describe('TimelineRow', () => {
       players: [{ ...input.report.players![0], name: 'Paladin', specSlug: 'holy-paladin' }]
     };
     const { container, rerender } = render(TimelineRow, { ...input, report });
-    expect(screen.getByText('Paladin')).toHaveStyle({ color: '#F48CBA' });
+    expect(screen.getByText('Paladin')).toHaveClass('class-name', 'paladin');
     const icon = container.querySelector('.player-spec-icon')!;
     expect(icon).toHaveAttribute('src', '/images/wow/specs/paladin-holy.jpg');
     expect(icon.nextElementSibling).toHaveTextContent('Paladin');
@@ -330,7 +349,7 @@ describe('TimelineRow', () => {
         players: [{ ...report.players[0], name: 'Mage', specSlug: 'fire-mage' }]
       }
     });
-    expect(screen.getByText('Mage')).toHaveStyle({ color: '#3FC7EB' });
+    expect(screen.getByText('Mage')).toHaveClass('class-name', 'mage');
     expect(container.querySelector('.player-spec-icon')).toHaveAttribute(
       'src',
       '/images/wow/specs/mage-fire.jpg'
@@ -423,7 +442,12 @@ describe('TimelineRow', () => {
     expect(container.querySelector('.fight-end')?.getAttribute('style')).toContain('80%');
     expect(container.querySelector('.fight-end-label')?.textContent?.trim()).toBe('4:00');
     expect(screen.getByText('100 (Top 1%)')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Player0' }).getAttribute('href')).toBe(
+    const reportLink = screen.getByRole('link', { name: 'Open report in Warcraft Logs' });
+    expect(screen.getByText('Player0').closest('a')).toBeNull();
+    expect(container.querySelector('.report-time')?.nextElementSibling).toBe(reportLink);
+    expect(reportLink.querySelector('svg')).toHaveClass('lucide-external-link');
+    expect(container.querySelector('.player-heading')).not.toHaveTextContent(input.report.title);
+    expect(reportLink.getAttribute('href')).toBe(
       'https://fresh.warcraftlogs.com/reports/Report0#fight=1'
     );
     expect(

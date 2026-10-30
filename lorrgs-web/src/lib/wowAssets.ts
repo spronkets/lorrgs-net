@@ -36,6 +36,12 @@ const classRoleSpecs: Record<number, { classSlug: string; Damage: string[]; Tank
   13: { classSlug: 'evoker', Damage: ['devastation', 'augmentation'], Healing: 'preservation' }
 };
 
+export function getClassSlugForSpec(specSlug: string | undefined): string | undefined {
+  return Object.values(classRoleSpecs).find(({ classSlug }) =>
+    specSlug?.endsWith(`-${classSlug}`)
+  )?.classSlug;
+}
+
 export function getClassRoleIconUrl(classId: number, role: 'Damage' | 'Tank' | 'Healing'): string {
   const entry = classRoleSpecs[classId];
   const spec = role === 'Damage' ? entry?.Damage[0] : entry?.[role];

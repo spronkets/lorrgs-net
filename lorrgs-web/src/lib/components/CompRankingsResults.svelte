@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Button from './Button.svelte';
   import type { CompRankingFilters } from '../models/CompRankingFilters';
   import type { CompRankingData } from '../models/CompRankingData';
   import type { RankingReport } from '../models/RankingReport';
@@ -8,7 +7,6 @@
   import Alert from './Alert.svelte';
   import ReportIdentity from './ReportIdentity.svelte';
   import Spinner from './Spinner.svelte';
-  import { getBlizzardClassColor } from '../classColors';
   import { timelineTime } from '../timelineUtils';
   import { getTopPercentLabel } from '../rankingUtils';
   import { SvelteSet } from 'svelte/reactivity';
@@ -120,10 +118,10 @@
         }
       }));
   }
-  function color(slug: string) {
+  function classSlug(slug: string) {
     const spec = worldData.specs?.find((item) => item.fullNameSlug === slug);
     const cls = worldData.classes?.find((item) => item.id === spec?.classId);
-    return getBlizzardClassColor(cls?.nameSlug, cls?.color ?? '#7ba4bf');
+    return cls?.nameSlug ?? '';
   }
   function specIcon(slug: string) {
     const spec = worldData.specs?.find((item) => item.fullNameSlug === slug);
@@ -178,6 +176,8 @@
                         factionId
                       }}
                       {edition}
+                      regionNextToServer
+                      reportNameInLink
                       showReportName={loader.loaded.has(key(summary))}
                     />
                   </div>
@@ -241,22 +241,35 @@
             <div class="composition-heading">
               <h4>Raid composition</h4>
               <div class="roster-filters" role="group" aria-label="Roster roles">
-                <Button
-                  variant="secondary-outline"
-                  size="small"
-                  class={['comp-rankings-results-button']}
+                <button
+                  class={['button', ['comp-rankings-results-button']]}
+                  data-tone={(!selectedRole && !selectedSpec) === true ||
+                  (!selectedRole && !selectedSpec) === 'true'
+                    ? 'primary'
+                    : 'secondary'}
+                  data-outline={!(
+                    (!selectedRole && !selectedSpec) === true ||
+                    (!selectedRole && !selectedSpec) === 'true'
+                  )}
+                  data-size="small"
                   type="button"
                   aria-pressed={!selectedRole && !selectedSpec}
                   onclick={() => {
                     selectedRoles[key(summary)] = '';
                     selectedSpecs[key(summary)] = '';
-                  }}>All: {playerCount}</Button
+                  }}>All: {playerCount}</button
                 >
                 {#each Object.entries(roles) as [code, count] (code)}
-                  <Button
-                    variant="secondary-outline"
-                    size="small"
-                    class={['comp-rankings-results-button']}
+                  <button
+                    class={['button', ['comp-rankings-results-button']]}
+                    data-tone={(selectedRole === code) === true ||
+                    (selectedRole === code) === 'true'
+                      ? 'primary'
+                      : 'secondary'}
+                    data-outline={!(
+                      (selectedRole === code) === true || (selectedRole === code) === 'true'
+                    )}
+                    data-size="small"
                     type="button"
                     aria-pressed={selectedRole === code}
                     onclick={() => {
@@ -265,7 +278,7 @@
                     }}
                     >{worldData.roles?.find((role) => role.code === code)?.name ??
                       roleNames[code] ??
-                      code}: {count}</Button
+                      code}: {count}</button
                   >
                 {/each}
               </div>
@@ -275,11 +288,12 @@
               {#if loader.errors.has(key(summary))}<Alert variant="error">
                   {loader.errors.get(key(summary))}
                 </Alert>{/if}
-              <Button
-                variant="secondary-outline"
-                size="small"
+              <button
+                class={['button', ['comp-rankings-results-button', `load-details`]]}
+                data-tone="secondary"
+                data-outline="true"
+                data-size="small"
                 type="button"
-                class={['comp-rankings-results-button', `load-details`]}
                 disabled={loader.loadingKeys.has(key(summary))}
                 onclick={() => loader.load(summary)}
               >
@@ -289,38 +303,49 @@
                   : loader.errors.has(key(summary))
                     ? 'Retry loading report'
                     : 'Load report'}
-              </Button>
+              </button>
             {:else}
               <div class="composition specs">
                 {#each Object.entries(fight?.composition?.specs ?? {}) as [slug, count] (slug)}
-                  <Button
-                    variant="secondary-outline"
-                    size="small"
+                  <button
                     class={[
-                      'comp-rankings-results-button',
-                      {
-                        dimmed:
-                          (!!selectedSpec && selectedSpec !== slug) ||
-                          (!!selectedRole &&
-                            worldData.roles?.find(
-                              (role) =>
-                                role.id ===
-                                worldData.specs?.find((spec) => spec.fullNameSlug === slug)?.roleId
-                            )?.code !== selectedRole)
-                      }
+                      'button',
+                      [
+                        'comp-rankings-results-button',
+                        'class-accent',
+                        classSlug(slug),
+                        {
+                          dimmed:
+                            (!!selectedSpec && selectedSpec !== slug) ||
+                            (!!selectedRole &&
+                              worldData.roles?.find(
+                                (role) =>
+                                  role.id ===
+                                  worldData.specs?.find((spec) => spec.fullNameSlug === slug)
+                                    ?.roleId
+                              )?.code !== selectedRole)
+                        }
+                      ]
                     ]}
+                    data-tone={(selectedSpec === slug) === true ||
+                    (selectedSpec === slug) === 'true'
+                      ? 'primary'
+                      : 'secondary'}
+                    data-outline={!(
+                      (selectedSpec === slug) === true || (selectedSpec === slug) === 'true'
+                    )}
+                    data-size="small"
                     type="button"
                     aria-pressed={selectedSpec === slug}
                     onclick={() => {
                       selectedSpecs[key(summary)] = selectedSpec === slug ? '' : slug;
                       selectedRoles[key(summary)] = '';
                     }}
-                    style={`border-color: ${color(slug)}`}
                     >{#if specIcon(slug)}<img
                         src={specIcon(slug)}
                         alt=""
                       />{/if}{worldData.specs?.find((spec) => spec.fullNameSlug === slug)
-                      ?.fullName ?? slug} ×{count}</Button
+                      ?.fullName ?? slug} ×{count}</button
                   >
                 {/each}
               </div>
@@ -368,6 +393,10 @@
 </div>
 
 <style>
+  .specs :global(.comp-rankings-results-button) {
+    border-color: var(--class-accent, #7ba4bf);
+  }
+
   .comp-results {
     display: grid;
     gap: 0.8rem;
@@ -385,7 +414,8 @@
     vertical-align: middle;
   }
   article {
-    border: 1px solid #687e94;
+    border: 1px solid var(--display-border);
+    background: var(--display-surface);
     border-radius: 0.4rem;
     padding: 0.8rem;
     min-width: 0;
@@ -445,7 +475,7 @@
     font-size: 0.85rem;
     line-height: 1.5;
     font-weight: 400;
-    color: #9cabb8;
+    color: var(--display-muted);
     gap: 0.8rem 1.5rem;
     margin: 0;
     padding: 0;
@@ -455,7 +485,7 @@
     font-weight: 400;
   }
   .result-value {
-    color: #dceeff;
+    color: var(--display-value);
   }
   .stats > span {
     grid-column: 2;
@@ -473,7 +503,7 @@
   }
   details {
     margin-top: 1rem;
-    border: 1px solid #687e94;
+    border: 1px solid var(--display-border);
     border-radius: 0.4rem;
   }
   .composition {
@@ -502,7 +532,7 @@
     outline-offset: 3px;
   }
   details[open] > summary {
-    border-bottom: 1px solid #687e94;
+    border-bottom: 1px solid var(--display-border);
     border-radius: 0.4rem 0.4rem 0 0;
   }
   .roster-content {

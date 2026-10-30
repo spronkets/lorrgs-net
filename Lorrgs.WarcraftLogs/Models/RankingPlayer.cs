@@ -20,15 +20,12 @@ public class RankingPlayer
     public string? GuildName { get; set; }
     public int? FactionId { get; set; }
     public string? ServerRegion { get; set; }
+    /// <summary>The realm display name, preserving its upstream casing and punctuation.</summary>
     public string? ServerName { get; set; }
 
-    // Internal alias: existing mapping code currently resolves slugs.
+    /// <summary>The realm slug used for character lookups, separate from the display name.</summary>
     [JsonIgnore]
-    public string? ServerSlug
-    {
-        get => ServerName;
-        set => ServerName = value;
-    }
+    public string? ServerSlug { get; set; }
 
     public int ClassId { get; set; }
     public int SpecId { get; set; }

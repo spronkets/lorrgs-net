@@ -1,0 +1,56 @@
+@use 'sass:color';
+
+$colors: (
+  'alliance': #162c57,
+  'horde': #8c1616
+);
+
+@mixin faction-styles {
+  :global(:where(.faction-name)) {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  :global(.faction-name > svg),
+  :global(.faction-name > img) {
+    display: block;
+    align-self: center;
+    flex-shrink: 0;
+  }
+
+  @each $faction, $color in $colors {
+    :global(.faction-name.#{$faction}) {
+      color: $color;
+    }
+
+    @if $faction == 'alliance' {
+      :global(.theme-dark .faction-name.#{$faction}) {
+        color: color.adjust($color, $lightness: 30%, $space: hsl);
+      }
+    } @else if $faction == 'horde' {
+      :global(.theme-dark .faction-name.#{$faction}) {
+        color: color.adjust($color, $lightness: 10%, $space: hsl);
+      }
+    }
+
+    :global(.faction-name.#{$faction}:not(.no-faction-icon)::before) {
+      content: '';
+      display: block;
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      align-self: center;
+      transform: translateY(-1px);
+      background: url('/images/wow/shared/factions/#{$faction}.png') center / contain no-repeat;
+    }
+
+    :global(.faction-icon.#{$faction}) {
+      width: 14px;
+      height: 14px;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+  }
+
+}

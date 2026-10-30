@@ -56,7 +56,8 @@ it('hydrates a shared encounter, navigates to either ranking flow, and retains u
     onnavigate
   });
 
-  expect(screen.getByRole('heading', { name: 'Compare raid cooldowns' })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Compare raid cooldowns' })).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Edition' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Spec Rankings' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Comp Rankings' })).toBeEnabled();
   expect(location.search).toContain('edition=Anniversary');

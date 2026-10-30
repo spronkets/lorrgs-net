@@ -16,5 +16,6 @@ export type TimelineMagnification = {
   previewPixelsPerMillisecond?: number;
   timestamp?: number;
   resourceMode?: 'health' | 'mana';
+  boss?: boolean;
   phases?: { id: number; timestamp: number }[];
 };

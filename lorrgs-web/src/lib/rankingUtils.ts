@@ -1,6 +1,22 @@
 import type { RankingReport } from './models/rankings/RankingReport';
 import type { RankingFilters } from './models/rankings/RankingFilters';
 import type { RankingSort } from './models/rankings/RankingSort';
+import type { RankingPlayer } from './models/RankingPlayer';
+
+function warcraftLogsHost(edition: string): string {
+  return { anniversary: 'fresh', mistsofpandaria: 'classic', era: 'vanilla' }[edition] ?? 'www';
+}
+
+export function getPlayerProfileLink(
+  player: Pick<RankingPlayer, 'name' | 'serverRegion' | 'serverName' | 'serverSlug'> | undefined,
+  edition: string
+): string | null {
+  const region = normalizeRankingRegion(player?.serverRegion);
+  const server = (player?.serverSlug || player?.serverName || '').trim().toLowerCase().replace(/\s+/g, '-');
+  const name = player?.name.trim().toLowerCase();
+  if (!region || !server || !name) return null;
+  return `https://${warcraftLogsHost(edition)}.warcraftlogs.com/character/${encodeURIComponent(region)}/${encodeURIComponent(server)}/${encodeURIComponent(name)}`;
+}
 
 export function parseKillTime(value: string): number | null {
   const trimmed = value.trim();
@@ -126,8 +142,7 @@ export function getRankingReportLink(
   report: { reportId: string; fights?: { fightId: number }[]; players?: { playerId: number }[] },
   edition: string
 ): string {
-  const host =
-    { anniversary: 'fresh', mistsofpandaria: 'classic', era: 'vanilla' }[edition] ?? 'www';
+  const host = warcraftLogsHost(edition);
   const params = new URLSearchParams();
   const fight = report.fights?.[0]?.fightId;
   const source = report.players?.[0]?.playerId;

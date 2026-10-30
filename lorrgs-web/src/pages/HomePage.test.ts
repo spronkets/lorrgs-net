@@ -94,7 +94,7 @@ it('combines the spec icons and encounter heading inside the selection panel', a
     name: 'Paladin Retribution Paladin vs. Illidan Stormrage'
   });
   expect(screen.getByRole('heading', { name: 'Spec Rankings', level: 2 })).toBeInTheDocument();
-  expect(container.querySelector('.ranking-page-header')).toHaveTextContent(
+  expect(container.querySelector('.page-header')).toHaveTextContent(
     'Compare cooldown usage across ranked players of a chosen specialization.'
   );
   expect(heading.closest('.selection-collapsed')).not.toBeNull();

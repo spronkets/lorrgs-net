@@ -267,6 +267,8 @@ public sealed class RankingsDataService(
                         ?? NormalizeRankingFaction(rankingElem.Guild?.Faction?.ToString()),
                     ServerRegion = ResolveServerRegion(rankingElem.ServerRegion, rankingElem.RegionName, rankingElem.RegionAlias)
                         ?? NormalizeServerRegion(activeOptions.ServerRegion),
+                    ServerName = ResolveServerDisplayName(rankingElem.ServerName, rankingElem.RealmName,
+                        WclRankingJsonHelpers.TryGetNestedExtensionString(rankingElem.ExtensionData, "server", "name")),
                     ServerSlug = ResolveServerSlug(rankingElem.ServerSlug, rankingElem.ServerName, rankingElem.RealmName, rankingElem.ServerAlias)
                         ?? NormalizeServerSlug(activeOptions.ServerSlug),
                     ClassId = queryContext.ClassId,
@@ -779,6 +781,8 @@ public sealed class RankingsDataService(
                 ServerRegion = ResolveServerRegion(character.ServerRegion, character.RegionName, character.RegionAlias)
                     ?? primaryPlayer.ServerRegion
                     ?? NormalizeServerRegion(requestOptions.ServerRegion),
+                ServerName = ResolveServerDisplayName(character.ServerName, character.RealmName,
+                    WclRankingJsonHelpers.TryGetNestedExtensionString(character.ExtensionData, "server", "name")),
                 ServerSlug = ResolveServerSlug(character.ServerSlug, character.ServerName, character.RealmName, character.ServerAlias)
                     ?? primaryPlayer.ServerSlug
                     ?? NormalizeServerSlug(requestOptions.ServerSlug),
@@ -816,7 +820,8 @@ public sealed class RankingsDataService(
 
         foreach (var player in players)
         {
-            if (player.FactionId.HasValue && !string.IsNullOrWhiteSpace(player.GuildName))
+            if (player.FactionId.HasValue && !string.IsNullOrWhiteSpace(player.GuildName) &&
+                !string.IsNullOrWhiteSpace(player.ServerName))
             {
                 continue;
             }
@@ -875,7 +880,7 @@ public sealed class RankingsDataService(
                 var alias = $"c{i}";
                 aliasToKey[alias] = item.Key;
                 charactersBlock.AppendLine(
-                    $"    {alias}: character(name: \"{EscapeGraphQlString(item.Name)}\", serverSlug: \"{EscapeGraphQlString(item.ServerSlug)}\", serverRegion: \"{EscapeGraphQlString(item.ServerRegion)}\") {{ name faction {{ id }} guilds {{ name faction {{ id }} }} }}");
+                    $"    {alias}: character(name: \"{EscapeGraphQlString(item.Name)}\", serverSlug: \"{EscapeGraphQlString(item.ServerSlug)}\", serverRegion: \"{EscapeGraphQlString(item.ServerRegion)}\") {{ name server {{ name }} faction {{ id }} guilds {{ name faction {{ id }} }} }}");
             }
 
             var queryText = CharacterFactionEnrichmentQueryTemplate.Replace(
@@ -922,6 +927,10 @@ public sealed class RankingsDataService(
                 }
 
                 var playerFactionId = ReadFactionId(characterElement);
+                var serverName = characterElement.TryGetProperty("server", out var server) &&
+                    server.ValueKind == JsonValueKind.Object
+                    ? TryGetString(server, "name")
+                    : null;
                 int? guildFactionId = null;
                 string? guildName = null;
 
@@ -942,6 +951,11 @@ public sealed class RankingsDataService(
 
                 foreach (var player in mappedPlayers)
                 {
+                    if (!string.IsNullOrWhiteSpace(serverName))
+                    {
+                        player.ServerName = serverName;
+                    }
+
                     if (!player.FactionId.HasValue)
                     {
                         player.FactionId = playerFactionId ?? guildFactionId;
@@ -1014,6 +1028,9 @@ public sealed class RankingsDataService(
             ?? NormalizeServerRegion(regionName)
             ?? NormalizeServerRegion(regionAlias);
     }
+
+    private static string? ResolveServerDisplayName(params string?[] names) =>
+        names.FirstOrDefault(name => !string.IsNullOrWhiteSpace(name))?.Trim();
 
     private static string? ResolveServerSlug(string? serverSlug, string? serverName, string? realmName, string? serverAlias = null)
     {

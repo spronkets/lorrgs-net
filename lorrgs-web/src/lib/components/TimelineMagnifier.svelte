@@ -382,18 +382,27 @@
                       &minus;{Number((event.healthBeforePercent - event.healthAfterPercent).toFixed(2))}% health
                     </span>
                   {/if}
-                  {#each event.castResults?.filter((result) => Number(result.amount.toFixed(2)) > 0) ?? [] as result (`${result.targetId}-${result.kind}`)}
+                  {#each event.castResults?.filter((result) => result.outcome || Number(result.amount.toFixed(2)) > 0) ?? [] as result (`${result.targetId}-${result.kind}`)}
                     <span
                       class:resource-value={result.kind === 'mana-returned'}
                       class:health-gain={result.kind === 'heal'}
                       class:health-loss={result.kind === 'damage'}
                       class:mana-cost={result.kind === 'mana-returned'}
                     >
+                      {#if result.outcome}
+                        {result.outcome} on {result.targetName}
+                      {:else}
                       {result.kind === 'damage' ? '-' : '+'}{result.amount.toLocaleString(undefined, {
                         maximumFractionDigits: 2
                       })}{result.kind === 'mana-returned' ? ' mana' : ` to ${result.targetName}`}
+                      {/if}
                     </span>
                   {/each}
+                  {#if magnifier.boss && !event.castResults?.length}
+                    <span title="No damage or healing event could be matched to this cast in the fetched log. This is not a recorded zero or confirmed miss.">
+                      No recorded result
+                    </span>
+                  {/if}
                 </span>
               {/if}
             </span>

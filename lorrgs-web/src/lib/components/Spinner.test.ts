@@ -5,7 +5,7 @@ import Spinner from './Spinner.svelte';
 it('renders a decorative, current-color loading icon without duplicating status announcements', () => {
   const { container } = render(Spinner, { inline: true });
   const icon = container.querySelector('svg')!;
-  expect(icon).toHaveClass('loading-spinner');
+  expect(icon).toHaveClass('loading-spinner', 'lucide-loader-circle');
   expect(icon).toHaveAttribute('aria-hidden', 'true');
   expect(icon).toHaveAttribute('focusable', 'false');
   expect(icon).toHaveAttribute('stroke', 'currentColor');

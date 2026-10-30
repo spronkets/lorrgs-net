@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from './Button.svelte';
+  import { X } from '@lucide/svelte';
   type Props = {
     message: string;
     variant?: 'success' | 'error';
@@ -22,25 +22,17 @@
   aria-atomic="true"
 >
   <span>{message}</span>
-  <Button
-    variant="unstyled"
-    class={['toast-button']}
+  <button
+    class={['button', ['toast-button']]}
+    data-tone="unstyled"
+    data-outline="false"
+    data-size="medium"
     type="button"
     aria-label="Dismiss notification"
     onclick={onclose}
   >
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      aria-hidden="true"
-    >
-      <path d="m6 6 12 12M18 6 6 18" />
-    </svg>
-  </Button>
+    <X size={12} aria-hidden="true" />
+  </button>
 </div>
 
 <style>

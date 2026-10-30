@@ -7,8 +7,8 @@
 # Application API requests; live loads require WCL credentials and consume quota.
 # Replace sample report/fight/player identities with a visible ranking row.
 # Both endpoints require an ASCII alphanumeric report code <= 32 chars and fightId > 0.
-# edition defaults to retail; supported values are retail, anniversary, mistsofpandaria, era.
-# Unlike WorldData/CompRankings, edition aliases and classic_sod are NOT accepted here.
+# edition defaults to retail; supported values are retail, anniversary, mistsofpandaria, era, classic_sod.
+# Edition aliases are not accepted here.
 # Player timeline requires sourceId > 0 OR a nonblank playerName; optional specId
 # enables specialization-specific corrections. Boss timeline needs no player selection.
 # Responses: 200, 400, 403, 404, 429, 502; errors use Problem Details.

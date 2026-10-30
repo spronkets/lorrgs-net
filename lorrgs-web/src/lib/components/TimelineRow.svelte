@@ -1,11 +1,11 @@
 <script lang="ts">
+  import { ChartNoAxesColumn, Copy, Crosshair, ExternalLink } from '@lucide/svelte';
   import { withResourceLanes } from '../spellClassification';
   import type { TimelineEvent } from '../models/TimelineEvent';
   import Alert from './Alert.svelte';
-  import Button from './Button.svelte';
+
   import Spinner from './Spinner.svelte';
-  import { getBlizzardClassColor, getBlizzardClassColors } from '../classColors';
-  import { getSpecIconUrl } from '../wowAssets';
+  import { getClassSlugForSpec, getSpecIconUrl } from '../wowAssets';
   import { timelineErrorSummary } from '../timelineError';
   import TimelinePhases from './TimelinePhases.svelte';
   import type { RankingReport } from '../models/RankingReport';
@@ -14,11 +14,13 @@
   import type { TimelineMagnification } from '../models/TimelineMagnification';
   import {
     getTopPercentLabel,
+    getPlayerProfileLink,
     getRankingReportLink,
     getRotationAnalyzerLink
   } from '../rankingUtils';
   import {
     TIMELINE_ZOOM_LEVELS,
+    timelinePreview,
     canLoadTimeline,
     castIntervals,
     fightDuration,
@@ -115,11 +117,7 @@
     if (values.length === 0) return null;
     return { min: Math.min(...values), max: Math.max(...values) };
   });
-  const playerClass = $derived(
-    Object.keys(getBlizzardClassColors()).find((slug) =>
-      report.players?.[0]?.specSlug.endsWith(`-${slug}`)
-    )
-  );
+  const playerClass = $derived(getClassSlugForSpec(report.players?.[0]?.specSlug));
   const playerSpec = $derived(
     playerClass ? report.players?.[0]?.specSlug.slice(0, -(playerClass.length + 1)) : ''
   );
@@ -173,19 +171,6 @@
       return;
     }
     const rect = track.getBoundingClientRect();
-    const timestamp = Math.max(
-      0,
-      Math.min(
-        timeline.duration,
-        ((mouse.clientX - rect.left) / Math.max(1, rect.width)) * axisDuration
-      )
-    );
-    const previewWidth = Math.min(360, window.innerWidth - 16) - 18;
-    const previewZoom = TIMELINE_ZOOM_LEVELS[TIMELINE_ZOOM_LEVELS.length - 1];
-    const span = Math.min(
-      timeline.duration,
-      (previewWidth * axisDuration) / Math.max(1, rect.width * (previewZoom / zoom))
-    );
     const eventElement =
       mouse.target instanceof Element ? mouse.target.closest('[data-event-index]') : null;
     const hoveredEvent = eventElement
@@ -197,19 +182,14 @@
       hoveredEvent,
       mergedResources,
       showIcons,
-      previewPixelsPerMillisecond: previewWidth / span,
-      timestamp,
+      ...timelinePreview(rect, mouse.clientX, timeline.duration, axisDuration, zoom, window.innerWidth),
       resourceMode: survivalMode ? resourceMode : undefined,
       phases:
         report.bossTimeline && report.bossTimeline.fightId === report.fights?.[0]?.fightId
           ? report.bossTimeline.phases
           : report.fights?.[0]?.phases,
-      start: Math.max(0, Math.min(timestamp - span / 2, timeline.duration - span)),
-      span,
-      zoom: previewZoom,
       x: mouse.clientX,
       y: mouse.clientY,
-      trackTop: rect.top
     };
   }
   function reportDate(report: RankingReport): string | null {
@@ -254,7 +234,37 @@
         <div class="player-meta">Mana · abilities & consumables</div>
       {/if}
     {:else}
+      {#snippet guildName()}
+        {#if faction || report.players?.[0]?.guildName}
+          <span class="guild-name faction-name"
+            title={report.players?.[0]?.guildName || faction || undefined}
+            class:alliance={faction === 'Alliance'} class:horde={faction === 'Horde'}
+          >{report.players?.[0]?.guildName ?? ''}</span>
+        {/if}
+      {/snippet}
       <div class="player-heading">
+        {#snippet playerName()}
+          {#if playerClass && playerSpec}
+            <img class="player-spec-icon" src={getSpecIconUrl(playerClass, playerSpec)}
+              alt="" title={report.players?.[0]?.specSlug} />
+          {/if}
+          <span class={`class-name ${playerClass ?? ''}`}
+            title={timeline?.playerName || report.players?.[0]?.name || 'Unknown player'}>
+            {timeline?.playerName || report.players?.[0]?.name || 'Unknown player'}
+          </span>
+        {/snippet}
+        {#if !compositionMode}
+          {@const profileLink = getPlayerProfileLink(report.players?.[0], edition)}
+          {#if profileLink}
+            <a class="player-name" href={profileLink} target="_blank" rel="noopener noreferrer"
+              title="Open this player's Warcraft Logs profile in a new tab.">
+              {@render playerName()}
+            </a>
+          {:else}
+            <span class="player-name">{@render playerName()}</span>
+          {/if}
+          {@render guildName()}
+        {:else}
         <a
           class="player-report-link"
           href={getRankingReportLink(report, edition)}
@@ -262,31 +272,10 @@
           rel="noopener"
           title="Open this player's fight in Warcraft Logs in a new tab."
         >
-          {#if playerClass && playerSpec}
-            <img
-              class="player-spec-icon"
-              src={getSpecIconUrl(playerClass, playerSpec)}
-              alt=""
-              title={report.players?.[0]?.specSlug}
-            />
-          {/if}
-          <span style:color={playerClass ? getBlizzardClassColor(playerClass) : undefined}
-            >{timeline?.playerName || report.players?.[0]?.name || 'Unknown player'}</span
-          >
-          <svg
-            width="11"
-            height="11"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            aria-hidden="true"
-          >
-            <path
-              d="M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"
-            />
-          </svg>
+            {@render playerName()}
+            <ExternalLink size={11} aria-hidden="true" />
         </a>
+        {/if}
         <span class="player-performance">
           {#if compositionMode && report.players?.[0]?.parsePercentile == null}
             Parse unavailable
@@ -298,75 +287,50 @@
             )})
           {/if}
         </span>
+        {#if getRotationAnalyzerLink(report) && onreference}
+          <button
+            class={['button', ['timeline-row-button', 'reference-target copy-note']]}
+            data-tone="unstyled"
+            data-outline="false"
+            data-size="medium"
+            type="button"
+            aria-label="Use as boss reference"
+            aria-pressed={isReference}
+            disabled={isReference}
+            title={isReference ? 'Current boss reference' : 'Use this fight as the boss reference.'}
+            onclick={() => onreference?.(report)}
+          >
+            <Crosshair size={13} aria-hidden="true" />
+          </button>
+        {/if}
       </div>
       <div class="player-details">
-        <span class="player-meta player-guild" title={report.players?.[0]?.guildName || ''}>
-          {#if faction}
-            <img
-              class="faction-icon"
-              src={`/images/wow/shared/factions/${faction.toLowerCase()}.png`}
-              alt={faction}
-              title={faction}
-            />
-          {/if}
-          {#if report.players?.[0]?.guildName}
-            <span
-              class="guild-name"
-              class:alliance={faction === 'Alliance'}
-              class:horde={faction === 'Horde'}>{report.players[0].guildName}</span
-            >
-          {/if}
-          <span>{report.players?.[0]?.serverRegion || '—'}</span>
+        <span class="player-meta player-guild">
+          {#if compositionMode}{@render guildName()}{/if}
+          <span>{[
+            report.players?.[0]?.serverName,
+            report.players?.[0]?.serverRegion?.toUpperCase()
+          ].filter(Boolean).join(' ')}</span>
         </span>
         <span class="player-actions">
           {#if reportDate(report)}<span class="player-meta report-time">{reportDate(report)}</span
             >{/if}
+          {#if !compositionMode}
+            <a class="report-icon-link copy-note"
+              href={getRankingReportLink(report, edition)} target="_blank" rel="noopener noreferrer"
+              aria-label="Open report in Warcraft Logs"
+              title={report.title || `Report ${report.reportId}`}>
+              <ExternalLink size={11} aria-hidden="true" />
+            </a>
+          {/if}
           {#if getRotationAnalyzerLink(report)}
-            {#if onreference}
-              <Button
-                variant="unstyled"
-                type="button"
-                class={['timeline-row-button', `reference-target copy-note`]}
-                aria-label="Use as boss reference"
-                aria-pressed={isReference}
-                disabled={isReference}
-                title={isReference
-                  ? 'Current boss reference'
-                  : 'Use this fight as the boss reference.'}
-                onclick={() => onreference?.(report)}
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="7" />
-                  <circle cx="12" cy="12" r="2" />
-                  <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
-                </svg>
-              </Button>
-            {/if}
             <a
               class="analyzer-link copy-note"
               href={getRotationAnalyzerLink(report)}
               aria-label="Open report analyzer"
               title="Analyze this player's fight in the report analyzer."
             >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                aria-hidden="true"
-              >
-                <path d="M4 3v18h17M8 16v-5m5 5V7m5 9v-8" />
-              </svg>
+              <ChartNoAxesColumn size={13} aria-hidden="true" />
             </a>
           {/if}
         </span>
@@ -418,7 +382,7 @@
     {#if endTime > 0}
       <span
         class="after-fight"
-        style={`left: ${(endTime / axisDuration) * 100}%; width: ${(1 - endTime / axisDuration) * 100}%`}
+        style={`left: ${Math.min(100, (endTime / axisDuration) * 100)}%; width: ${Math.max(0, (1 - endTime / axisDuration) * 100)}%`}
         aria-hidden="true"
       ></span>
       <span
@@ -475,26 +439,31 @@
             aria-label={title}
           ></span>
         {/if}
-        <Button
-          variant="unstyled"
-          type="button"
+        <button
           class={[
-            'timeline-row-button',
-            `event`,
-            {
-              buff: event.kind === 'buff' && !event.displayBelow,
-              below: event.displayBelow,
-              death: event.kind === 'death',
-              cast: event.kind === 'cast' || event.kind === 'marker',
-              'cast-icon': event.kind === 'cast' || isResourceHit(event) || event.displayBelow,
-              healing: event.kind === 'heal' || event.kind === 'hot',
-              'damage-taken': event.kind === 'damage',
-              'mana-event': event.kind === 'mana-spent' || event.kind === 'mana-returned',
-              'power-window': powerWindow,
-              'spell-dimmed': inspected !== null && inspected.id !== event.spellId,
-              'spell-highlighted': inspected?.id === event.spellId
-            }
+            'button',
+            [
+              'timeline-row-button',
+              `event`,
+              {
+                buff: event.kind === 'buff' && !event.displayBelow,
+                below: event.displayBelow,
+                death: event.kind === 'death',
+                cast: event.kind === 'cast' || event.kind === 'marker',
+                'cast-icon': event.kind === 'cast' || isResourceHit(event) || event.displayBelow,
+                healing: event.kind === 'heal' || event.kind === 'hot',
+                'damage-taken': event.kind === 'damage',
+                'mana-event': event.kind === 'mana-spent' || event.kind === 'mana-returned',
+                'power-window': powerWindow,
+                'spell-dimmed': inspected !== null && inspected.id !== event.spellId,
+                'spell-highlighted': inspected?.id === event.spellId
+              }
+            ]
           ]}
+          data-tone="unstyled"
+          data-outline="false"
+          data-size="medium"
+          type="button"
           data-event-index={index}
           style={`--spell-color: ${resourceColor ?? appearance.color}; left: ${(event.timestamp / axisDuration) * 100}%; top: ${timelineEventTop(event)}px; width: ${event.kind === 'buff' && !event.displayBelow ? `max(2px, ${((event.duration ?? 0) / axisDuration) * 100}%)` : event.kind === 'death' ? '2px' : '22px'}`}
           onmouseenter={(mouse) => {
@@ -528,7 +497,7 @@
             {:else}<span class="cast-dot">◆</span>{/if}
           {:else if event.kind === 'marker'}<span class="cast-dot" aria-hidden="true">◇</span>
           {:else if event.kind === 'death'}<span class="death-label">†</span>{/if}
-        </Button>
+        </button>
       {/each}
       {#if !timeline.isComplete}<div class="incomplete">
           <Alert variant="warning" compact>Partial timeline — event limit reached</Alert>
@@ -550,22 +519,28 @@
       <div class="track-message error-message">
         <Alert variant="warning" compact>
           <span>{timelineErrorSummary(error)}</span>
-          <Button variant="warning-outline" size="small" onclick={() => onload(report)}
-            >Retry</Button
+          <button
+            class="button"
+            data-tone="warning"
+            data-outline="true"
+            data-size="small"
+            type="button"
+            onclick={() => onload(report)}>Retry</button
           >
         </Alert>
       </div>
     {:else if canLoadTimeline(report)}
       <div class="unloaded-controls">
-        <Button
-          variant="secondary-outline"
-          size="small"
-          class={['timeline-row-button', `load-row`]}
+        <button
+          class={['button', ['timeline-row-button', `load-row`]]}
+          data-tone="secondary"
+          data-outline="true"
+          data-size="small"
           type="button"
           onclick={() => onload(report)}
         >
           Load report {report.title || report.reportId}
-        </Button>
+        </button>
       </div>
     {:else}
       <div class="track-message">
@@ -573,28 +548,19 @@
       </div>
     {/if}
     {#if timeline}
-      <Button
-        variant="unstyled"
-        class={['timeline-row-button', `copy-note timeline-copy`]}
+      <button
+        class={['button', ['timeline-row-button', `copy-note timeline-copy`]]}
+        data-tone="unstyled"
+        data-outline="false"
+        data-size="medium"
         style={`left: calc(${(endTime / axisDuration) * 100}% + 4px)`}
         type="button"
         aria-label="Copy note"
         title="Preview and copy this player's selected casts as an MRT or NSRT raid note."
         onclick={() => oncopy(timeline)}
       >
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          aria-hidden="true"
-        >
-          <rect x="8" y="8" width="12" height="13" rx="2" />
-          <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3" />
-        </svg>
-      </Button>
+        <Copy size={13} aria-hidden="true" />
+      </button>
     {/if}
   </div>
 </div>
@@ -734,13 +700,14 @@
   }
   .track {
     position: relative;
+    z-index: 0;
     width: calc(
       100% - var(--timeline-identity-width, 220px) - 28px - var(--timeline-position-width, 0px)
     );
     flex-shrink: 0;
   }
   .track {
-    overflow: visible;
+    overflow-x: clip;
   }
   .player-row > .rank {
     width: var(--timeline-position-width, 32px);
@@ -763,9 +730,10 @@
     display: flex;
     width: max-content;
     min-width: 100%;
-    align-items: baseline;
+    align-items: center;
     gap: 5px;
     font-size: 13px;
+    line-height: 1.4;
     font-weight: 600;
   }
   .player-spec-icon {
@@ -792,17 +760,44 @@
     white-space: nowrap;
     min-width: 0;
   }
+  .player-name,
   .player-report-link {
     display: inline-flex;
     align-items: center;
     align-self: center;
     gap: 3px;
   }
-  .player-report-link span {
+  .player-name {
+    min-width: 0;
+    max-width: 16ch;
+    overflow: hidden;
+  }
+  .player-name span {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .player-report-link svg {
+  .report-icon-link {
+    color: var(--display-value);
+  }
+  :global(.theme-dark) .report-icon-link {
+    color: #fff;
+  }
+  .player-heading .guild-name {
+    max-width: 24ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .player-report-link span {
+    min-width: 0;
+    max-width: 24ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .player-report-link :global(svg) {
     display: block;
     align-self: center;
     flex-shrink: 0;
@@ -817,6 +812,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 6px;
+    line-height: 1.4;
   }
   .player-details .player-meta {
     margin-top: 0;
@@ -836,17 +832,8 @@
   .guild-name {
     font-weight: 700;
   }
-  .guild-name.alliance {
-    color: #69aaff;
-  }
-  .guild-name.horde {
-    color: #ff6969;
-  }
-  .faction-icon {
-    width: 14px;
-    height: 14px;
-    object-fit: contain;
-    flex-shrink: 0;
+  .guild-name:global(.faction-name::before) {
+    transform: none;
   }
   .player-performance {
     font-size: 10px;
@@ -858,6 +845,9 @@
     justify-content: center;
     padding: 3px;
     flex-shrink: 0;
+  }
+  :is(.copy-note, :global(.copy-note.timeline-row-button)) :global(svg) {
+    display: block;
   }
   .player-actions {
     display: inline-flex;

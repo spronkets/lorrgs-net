@@ -1,10 +1,8 @@
 <script lang="ts">
-  import Button from '../lib/components/Button.svelte';
   import { onMount } from 'svelte';
   import type { WorldDataSnapshot } from '../lib/models/WorldDataSnapshot';
   import type { RaidCatalog } from '../lib/models/RaidCatalog';
   import EncounterFilters from '../lib/components/EncounterFilters.svelte';
-  import RankingPageHeader from '../lib/components/RankingPageHeader.svelte';
 
   export let worldData: WorldDataSnapshot = {};
   export let raidCatalog: RaidCatalog = { editions: [], instances: {} };
@@ -39,10 +37,6 @@
 </script>
 
 <section class="landing-page">
-  <RankingPageHeader
-    title="Compare raid cooldowns"
-    description="Choose an encounter, then compare cooldown usage by specialization or raid composition."
-  />
   <EncounterFilters
     {worldData}
     {raidCatalog}
@@ -52,21 +46,23 @@
     {oneditionchange}
   />
   <div class="ranking-flows">
-    <Button
-      variant="primary-outline"
-      size="small"
-      class={['landing-page-button']}
+    <button
+      class={['button', ['landing-page-button']]}
+      data-tone="primary"
+      data-outline="true"
+      data-size="small"
       type="button"
       disabled={!selectedBoss}
-      onclick={() => onnavigate?.('spec')}>Spec Rankings</Button
+      onclick={() => onnavigate?.('spec')}>Spec Rankings</button
     >
-    <Button
-      variant="primary-outline"
-      size="small"
-      class={['landing-page-button']}
+    <button
+      class={['button', ['landing-page-button']]}
+      data-tone="primary"
+      data-outline="true"
+      data-size="small"
       type="button"
       disabled={!selectedBoss}
-      onclick={() => onnavigate?.('comp')}>Comp Rankings</Button
+      onclick={() => onnavigate?.('comp')}>Comp Rankings</button
     >
   </div>
   <section class="about" aria-labelledby="about-heading">

@@ -12,18 +12,21 @@
   import type { WorldDataSnapshot } from '../lib/models/WorldDataSnapshot';
   import Alert from '../lib/components/Alert.svelte';
   import Spinner from '../lib/components/Spinner.svelte';
-  import RankingPageHeader from '../lib/components/RankingPageHeader.svelte';
+  import PageHeader from '../lib/components/PageHeader.svelte';
   import EditionSelector from '../lib/components/EditionSelector.svelte';
   import { getVersionIconUrl } from '../lib/selectionIcons';
   import BossSelector from '../lib/components/BossSelector.svelte';
   import CompRankingsResults from '../lib/components/CompRankingsResults.svelte';
-  import { slugifyBossName } from '../lib/raidCatalog';
+  import { DISABLED_EDITION_OPTIONS, EDITION_OPTIONS, slugifyBossName } from '../lib/raidCatalog';
   import { getBossPortraitUrl } from '../lib/bossPortraits';
   import ReportIdentity from '../lib/components/ReportIdentity.svelte';
-  import Button from '../lib/components/Button.svelte';
-  import Textarea from '../lib/components/Textarea.svelte';
 
-  let { edition, worldData, selectedVersion = '', oneditionchange }: {
+  let {
+    edition,
+    worldData,
+    selectedVersion = '',
+    oneditionchange
+  }: {
     edition: string;
     worldData: WorldDataSnapshot;
     selectedVersion?: string;
@@ -42,10 +45,12 @@
   const fightKey = (code: string, id: number) => `${code}:${id}`;
 
   function findBoss(encounterId: number | undefined, name: string) {
-    return worldData.bosses?.find((boss) => boss.id === encounterId) ??
+    return (
+      worldData.bosses?.find((boss) => boss.id === encounterId) ??
       worldData.bosses?.find(
         (boss) => slugifyBossName(boss.name ?? boss.nameSlug) === slugifyBossName(name)
-      );
+      )
+    );
   }
 
   async function loadReports() {
@@ -81,8 +86,7 @@
   function removeReport(code: string) {
     reports.delete(code);
     delete bosses[code];
-    for (const key of progress.keys())
-      if (key.startsWith(`${code}:`)) progress.delete(key);
+    for (const key of progress.keys()) if (key.startsWith(`${code}:`)) progress.delete(key);
   }
 
   async function restore() {
@@ -124,12 +128,19 @@
 </script>
 
 <section class="reports-page">
-  <RankingPageHeader title="Load Report"
-    description="Enter report codes or Warcraft Logs URLs to load every boss pull, full roster, and timeline." />
+  <PageHeader
+    title="Load Report"
+    description="Enter report codes or Warcraft Logs URLs to load every boss pull, full roster, and timeline."
+  />
   <section class="report-edition" aria-label="Edition selection">
-    <h3>Edition</h3>
-    <EditionSelector versions={['Anniversary', 'Mists of Pandaria', 'Era', 'Retail']}
-      {selectedVersion} {getVersionIconUrl} onselect={oneditionchange} />
+    <h3 class="edition-label">Edition</h3>
+    <EditionSelector
+      versions={EDITION_OPTIONS}
+      disabledVersions={DISABLED_EDITION_OPTIONS}
+      {selectedVersion}
+      {getVersionIconUrl}
+      onselect={oneditionchange}
+    />
   </section>
   <form
     onsubmit={(event) => {
@@ -137,15 +148,21 @@
       void loadReports();
     }}
   >
-    <Textarea
-      label="Report codes or URLs"
-      id="report-codes"
-      bind:value={input}
-      rows="2"
-      placeholder="AkYhRaKBcV42rXm1 — separate multiple reports with spaces, commas, or new lines"
-    />
-    <Button type="submit" disabled={loading || !edition}
-      >{loading ? 'Loading reports…' : 'Load reports'}</Button
+    <div class="form-field">
+      <label for="report-codes">Report codes or URLs</label><textarea
+        id="report-codes"
+        class="textarea"
+        bind:value={input}
+        rows="2"
+        placeholder="Separate multiple reports with spaces, commas, or new lines"></textarea>
+    </div>
+    <button
+      class="button"
+      data-tone="primary"
+      data-outline="false"
+      data-size="medium"
+      type="submit"
+      disabled={loading || !edition}>{loading ? 'Loading reports…' : 'Load reports'}</button
     >
   </form>
   {#if !edition}<p>Select an edition before loading reports.</p>{/if}
@@ -162,7 +179,8 @@
           {
             slug: String(fight.encounterID),
             name: fight.name,
-            iconName: findBoss(fight.encounterID, fight.name)?.icon ??
+            iconName:
+              findBoss(fight.encounterID, fight.name)?.icon ??
               getBossPortraitUrl(slugifyBossName(fight.name))
           }
         ])
@@ -174,15 +192,28 @@
           <ReportIdentity report={{ ...report, reportId: code, fights: undefined }} {edition} />
           <p class="report-meta"><span>{report.zone?.name ?? 'Unknown raid'}</span> · {code}</p>
         </div>
-        <Button variant="warning-outline" aria-label={`Remove report ${code}`}
-          onclick={() => removeReport(code)}>Remove report</Button>
+        <button
+          class="button"
+          data-tone="danger"
+          data-outline="true"
+          data-size="medium"
+          type="button"
+          aria-label={`Remove report ${code}`}
+          onclick={() => removeReport(code)}>Remove report</button
+        >
       </div>
       {#if report.fights.length}
         <BossSelector bosses={bossOptions} bind:value={bosses[code]} />
-        {@const visiblePulls = report.fights.filter((pull) => String(pull.encounterID) === bosses[code])}
-        {@const readyCount = visiblePulls.filter((pull) => progress.get(fightKey(code, pull.id))?.ready).length}
+        {@const visiblePulls = report.fights.filter(
+          (pull) => String(pull.encounterID) === bosses[code]
+        )}
+        {@const readyCount = visiblePulls.filter(
+          (pull) => progress.get(fightKey(code, pull.id))?.ready
+        ).length}
         {#if visiblePulls.some((pull) => progress.get(fightKey(code, pull.id))?.pending ?? true)}
-          <Spinner loadingText={`Loading raid compositions and cooldown timelines… ${readyCount} of ${visiblePulls.length} pulls ready.`} />
+          <Spinner
+            loadingText={`Loading raid compositions and cooldown timelines… ${readyCount} of ${visiblePulls.length} pulls ready.`}
+          />
         {/if}
         {#each report.fights as pull (pull.id)}
           {@const summary = manualRankingReport(report, pull)}
@@ -215,18 +246,19 @@
   {/each}
 </section>
 
-<style>
+<style lang="scss">
+  @use '../lib/styles/selection-tokens' as selectionTokens;
+
   .report-edition {
     display: grid;
     gap: 16px;
     margin-bottom: 24px;
   }
-  .report-edition h3 {
+  .edition-label {
+    @include selectionTokens.apply-selection-tokens;
+    @include selectionTokens.selection-label;
+
     margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
   }
   .reports-page {
     display: grid;
@@ -236,7 +268,7 @@
     margin: 0;
   }
   .report-meta {
-    color: #9cabb8;
+    color: var(--display-muted);
     font-size: 0.85rem;
     line-height: 1.5;
   }
@@ -247,7 +279,8 @@
   }
   .report-selection {
     padding: 0.8rem;
-    border: 1px solid #687e94;
+    border: 1px solid var(--display-border);
+    background: var(--display-surface);
     border-radius: 0.4rem;
   }
   .report-heading {

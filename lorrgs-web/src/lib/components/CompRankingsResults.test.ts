@@ -171,11 +171,8 @@ it('shows summary faction and identity below linked titles without extra request
   expect(headings[3].querySelector('a svg')).toHaveAttribute('width', '11');
   const rows = container.querySelectorAll('article');
   expect(rows[3].querySelector('.raid-identity')).toHaveTextContent('EU Thunderstrike');
-  expect(within(rows[3] as HTMLElement).getByAltText('Alliance')).toHaveAttribute(
-    'src',
-    '/images/wow/shared/factions/alliance.png'
-  );
-  expect(within(rows[4] as HTMLElement).getByAltText('Horde')).toBeInTheDocument();
+  expect(rows[3].querySelector('.faction-name')).toHaveClass('alliance');
+  expect(rows[4].querySelector('.faction-name')).toHaveClass('horde');
   expect(rows[5].querySelector('.faction-icon')).toBeNull();
   expect(within(headings[3] as HTMLElement).getByRole('link')).toHaveAttribute('target', '_blank');
   expect(getCompRankingDetails).toHaveBeenCalledTimes(3);
@@ -272,7 +269,7 @@ it('retains upstream rank positions instead of reordering by loaded report ranks
   expect(within(first).getByAltText('Horde')).toBeInTheDocument();
   expect(within(first).getByAltText('Horde')).toHaveAttribute('title', 'Horde');
   expect(first.querySelector('.raid-identity')).not.toHaveTextContent('Horde');
-  expect(first.querySelector('.guild-name')).toHaveClass('horde');
+  expect(first.querySelector('.faction-name')).toHaveClass('horde');
   expect(first.querySelector('.date-line')).toHaveTextContent('Kill time 3:20 Speed #5 (Top 5%)');
   expect(first.querySelector('.date-line')).not.toHaveTextContent('·');
   expect(first.querySelector('.stats')).toHaveTextContent('1 damage taken');

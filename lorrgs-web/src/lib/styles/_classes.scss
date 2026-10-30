@@ -1,0 +1,75 @@
+$colors: (
+  'death-knight': '#C41E3A',
+  'demon-hunter': '#A330C9',
+  'druid': '#FF7C0A',
+  'evoker': '#33937F',
+  'hunter': '#AAD372',
+  'mage': '#3FC7EB',
+  'monk': '#00FF98',
+  'paladin': '#F48CBA',
+  'priest': '#FFFFFF',
+  'rogue': '#FFF468',
+  'shaman': '#0070DD',
+  'warlock': '#8788EE',
+  'warrior': '#C69B6D'
+);
+
+@mixin class-styles {
+  @each $slug, $color in $colors {
+    :global(.class-accent.#{$slug}),
+    :global(.class-name.#{$slug}),
+    :global(.class-icon.#{$slug}),
+    :global(.class-badge.#{$slug}) {
+      --class-accent: #{$color};
+    }
+    :global(.class-icon.#{$slug}) {
+      --class-icon-border: #{$color};
+    }
+  }
+
+  :global(:where(.class-name)) {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--class-accent, inherit);
+  }
+
+  :global(.class-name > svg),
+  :global(.class-name > img) {
+    display: block;
+    align-self: center;
+    flex-shrink: 0;
+  }
+
+  :global(:where(.class-icon)) {
+    border-color: var(--class-accent, var(--class-icon-border));
+  }
+
+  :global(:where(.class-badge)) {
+    background-color: var(--class-accent, #7ba4bf);
+  }
+}
+
+@mixin text-theme {
+  --class-text-shade: #172433;
+  --class-text-share: 55%;
+  --class-text-ceiling: 0.49;
+}
+
+@mixin text-theme-dark {
+  --class-text-shade: #ffffff;
+  --class-text-share: 72%;
+  --class-text-ceiling: 1;
+}
+
+@mixin text-color($accent: var(--class-accent)) {
+  color: oklch(
+    from
+      color-mix(
+        in srgb,
+        #{$accent} var(--class-text-share, 55%),
+        var(--class-text-shade, #172433)
+      )
+      min(l, var(--class-text-ceiling, 0.49)) c h
+  );
+}

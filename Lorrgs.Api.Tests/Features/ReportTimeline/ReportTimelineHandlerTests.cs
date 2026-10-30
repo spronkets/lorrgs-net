@@ -39,6 +39,7 @@ public sealed class ReportTimelineHandlerTests
     [InlineData("anniversary", false)]
     [InlineData("mistsofpandaria", false)]
     [InlineData("era", false)]
+    [InlineData("classic_sod", false)]
     public async Task GetForwardsPlayerSelectionSpecAndCancellation(string edition, bool useSourceId)
     {
         var service = new TimelineService();

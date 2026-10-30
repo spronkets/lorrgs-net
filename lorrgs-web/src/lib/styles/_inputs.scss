@@ -1,0 +1,95 @@
+@use 'selection-tokens' as selectionTokens;
+
+.form-field {
+  @include selectionTokens.apply-selection-tokens($global: false);
+
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.form-field > label {
+  @include selectionTokens.selection-label;
+}
+
+.input {
+  @include selectionTokens.selection-control;
+
+  width: 100%;
+}
+.input::placeholder {
+  color: var(--select-placeholder);
+  opacity: 1;
+}
+.input-frame {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+.affixed {
+  border: 1px solid var(--select-border);
+  border-radius: var(--radius-md, 0.58rem);
+  background: var(--select-bg);
+  color: var(--select-text);
+}
+.affixed:hover {
+  border-color: var(--select-hover-border);
+  background: var(--select-hover-bg);
+}
+.affixed:focus-within {
+  border-color: var(--select-focus-border);
+  box-shadow: var(--select-focus-ring);
+}
+.affixed .input {
+  flex: 1;
+  width: 0;
+  min-width: 5ch;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.affixed .input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.affixed input[type='number'] {
+  appearance: textfield;
+}
+.affixed input::-webkit-inner-spin-button,
+.affixed input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+.prefix,
+.suffix {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.prefix {
+  padding: 3px;
+}
+.suffix {
+  align-items: stretch;
+  border-left: 1px solid var(--select-border);
+}
+.input.compact {
+  min-height: 44px;
+  padding: 0.2rem;
+  font-size: 0.8rem;
+}
+
+.textarea {
+  @include selectionTokens.selection-control;
+
+  width: 100%;
+  resize: vertical;
+}
+.textarea::placeholder {
+  color: var(--select-placeholder);
+  opacity: 1;
+}
+.monospace {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}

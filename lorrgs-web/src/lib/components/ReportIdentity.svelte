@@ -1,35 +1,48 @@
 <script lang="ts">
+  import { ExternalLink } from '@lucide/svelte';
   import type { RankingReport } from '../models/RankingReport';
   import { getRankingReportLink } from '../rankingUtils';
 
-  let { report, edition, showReportName = true }: {
+  let { report, edition, showReportName = true, regionNextToServer = false, reportNameInLink = false }: {
     report: Pick<RankingReport, 'reportId' | 'title' | 'guildName' | 'serverName' | 'serverRegion' | 'factionId' | 'fights'>;
     edition: string;
     showReportName?: boolean;
+    regionNextToServer?: boolean;
+    reportNameInLink?: boolean;
   } = $props();
   const faction = $derived(report.factionId === 1 ? 'Alliance' : report.factionId === 2 ? 'Horde' : null);
 </script>
 
 <div class="report-identity">
   <h3>
-    {#if faction}
-      <img class="faction-icon" src={`/images/wow/shared/factions/${faction.toLowerCase()}.png`}
-        alt={faction} title={faction} />
-    {/if}
-    <a class:alliance={faction === 'Alliance'} class:horde={faction === 'Horde'}
+    {#if reportNameInLink}
+      {#if report.guildName}
+        <span class="guild-name faction-name" class:alliance={faction === 'Alliance'} class:horde={faction === 'Horde'} title={faction ?? undefined}>{report.guildName}</span>
+      {/if}
+      {#if showReportName || !report.guildName}
+        <a class="report-link"
+          href={getRankingReportLink({ reportId: report.reportId, fights: report.fights }, edition)}
+          target="_blank" rel="noopener noreferrer">
+          {report.title}
+          <ExternalLink size={11} aria-hidden="true" />
+        </a>
+      {/if}
+    {:else}
+    <a class="faction-name" class:alliance={faction === 'Alliance'} class:horde={faction === 'Horde'} title={faction ?? undefined}
       href={getRankingReportLink({ reportId: report.reportId, fights: report.fights }, edition)} target="_blank" rel="noopener noreferrer">
-      <span class="guild-name" class:alliance={faction === 'Alliance'} class:horde={faction === 'Horde'}>{report.guildName || report.title}</span>
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="2" aria-hidden="true">
-        <path d="M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5" />
-      </svg>
+      <span class="guild-name">{report.guildName || report.title}{!regionNextToServer && report.serverRegion ? ` ${report.serverRegion.toUpperCase()}` : ''}</span>
+      <ExternalLink size={11} aria-hidden="true" />
     </a>
-    {#if showReportName && report.guildName}<span class="report-name">({report.title})</span>{/if}
+    {#if !reportNameInLink && showReportName && report.guildName}<span class="report-name">({report.title})</span>{/if}
+    {/if}
   </h3>
-  {#if report.serverRegion || report.serverName}
+  {#if report.serverName || (regionNextToServer && report.serverRegion)}
     <div class="raid-identity">
-      {#if report.serverRegion}<span>{report.serverRegion.toUpperCase()}</span>{/if}
-      {#if report.serverName}<span>{report.serverName}</span>{/if}
+      {#if regionNextToServer}
+        <span>{report.serverName ?? ''}{report.serverRegion ? ` ${report.serverRegion.toUpperCase()}` : ''}</span>
+      {:else if report.serverName}
+        <span>{report.serverName}</span>
+      {/if}
     </div>
   {/if}
 </div>
@@ -52,23 +65,22 @@
     font-weight: 700;
     text-decoration: none;
   }
-  a svg {
+  a :global(svg) {
     display: block;
     align-self: center;
     flex-shrink: 0;
   }
-  .alliance { color: #69aaff; }
-  .horde { color: #ff6969; }
-  .faction-icon {
-    width: 14px;
-    height: 14px;
-    object-fit: contain;
-    flex-shrink: 0;
-  }
   .report-name,
   .raid-identity {
-    color: #9cabb8;
+    color: var(--display-muted);
     font-weight: 400;
+  }
+  .report-link {
+    color: var(--display-value, inherit);
+    font-weight: 400;
+  }
+  :global(.theme-dark) .report-link {
+    color: #ffffff;
   }
   .raid-identity {
     display: flex;

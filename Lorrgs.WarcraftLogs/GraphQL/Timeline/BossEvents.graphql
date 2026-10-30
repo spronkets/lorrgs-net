@@ -5,7 +5,7 @@ query BossTimelineEvents(
     report(code: $code) {
       events(
         fightIDs: $fightIds, startTime: $startTime, endTime: $endTime,
-        dataType: Casts, hostilityType: Enemies, limit: 10000,
+        filterExpression: "type IN ('begincast','cast','damage','miss','heal','applybuff','refreshbuff','removebuff','applybuffstack','removebuffstack','death','resourcechange','drain','interrupt')", limit: 10000,
         useAbilityIDs: true, useActorIDs: true
       ) {
         data

@@ -1,0 +1,44 @@
+$primary: #215f9b;
+$secondary: #526579;
+$success: #237044;
+$warning: #75500f;
+$danger: #a52c36;
+$on-solid: #fff;
+
+$primary-dark: #85bfff;
+$secondary-dark: #b6c8da;
+$success-dark: #7ddca0;
+$warning-dark: #f3d392;
+$danger-dark: #ff8c96;
+
+$info-text: #214f79;
+$info-background: #edf5fc;
+$info-border: #8db4d5;
+$danger-text: #862e34;
+$danger-background: #fff1f2;
+$danger-border: #d99ca1;
+$warning-background: #fff8e6;
+$warning-border: #d3b36b;
+
+$info-text-dark: #bddcf5;
+$info-background-dark: #1b2b3b;
+$info-border-dark: #486b8b;
+$danger-text-dark: #ffc2c6;
+$danger-background-dark: #392326;
+$danger-border-dark: #92545b;
+$warning-background-dark: #342d1e;
+$warning-border-dark: #887341;
+
+@mixin display-theme {
+  --display-muted: #4f6579;
+  --display-value: #183b56;
+  --display-border: #9fb6ca;
+  --display-surface: #ffffff;
+}
+
+@mixin display-theme-dark {
+  --display-muted: #9cabb8;
+  --display-value: #dceeff;
+  --display-border: #687e94;
+  --display-surface: transparent;
+}

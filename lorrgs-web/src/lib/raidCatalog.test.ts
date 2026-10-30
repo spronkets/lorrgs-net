@@ -74,7 +74,38 @@ describe('raid catalog version mapping', () => {
     expect(getApiEditionSlug('Anniversary')).toBe('anniversary');
     expect(getApiEditionSlug('Era')).toBe('era');
     expect(getApiEditionSlug('Retail')).toBe('midnight');
+    expect(getApiEditionSlug('Season of Discovery')).toBe('classic_sod');
     expect(getApiEditionSlug('Unknown')).toBe('');
+  });
+
+  it('maps Season of Discovery to its catalog and icon', () => {
+    expect(getEditionSlug('Season of Discovery')).toBe('classic_sod');
+    expect(getVersionIconUrl('Season of Discovery')).toBe(
+      '/images/wow/editions/sod-classic.png'
+    );
+    expect(getRaidsForEdition(
+      {
+        ...sampleCatalog,
+        instances: {
+          ...sampleCatalog.instances,
+          classic_sod: [
+            {
+              zoneId: 2007,
+              slug: 'blackfathomdeeps',
+              name: 'Blackfathom Deeps',
+              edition: 'classic_sod',
+              phase: 1,
+              bosses: [],
+              isAvailable: true
+            }
+          ]
+        }
+      },
+      'Season of Discovery'
+    )).toHaveLength(1);
+    expect(getAllowedClassIds('Season of Discovery')).toEqual([
+      1, 2, 3, 4, 5, 7, 8, 9, 11
+    ]);
   });
 
   it('uses the retail icon for retail selections', () => {

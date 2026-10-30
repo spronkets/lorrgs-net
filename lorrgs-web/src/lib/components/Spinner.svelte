@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { LoaderCircle } from '@lucide/svelte';
   type Props = {
     loadingText?: string;
     inline?: boolean;
@@ -12,18 +13,7 @@
   role={inline ? undefined : 'status'}
   aria-label={!inline && !loadingText ? 'Loading' : undefined}
 >
-  <svg
-    class="loading-spinner"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="3"
-    aria-hidden="true"
-    focusable="false"
-  >
-    <circle cx="12" cy="12" r="9" opacity="0.25" />
-    <path d="M12 3a9 9 0 0 1 9 9" stroke-linecap="round" />
-  </svg>
+  <LoaderCircle class="loading-spinner" strokeWidth={3} aria-hidden="true" focusable="false" />
   {#if loadingText}<span class="loading-text">{loadingText}</span>{/if}
 </span>
 
@@ -42,7 +32,7 @@
     font-size: 0.875rem;
     line-height: 1.5;
   }
-  .loading-spinner {
+  .spinner :global(.loading-spinner) {
     display: inline-block;
     width: 3rem;
     height: 3rem;
@@ -56,7 +46,7 @@
     margin-inline-end: 0.4em;
     vertical-align: -0.125em;
   }
-  .inline .loading-spinner {
+  .inline :global(.loading-spinner) {
     width: 1em;
     height: 1em;
   }
@@ -66,7 +56,7 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .loading-spinner {
+    .spinner :global(.loading-spinner) {
       animation: none;
     }
   }

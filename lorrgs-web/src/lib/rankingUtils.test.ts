@@ -5,6 +5,7 @@ import {
   getTopPercentLabel,
   getRankingFilterError,
   getRankingReportLink,
+  getPlayerProfileLink,
   getRotationAnalyzerLink,
   parseKillTime,
   toKillTimeInput,
@@ -39,6 +40,21 @@ const reports = [
 ];
 
 describe('ranking utilities', () => {
+  it('links character profiles on the edition host using region and realm metadata', () => {
+    const player = { name: 'Yunan', serverRegion: 'EU', serverName: 'Thunderstrike' };
+    expect(getPlayerProfileLink(player, 'anniversary')).toBe(
+      'https://fresh.warcraftlogs.com/character/eu/thunderstrike/yunan'
+    );
+    expect(getPlayerProfileLink({ ...player, serverRegion: 'NA', serverName: 'Area 52' }, 'retail')).toBe(
+      'https://www.warcraftlogs.com/character/us/area-52/yunan'
+    );
+    expect(getPlayerProfileLink({ ...player, serverSlug: 'canonical-realm' }, 'era')).toContain(
+      '/character/eu/canonical-realm/yunan'
+    );
+    expect(getPlayerProfileLink(undefined, 'anniversary')).toBeNull();
+    expect(getPlayerProfileLink({ ...player, serverName: '' }, 'anniversary')).toBeNull();
+    expect(getPlayerProfileLink({ ...player, serverRegion: null }, 'anniversary')).toBeNull();
+  });
   it('formats legacy kill-time links as minute and second duration inputs', () => {
     expect(toKillTimeInput('120')).toBe('2:00');
     expect(toKillTimeInput('2:05')).toBe('2:05');

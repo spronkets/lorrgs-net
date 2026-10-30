@@ -204,19 +204,20 @@ describe('ranking cooldown comparison', () => {
     await screen.findByRole('button', { name: 'Tank ability' });
     expect(fetchTimeline).not.toHaveBeenCalled();
   });
-  it('gives spec boss and player timelines separate matching axis headers', () => {
+  it('shares one sticky numbered axis and scrollbar across boss and player timelines', () => {
     const { container } = render(RankingsTimeline, { reports: rows, edition: 'anniversary' });
-    const boss = screen.getByRole('region', { name: 'Boss timelines' });
-    const players = screen.getByRole('region', { name: 'Player timelines' });
-    expect(boss.querySelector('.axis-label')).toHaveTextContent('Boss');
-    expect(players.querySelector('.axis-label')).toHaveTextContent('Player');
-    expect(boss.querySelector('.boss-row')).not.toBeNull();
-    expect(boss.querySelector('.player-row')).toBeNull();
-    expect(players.querySelectorAll('.player-row')).toHaveLength(rows.length);
-    expect(boss.querySelector('.axis')?.textContent).toBe(
-      players.querySelector('.axis')?.textContent
+    const table = container.querySelector('.combined-timelines');
+    expect(table?.querySelector('.boss-row')).not.toBeNull();
+    expect(table?.querySelectorAll('.player-row')).toHaveLength(rows.length);
+    expect(container.querySelectorAll('.axis')).toHaveLength(1);
+    expect(screen.getByRole('region', { name: 'Timeline horizontal scroll' })).toContainElement(
+      container.querySelector('.axis')
     );
-    expect(container.querySelectorAll('.position-label')).toHaveLength(2);
+    expect(container.querySelector('.sticky-timeline-header')).toContainElement(
+      screen.getByRole('region', { name: 'Timeline horizontal scroll' })
+    );
+    expect(container.querySelector('.sticky-identity-headings')).toHaveTextContent(/#\s*Player/);
+    expect(table?.querySelector('.axis')).toBeNull();
   });
   it('updates the matching player phases when corrected boss data arrives after player data', async () => {
     let resolveBoss!: (_timeline: ReturnType<typeof bossResponse>) => void;
@@ -297,7 +298,7 @@ describe('ranking cooldown comparison', () => {
     const { container } = render(RankingsTimeline);
     const legend = screen.getByText('Power windows').closest('.spell-inspector');
     expect(container.querySelector('.timeline-panel')?.firstElementChild).toBe(legend);
-    expect(legend?.nextElementSibling).toBe(container.querySelector('.timeline-scroll'));
+    expect(legend?.nextElementSibling).toBe(container.querySelector('.sticky-timeline-header'));
     expect(container.querySelector('.timeline-scroll')?.contains(legend)).toBe(false);
   });
 
@@ -308,10 +309,7 @@ describe('ranking cooldown comparison', () => {
     }));
     const { container, rerender } = render(RankingsTimeline, { reports, edition: 'anniversary' });
     await screen.findByRole('button', { name: '0:30 · Boss Strike' });
-    expect(container.querySelector('.boss-row')?.parentElement?.nextElementSibling).toHaveAttribute(
-      'aria-label',
-      'Player timelines'
-    );
+    expect(container.querySelector('.boss-row')?.nextElementSibling).toHaveClass('player-row');
     expect(container.querySelectorAll('.boss-row [aria-label="Phase 2 at 1:00"]')).toHaveLength(1);
     expect(container.querySelectorAll('.player-row [aria-label="Phase 2 at 1:00"]')).toHaveLength(
       5
@@ -354,6 +352,60 @@ describe('ranking cooldown comparison', () => {
     await fireEvent.mouseEnter(spell);
     expect(screen.getByRole('tooltip')).toHaveTextContent(`${maximum}%`);
     expect(fetchTimeline).toHaveBeenCalledTimes(1);
+  });
+
+  it('magnifies boss casts with recorded damage and clears the preview when leaving the track', async () => {
+    const report = rows[0].report;
+    const boss = bossResponse(report);
+    boss.events[0].castResults = [
+      { targetId: 7, targetName: 'Player0', kind: 'damage', amount: 1250 }
+    ];
+    const { container } = render(RankingsTimeline, {
+      reports: [{ rank: 1, report: { ...report, timeline: response(report), bossTimeline: boss } }],
+      edition: 'anniversary'
+    });
+    const cast = await screen.findByRole('button', { name: /0:30 · Boss Strike/ });
+    await fireEvent.mouseEnter(cast);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Boss');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('1,250');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Player0');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('800%');
+    await fireEvent.mouseOut(container.querySelector('.boss-row .track')!, { relatedTarget: null });
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    await fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '800' } });
+    await fireEvent.mouseEnter(cast);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('applies received effect controls to the boss row', async () => {
+    const report = rows[0].report;
+    const boss = bossResponse(report);
+    boss.events.push(
+      { spellId: 123, timestamp: 1000, duration: null, kind: 'damage', amount: 100 },
+      { spellId: 123, timestamp: 2000, duration: null, kind: 'heal', amount: 50 },
+      { spellId: 123, timestamp: 3000, duration: null, kind: 'mana-returned', amount: 20 }
+    );
+    const { container } = render(RankingsTimeline, {
+      reports: [{ rank: 1, report: { ...report, timeline: response(report), bossTimeline: boss } }],
+      edition: 'anniversary'
+    });
+    expect(container.querySelectorAll('.boss-event')).toHaveLength(1);
+    for (const name of ['Show damage taken', 'Show healing received', 'Show mana received'])
+      await fireEvent.click(screen.getByRole('button', { name }));
+    expect(container.querySelectorAll('.boss-event')).toHaveLength(4);
+    expect(container.querySelector('.boss-row .track')).toHaveStyle({ height: '108px' });
+  });
+
+  it('labels boss casts without recorded results instead of showing a blank amount', async () => {
+    const report = rows[0].report;
+    const boss = bossResponse(report);
+    const { container } = render(RankingsTimeline, {
+      reports: [{ rank: 1, report: { ...report, timeline: response(report), bossTimeline: boss } }],
+      edition: 'anniversary'
+    });
+    await fireEvent.mouseEnter(container.querySelector('.boss-event')!);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('No recorded result');
+    expect(screen.getByRole('tooltip')).not.toHaveTextContent('Missed / avoided');
   });
 
   it('keeps spells combined with magnification and no separate-spells control', async () => {
@@ -541,7 +593,7 @@ describe('ranking cooldown comparison', () => {
     expect(fetchTimeline).toHaveBeenCalledTimes(2);
   });
 
-  it('ends at the longest available fight exactly and shrinks with the filtered sample', async () => {
+  it('ends at the longest top-three fight exactly and shrinks with the filtered sample', async () => {
     fetchTimeline.mockImplementation(async (report) => ({
       ...response(report),
       duration: report.duration
@@ -565,6 +617,39 @@ describe('ranking cooldown comparison', () => {
     expect(container.querySelector('.timeline-grid')).toHaveStyle({ '--timeline-zoom': '100' });
     expect(container.querySelector('.axis .end-label')).toHaveTextContent('0:41');
     expect(fetchTimeline).toHaveBeenCalledTimes(2);
+  });
+
+  it('scales to the top three while keeping longer rows scrollable and recalculates after reordering', async () => {
+    fetchTimeline.mockImplementation(async (report) => ({
+      ...response(report),
+      duration: report.duration
+    }));
+    const reports = rows.map((row, index) => {
+      const duration = index < 3 ? 60000 + index * 30000 : 600000;
+      return {
+        ...row,
+        report: {
+          ...row.report,
+          duration,
+          fights: row.report.fights.map((fight) => ({ ...fight, duration }))
+        }
+      };
+    });
+    const { container, rerender } = render(RankingsTimeline, {
+      reports,
+      edition: 'anniversary'
+    });
+    await waitFor(() => expect(fetchTimeline).toHaveBeenCalledTimes(3));
+    expect(container.querySelector('.axis .end-label')).toHaveTextContent('10:00');
+    expect(container.querySelector('.timeline-grid')).toHaveStyle({ '--timeline-scale': '500' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Load report Report 3' }));
+    await waitFor(() => expect(fetchTimeline).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Load report Report 3' })).not.toBeInTheDocument());
+    expect(container.querySelector('.axis .end-label')).toHaveTextContent('10:00');
+    expect(container.querySelector('.timeline-grid')).toHaveStyle({ '--timeline-scale': '500' });
+    await rerender({ reports: [...reports].reverse(), edition: 'anniversary' });
+    expect(container.querySelector('.axis .end-label')).toHaveTextContent('10:00');
+    expect(container.querySelector('.timeline-grid')).toHaveStyle({ '--timeline-scale': '100' });
   });
 
   it('loads the new top three after sorting/filtering and reuses previously loaded rows', async () => {

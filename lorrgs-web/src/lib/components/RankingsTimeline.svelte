@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { Clock, Cross, Droplet, FlaskConical, HeartPlus, Image, RectangleEllipsis, Sparkles } from '@lucide/svelte';
   import Alert from './Alert.svelte';
-  import Button from './Button.svelte';
+
   import Spinner from './Spinner.svelte';
   import { onMount, tick, untrack } from 'svelte';
   import Toast from './Toast.svelte';
@@ -46,6 +47,23 @@
   let hidden = $state<Set<number>>(new Set());
   let scrollContainer: HTMLDivElement;
   let viewportWidth = $state(0);
+  let timelineWidth = $state(0);
+  let headerScrollbar: HTMLDivElement | undefined;
+  let navigationHeight = $state(0);
+  const synchronizedOffsets = new WeakMap<HTMLElement, number>();
+  function syncTimelineScroll(event: Event) {
+    const source = event.currentTarget;
+    if (!(source instanceof HTMLElement) || event.target !== source) return;
+    const synchronizedOffset = synchronizedOffsets.get(source);
+    synchronizedOffsets.delete(source);
+    if (synchronizedOffset !== undefined && Math.abs(source.scrollLeft - synchronizedOffset) <= 1) return;
+    for (const target of [scrollContainer, headerScrollbar]) {
+      if (target && target !== source && Math.abs(target.scrollLeft - source.scrollLeft) > 1) {
+        target.scrollLeft = source.scrollLeft;
+        synchronizedOffsets.set(target, target.scrollLeft);
+      }
+    }
+  }
   let identityWidth = $state(220);
   $effect(() => {
     reports;
@@ -206,12 +224,21 @@
       )
     )
   );
-  const axisDuration = $derived(
+  const viewportDuration = $derived(
     Math.max(
       1,
+      ...(compositionMode ? reports : reports.slice(0, 3)).map(({ report }) =>
+        fightDuration(report, loader.loaded.get(timelineKey(report)))
+      )
+    )
+  );
+  const axisDuration = $derived(
+    Math.max(
+      viewportDuration,
       ...reports.map(({ report }) => fightDuration(report, loader.loaded.get(timelineKey(report))))
     )
   );
+  const timelineScale = $derived(zoom * axisDuration / viewportDuration);
   const ticks = $derived(
     Array.from({ length: Math.floor(axisDuration / 30000) + 1 }, (_, i) => i * 30000)
   );
@@ -220,7 +247,7 @@
       ? Math.max(
           30000,
           Math.ceil(
-            axisDuration / Math.max(1, Math.floor(((viewportWidth - 34) * zoom) / 100 / 60)) / 30000
+            viewportDuration / Math.max(1, Math.floor(((viewportWidth - 34) * zoom) / 100 / 60)) / 30000
           ) * 30000
         )
       : 30000
@@ -243,7 +270,18 @@
   });
   onMount(() => {
     loader.start();
-    return () => loader.dispose();
+    const navigation = document.querySelector('.app-header');
+    const observer = new ResizeObserver(() => {
+      navigationHeight = navigation?.getBoundingClientRect().height ?? 0;
+    });
+    if (navigation) {
+      navigationHeight = navigation.getBoundingClientRect().height;
+      observer.observe(navigation);
+    }
+    return () => {
+      loader.dispose();
+      observer.disconnect();
+    };
   });
 </script>
 
@@ -288,10 +326,12 @@
                       : option.key === 'damage'
                         ? showDamageTaken
                         : showManaReceived}
-        <Button
-          variant="secondary-outline"
-          size="small"
-          class="option-toggle"
+        <button
+          class={['button', 'option-toggle']}
+          data-tone={selected === true || selected === 'true' ? 'primary' : 'secondary'}
+          data-outline={!(selected === true || selected === 'true')}
+          data-size="small"
+          type="button"
           title={option.name}
           aria-label={option.name}
           aria-pressed={selected}
@@ -308,46 +348,25 @@
           }}
         >
           <span aria-hidden="true">
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
               {#if option.key === 'icons'}
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="m3 13 5-5 13 13M12 12l4-4 5 5" />
+                <Image size={18} />
               {:else if option.key === 'casts'}
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 6v6l4 2" />
+                <Clock size={18} />
               {:else if option.key === 'buffs'}
-                <rect x="3" y="7" width="18" height="10" rx="2" />
-                <path d="M7 10v4m4-4v4" />
+                <RectangleEllipsis size={18} />
               {:else if option.key === 'deaths'}
-                <path d="M12 3v18M6 9h12" />
+                <Cross size={18} />
               {:else if option.key === 'health'}
-                <path
-                  d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"
-                />
-                <path d="M8 12h8m-4-4v8" />
+                <HeartPlus size={18} />
               {:else if option.key === 'received-buffs'}
-                <path
-                  d="m12 3 2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5L12 3Zm7 13v6m-3-3h6"
-                />
+                <Sparkles size={18} />
               {:else if option.key === 'damage'}
-                <path d="M12 3s-7 8-7 12a7 7 0 0 0 14 0c0-4-7-12-7-12Z" />
-                <path d="M9 16a3 3 0 0 0 3 3" />
+                <Droplet size={18} />
               {:else if option.key === 'mana-received'}
-                <path d="M9 3h6m-5 0v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M8 15h8" />
-                <path d="M12 12v6" />
+                <FlaskConical size={18} />
               {/if}
-            </svg>
           </span>
-        </Button>
+        </button>
       {/each}
     </fieldset>
     <label class="zoom"
@@ -401,7 +420,7 @@
   <p class="mobile-timeline-hint">
     Full fight fits at 100%. Increase Zoom to inspect crowded casts.
   </p>
-  <div class="timeline-panel composition-panel">
+  <div class="timeline-panel composition-panel" class:composition-mode={compositionMode}>
     <div class="spell-inspector" aria-live="polite" aria-atomic="true">
       {#if inspected}
         <span class="color-key" style={`background: ${inspected.color}`}></span>
@@ -416,38 +435,51 @@
         >
       {/if}
     </div>
+    <div class="sticky-timeline-header" style={`top: ${navigationHeight}px; --scrollbar-inset: ${viewportWidth <= 600 ? 0 : identityWidth + (compositionMode ? 0 : 32)}px`}>
+      <div class="sticky-identity-headings">
+        {#if !compositionMode}<div class="position-label">#</div>{/if}
+        <div class="player-label">Player</div>
+      </div>
+    <div
+      class="sticky-header-scrollbar"
+      bind:this={headerScrollbar}
+      onscroll={syncTimelineScroll}
+      role="region"
+      aria-label="Timeline horizontal scroll"
+      tabindex="0"
+    >
+      <div class="time-axis-content" style={`width: ${Math.max(0, timelineWidth - (viewportWidth <= 600 ? 0 : identityWidth + (compositionMode ? 0 : 32)))}px`}>
+        <div class="axis">
+          {#each labelTicks as tick (tick)}
+            <span class:end-label={tick === axisDuration}
+              style={`left: ${(tick / axisDuration) * 100}%`}>{timelineTime(tick)}</span>
+          {/each}
+        </div>
+      </div>
+    </div>
+    </div>
     <div
       class="timeline-scroll"
       bind:this={scrollContainer}
       bind:clientWidth={viewportWidth}
+      onscroll={syncTimelineScroll}
       role="region"
       aria-label="Aligned player timelines"
     >
       <div
         class="timeline-grid grouped-grid"
-        style={`--timeline-zoom: ${zoom}; --timeline-position-column-width: 24px; --timeline-position-width: ${compositionMode ? '0px' : 'calc(var(--timeline-position-column-width) + 8px)'}; --timeline-identity-width: ${identityWidth}px; --timeline-viewport-width: ${viewportWidth ? `${viewportWidth}px` : '100%'}`}
+        class:combined-timelines={!compositionMode}
+        bind:clientWidth={timelineWidth}
+        style={`--timeline-zoom: ${zoom}; --timeline-scale: ${timelineScale}; --timeline-position-column-width: 24px; --timeline-position-width: ${compositionMode ? '0px' : 'calc(var(--timeline-position-column-width) + 8px)'}; --timeline-identity-width: ${identityWidth}px; --timeline-viewport-width: ${viewportWidth ? `${viewportWidth}px` : '100%'}`}
       >
-        {#snippet timeAxis(label = 'Player')}
-          <div class="axis-row">
-            {#if !compositionMode}<div class="position-label">#</div>{/if}
-            <div class="identity axis-label">
-              <span>{label}</span>
-            </div>
-            <div class="axis">
-              {#each labelTicks as tick (tick)}
-                <span
-                  class:end-label={tick === axisDuration}
-                  style={`left: ${(tick / axisDuration) * 100}%`}>{timelineTime(tick)}</span
-                >
-              {/each}
-            </div>
-          </div>
-        {/snippet}
         {#snippet bossRow()}
           {#if referenceReport && canLoadTimeline(referenceReport)}
             <BossTimelineRow
+              {compositionMode}
               {bossSlug}
               {bossIconName}
+              {zoom}
+              bind:magnifier
               report={referenceReport}
               onloaded={(timeline) => {
                 const matches = reports.filter(
@@ -462,19 +494,23 @@
               {ticks}
               {showIcons}
               {showCasts}
+              {showBuffs}
+              {showDeaths}
+              {showDirectHeals}
+              {showHots}
+              {showDamageTaken}
+              {showManaReceived}
+              {showReceivedBuffs}
+              {hidden}
             />
           {/if}
         {/snippet}
         {#if compositionMode}
           <div class="role-timelines">
-            {@render timeAxis('Boss')}
             {@render bossRow()}
           </div>
         {:else}
-          <section aria-label="Boss timelines" class="role-timelines">
-            {@render timeAxis('Boss')}
-            {@render bossRow()}
-          </section>
+          {@render bossRow()}
         {/if}
         {#each timelineGroups as group (group.name)}
           {#snippet groupRows()}
@@ -519,18 +555,16 @@
             <section aria-label={group.name}>
               <h3 class="role-group">{group.name}</h3>
               <div class="role-timelines">
-                {@render timeAxis()}
                 {@render groupRows()}
               </div>
             </section>
           {:else}
-            <section aria-label="Player timelines" class="role-timelines">
-              {@render timeAxis()}
-              {@render groupRows()}
-            </section>
+            {@render groupRows()}
           {/if}
         {/each}
-        {#if !reports.length}<Alert>No loaded reports match these filters.</Alert>{/if}
+        {#if !reports.length}
+          <Alert>No loaded reports match these filters.</Alert>
+        {/if}
       </div>
     </div>
   </div>
@@ -544,14 +578,34 @@
 
   .role-timelines {
     border: 1px solid var(--line);
+    border-left: 0;
     border-radius: 0.4rem;
     background: var(--panel);
+  }
+  .role-timelines .position-label,
+  .role-timelines :global(.rank),
+  .role-timelines :global(.position-placeholder),
+  .composition-mode .role-timelines .identity,
+  .composition-mode .role-timelines :global(.player-row .identity),
+  .composition-mode .role-timelines :global(.boss-row .identity) {
+    box-shadow: inset 1px 0 var(--line);
   }
   .grouped-grid {
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
     padding-bottom: 1px;
+  }
+  .combined-timelines {
+    gap: 0;
+    border: 1px solid var(--line);
+    border-left: 0;
+    border-radius: 0.4rem;
+    background: var(--panel);
+  }
+  .combined-timelines :global(.rank),
+  .combined-timelines :global(.position-placeholder) {
+    box-shadow: inset 1px 0 var(--line);
   }
   .composition-panel .timeline-scroll {
     border: 0;
@@ -593,9 +647,9 @@
   }
   .timeline-grid {
     width: calc(
-      var(--timeline-zoom) * 1% -
+      var(--timeline-scale) * 1% -
         (var(--timeline-identity-width) + 28px + var(--timeline-position-width)) *
-        (var(--timeline-zoom) / 100 - 1)
+        (var(--timeline-scale) / 100 - 1)
     );
   }
   .mobile-timeline-hint {
@@ -692,56 +746,55 @@
   }
   .timeline-scroll {
     overflow: auto;
+    scrollbar-width: none;
     width: 100%;
     max-width: 100%;
     border: 1px solid var(--line);
     border-radius: 4px;
     background: var(--panel);
   }
-  .axis-row {
-    display: flex;
-    border-bottom: 1px solid var(--line);
+  .timeline-scroll::-webkit-scrollbar {
+    display: none;
   }
-  .axis-row {
+  .sticky-timeline-header {
     position: sticky;
-    top: 0;
-    z-index: 5;
+    z-index: 8;
     background: var(--panel);
-    height: 30px;
+    box-shadow: inset 0 0 0 1px var(--line);
   }
-  .identity {
-    width: var(--timeline-identity-width);
-    flex-shrink: 0;
-    padding: 6px 8px;
-    position: sticky;
-    left: var(--timeline-position-width);
-    background: var(--panel);
-    border-right: 1px solid var(--line);
-    z-index: 3;
-  }
-  .axis-label {
+  .sticky-identity-headings {
+    position: absolute;
+    inset: 0 auto 0 0;
     display: flex;
-    align-items: center;
+    width: var(--scrollbar-inset);
     font-size: 11px;
-    z-index: 6;
   }
   .position-label {
-    width: var(--timeline-position-width);
+    display: grid;
+    place-items: center;
+    width: 32px;
     flex-shrink: 0;
-    text-align: center;
-    position: sticky;
-    left: 0;
-    z-index: 7;
-    background: var(--panel);
     border-right: 1px solid var(--line);
-    box-sizing: border-box;
+  }
+  .player-label {
     display: flex;
     align-items: center;
-    justify-content: center;
+    flex: 1;
+    padding: 6px 8px;
+    border-right: 1px solid var(--line);
+  }
+  .sticky-header-scrollbar {
+    margin-left: var(--scrollbar-inset);
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: var(--panel);
+  }
+  .time-axis-content {
+    height: 30px;
   }
   .axis {
     position: relative;
-    width: calc(100% - var(--timeline-identity-width) - 28px - var(--timeline-position-width));
+    width: calc(100% - 28px);
     flex-shrink: 0;
   }
   .axis .end-label {
@@ -755,6 +808,9 @@
     font: 11px monospace;
   }
   @media (max-width: 600px) {
+    .sticky-identity-headings {
+      display: none;
+    }
     .mobile-timeline-hint {
       display: block;
       margin: 0 0 6px;
@@ -762,10 +818,7 @@
       color: var(--muted);
     }
     .timeline-grid {
-      width: calc(100% * var(--timeline-zoom) / 100);
-    }
-    .axis-label {
-      display: none;
+      width: calc(100% * var(--timeline-scale) / 100);
     }
     .axis {
       width: calc(100% - 34px);

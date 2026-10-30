@@ -1,8 +1,8 @@
 <script lang="ts">
-  import Button from './Button.svelte';
+  import { CalendarDays } from '@lucide/svelte';
   import { maska } from 'maska/svelte';
   import { killTimeMask } from '../killTimeMask';
-  import Input from './Input.svelte';
+
   import Alert from './Alert.svelte';
   import { getRankingFilterError, toKillTimeInput, selectRankingReports } from '../rankingUtils';
   import type { RankingFilters } from '../models/rankings/RankingFilters';
@@ -38,43 +38,83 @@
       <fieldset class="filter-group region-filter">
         <legend>Region</legend>
         {#each ['', 'us', 'eu', 'kr', 'tw', 'cn'] as region (region)}
-          <Button
-            variant="secondary-outline"
-            size="small"
-            class={['rankings-list-button']}
+          <button
+            class={['button', ['rankings-list-button']]}
+            data-tone={(filters.region === region) === true ||
+            (filters.region === region) === 'true'
+              ? 'primary'
+              : 'secondary'}
+            data-outline={!(
+              (filters.region === region) === true || (filters.region === region) === 'true'
+            )}
+            data-size="small"
             type="button"
             aria-label={region ? `Region ${region.toUpperCase()}` : 'All regions'}
             aria-pressed={filters.region === region}
             onclick={() => (filters.region = region)}
-            >{region ? region.toUpperCase() : 'All'}</Button
+            >{region ? region.toUpperCase() : 'All'}</button
           >
         {/each}
       </fieldset>
       <fieldset class="filter-group duration-filter">
         <legend>Kill time</legend>
-        <Input
-          aria-label="Minimum kill time"
-          action={(node) => maska(node, killTimeMask)}
-          type="text"
-          placeholder="m:ss"
-          bind:value={filters.minDuration}
-          onblur={() => (filters.minDuration = toKillTimeInput(filters.minDuration))}
-        />
+        <div class="form-field">
+          <div class="input-frame">
+            <input
+              id="rankingslist-field-1"
+              class="input"
+              aria-label="Minimum kill time"
+              use:maska={killTimeMask}
+              type="text"
+              placeholder="m:ss"
+              bind:value={filters.minDuration}
+              onblur={() => (filters.minDuration = toKillTimeInput(filters.minDuration))}
+            />
+          </div>
+        </div>
         <span aria-hidden="true">–</span>
-        <Input
-          aria-label="Maximum kill time"
-          action={(node) => maska(node, killTimeMask)}
-          type="text"
-          placeholder="m:ss"
-          bind:value={filters.maxDuration}
-          onblur={() => (filters.maxDuration = toKillTimeInput(filters.maxDuration))}
-        />
+        <div class="form-field">
+          <div class="input-frame">
+            <input
+              id="rankingslist-field-2"
+              class="input"
+              aria-label="Maximum kill time"
+              use:maska={killTimeMask}
+              type="text"
+              placeholder="m:ss"
+              bind:value={filters.maxDuration}
+              onblur={() => (filters.maxDuration = toKillTimeInput(filters.maxDuration))}
+            />
+          </div>
+        </div>
       </fieldset>
       <fieldset class="filter-group date-filter">
         <legend>Date range</legend>
-        <Input aria-label="From date" type="date" bind:value={filters.fromDate} />
+        <div class="form-field">
+          <div class="input-frame with-control-icon date-control">
+            <input
+              id="rankingslist-field-3"
+              class="input"
+              aria-label="From date"
+              type="date"
+              bind:value={filters.fromDate}
+            />
+            <CalendarDays class="control-icon" size={16} aria-hidden="true" />
+          </div>
+        </div>
         <span aria-hidden="true">–</span>
-        <Input aria-label="To date" type="date" bind:value={filters.toDate} />
+        <div class="form-field">
+          <div class="input-frame with-control-icon date-control">
+            <input
+              id="rankingslist-field-4"
+              class="input"
+              aria-label="To date"
+              type="date"
+              bind:value={filters.toDate}
+            />
+            <CalendarDays class="control-icon" size={16} aria-hidden="true" />
+          </div>
+        </div>
       </fieldset>
       <label
         >Sort by
@@ -85,12 +125,13 @@
           <option value="date">Date (newest)</option>
         </select>
       </label>
-      <Button
-        variant="secondary-outline"
-        size="small"
-        class={['rankings-list-button']}
+      <button
+        class={['button', ['rankings-list-button']]}
+        data-tone="secondary"
+        data-outline="true"
+        data-size="small"
         type="button"
-        onclick={resetFilters}>Reset filters</Button
+        onclick={resetFilters}>Reset filters</button
       >
     </div>
     {#if filterError}<Alert variant="error">{filterError}</Alert>{/if}
@@ -112,6 +153,40 @@
 <style lang="scss">
   @use '../styles/selection-tokens' as selectionTokens;
 
+  .with-control-icon {
+    position: relative;
+  }
+  .with-control-icon input {
+    padding-right: 2rem;
+  }
+  .with-control-icon :global(.control-icon) {
+    position: absolute;
+    right: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: var(--select-text);
+  }
+  .date-control input {
+    padding-right: 0.62rem;
+  }
+  .date-control input::-webkit-calendar-picker-indicator {
+    position: absolute;
+    right: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+  }
+  @supports not selector(input::-webkit-calendar-picker-indicator) {
+    .date-control :global(.control-icon) {
+      display: none;
+    }
+  }
   .rankings-list {
     @include selectionTokens.apply-selection-tokens;
   }

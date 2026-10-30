@@ -5,25 +5,39 @@ import type { RaidBossOption } from './models/RaidBossOption';
 import type { WowClassLike } from './models/WowClassLike';
 import type { WowSpecLike } from './models/WowSpecLike';
 
+export const EDITION_OPTIONS = [
+  'Anniversary',
+  'Forever',
+  'Mists of Pandaria',
+  'Era',
+  'Season of Discovery',
+  'Retail'
+];
+
+export const DISABLED_EDITION_OPTIONS = ['Forever'];
+
 const versionToEditionSlug: Record<string, string> = {
   Anniversary: 'anniversary',
   Era: 'classic',
   Retail: 'retail',
-  'Mists of Pandaria': 'mop'
+  'Mists of Pandaria': 'mop',
+  'Season of Discovery': 'classic_sod'
 };
 
 const versionToApiEditionSlug: Record<string, string> = {
   Anniversary: 'anniversary',
   Era: 'era',
   Retail: 'midnight',
-  'Mists of Pandaria': 'mop'
+  'Mists of Pandaria': 'mop',
+  'Season of Discovery': 'classic_sod'
 };
 
 const versionToClassIds: Record<string, number[]> = {
   Anniversary: [1, 2, 3, 4, 5, 7, 8, 9, 11],
   Era: [1, 2, 3, 4, 5, 7, 8, 9, 11],
   Retail: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
-  'Mists of Pandaria': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+  'Mists of Pandaria': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  'Season of Discovery': [1, 2, 3, 4, 5, 7, 8, 9, 11]
 };
 
 export function getEditionSlug(version: string): string {

@@ -218,6 +218,7 @@ public sealed class RankingsHandlerTests : IDisposable
         Assert.Equal(guild, player.GuildName);
         Assert.Equal("US", player.ServerRegion);
         Assert.Equal("quel-thalas", player.ServerSlug);
+        Assert.Equal("Quel'  Thalas", player.ServerName);
         var query = handler.Requests[1].GetProperty("query").GetString();
         Assert.Contains("serverRegion: \"US\"", query);
         Assert.Contains("serverSlug: \"quel-thalas\"", query);
@@ -247,11 +248,42 @@ public sealed class RankingsHandlerTests : IDisposable
             Assert.Equal(1, player.FactionId);
             Assert.Equal("Guild", player.GuildName);
             Assert.Equal(expectedRealm, player.ServerSlug);
+            Assert.Equal(realm, player.ServerName);
         });
         var query = handler.Requests[1].GetProperty("query").GetString();
         Assert.Contains("c0:", query);
         Assert.DoesNotContain("c1:", query);
         Assert.Equal(2, handler.GraphQlRequests);
+    }
+
+    [Theory]
+    [InlineData("Thunderstrike", "thunderstrike")]
+    [InlineData("Quel'Thalas", "quelthalas")]
+    [InlineData("Area 52", "area-52")]
+    public async Task ServerDisplayNameIsEnrichedEvenWhenFactionAndGuildAreKnown(string displayName, string slug)
+    {
+        var entries = JsonSerializer.Serialize(new[]
+        {
+            new
+            {
+                name = "Player", percentile = 90, faction = "Alliance", guild = "Guild",
+                serverRegion = "EU", server = slug, report = new { code = "abc", fightID = 7 }
+            }
+        });
+        var enrichment = JsonSerializer.Serialize(new
+        {
+            data = new { characterData = new { c0 = new { server = new { name = displayName } } } }
+        });
+        using var handler = new QueueHandler(RankingsPayload(entries), enrichment);
+        var response = await Handlers(fixture.CreateClient(handler), new RecordingTimelineService())
+            .Ranking.Handle(new GetSpecRankingRequest("retribution-paladin", "eranog", "retail", Metric: "dps", ZoneId: 38, ClassName: "Paladin", SpecName: "Retribution"));
+        var player = Assert.Single(Assert.Single(
+            Assert.IsType<SpecRankingData>(HttpResultAssertions.Status(200, response).Value).Reports).Players);
+        Assert.Equal(displayName, player.ServerName);
+        Assert.Equal(slug, player.ServerSlug);
+        Assert.Equal("Guild", player.GuildName);
+        Assert.Equal(1, player.FactionId);
+        Assert.Contains("server { name }", handler.Requests[1].GetProperty("query").GetString());
     }
 
     [Theory]

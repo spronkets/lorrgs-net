@@ -1,7 +1,4 @@
 <script lang="ts">
-  import Button from './Button.svelte';
-  import Input from './Input.svelte';
-  import Textarea from './Textarea.svelte';
   import Alert from './Alert.svelte';
   import { onMount } from 'svelte';
   import type { RankingReport } from '../models/RankingReport';
@@ -78,13 +75,14 @@
 <dialog bind:this={dialog} aria-labelledby="copy-note-title" {onclose}>
   <header>
     <h2 id="copy-note-title">Copy Note</h2>
-    <Button
-      variant="secondary-outline"
-      size="small"
-      class={['copy-note-dialog-button']}
+    <button
+      class={['button', ['copy-note-dialog-button']]}
+      data-tone="secondary"
+      data-outline="true"
+      data-size="small"
       type="button"
       aria-label="Close copy note"
-      onclick={() => dialog.close()}>Close</Button
+      onclick={() => dialog.close()}>Close</button
     >
   </header>
   <p class="source">{timeline.playerName} · {bossName || fight?.name || 'Boss'}</p>
@@ -97,27 +95,55 @@
       </select>
     </label>
     {#if target === 'name'}
-      <Input label="Name or Nickname" bind:value={playerName} placeholder={timeline.playerName} />
+      <div class="form-field">
+        <label for="copynotedialog-field-1">Name or Nickname</label>
+        <div class="input-frame">
+          <input
+            id="copynotedialog-field-1"
+            class="input"
+            type="text"
+            bind:value={playerName}
+            placeholder={timeline.playerName}
+          />
+        </div>
+      </div>
     {:else}
-      <Input label="Spec tag" readonly value={specNoteTag(specId, format) ?? 'Unavailable'} />
+      <div class="form-field">
+        <label for="copynotedialog-field-2">Spec tag</label>
+        <div class="input-frame">
+          <input
+            id="copynotedialog-field-2"
+            class="input"
+            type="text"
+            readonly
+            value={specNoteTag(specId, format) ?? 'Unavailable'}
+          />
+        </div>
+      </div>
     {/if}
     <fieldset>
       <legend>Note format</legend>
-      <Button
-        variant="secondary-outline"
-        size="small"
-        class={['copy-note-dialog-button']}
+      <button
+        class={['button', ['copy-note-dialog-button']]}
+        data-tone={(format === 'mrt') === true || (format === 'mrt') === 'true'
+          ? 'primary'
+          : 'secondary'}
+        data-outline={!((format === 'mrt') === true || (format === 'mrt') === 'true')}
+        data-size="small"
         type="button"
         aria-pressed={format === 'mrt'}
-        onclick={() => (format = 'mrt')}>MRT</Button
+        onclick={() => (format = 'mrt')}>MRT</button
       >
-      <Button
-        variant="secondary-outline"
-        size="small"
-        class={['copy-note-dialog-button']}
+      <button
+        class={['button', ['copy-note-dialog-button']]}
+        data-tone={(format === 'nsrt') === true || (format === 'nsrt') === 'true'
+          ? 'primary'
+          : 'secondary'}
+        data-outline={!((format === 'nsrt') === true || (format === 'nsrt') === 'true')}
+        data-size="small"
         type="button"
         aria-pressed={format === 'nsrt'}
-        onclick={() => (format = 'nsrt')}>NSRT</Button
+        onclick={() => (format = 'nsrt')}>NSRT</button
       >
     </fieldset>
     <label class="dynamic">
@@ -139,28 +165,30 @@
     <Alert variant="warning" compact>Partial timeline: this note may be missing casts.</Alert>
   {/if}
   <div class="preview">
-    <Textarea
-      label="Note preview"
-      monospace
-      style="min-height: 260px"
-      rows="12"
-      readonly
-      value={note.text}
-      spellcheck="false"
-      onclick={(event) => event.currentTarget.select()}
-    />
+    <div class="form-field">
+      <label for="copynotedialog-field-3">Note preview</label><textarea
+        id="copynotedialog-field-3"
+        class="textarea monospace"
+        style="min-height: 260px"
+        rows="12"
+        readonly
+        value={note.text}
+        spellcheck="false"
+        onclick={(event) => event.currentTarget.select()}></textarea>
+    </div>
   </div>
   {#if note.error}<Alert variant="error">{note.error}</Alert>{/if}
   {#if copyError}<Alert variant="error">{copyError}</Alert>{/if}
   <footer>
     <span>{note.count} selected casts</span>
-    <Button
-      variant="primary"
-      size="small"
-      class={['copy-note-dialog-button']}
+    <button
+      class={['button', ['copy-note-dialog-button']]}
+      data-tone="primary"
+      data-outline="false"
+      data-size="small"
       type="button"
       disabled={Boolean(note.error)}
-      onclick={copy}>Copy to clipboard</Button
+      onclick={copy}>Copy to clipboard</button
     >
   </footer>
   <p class="hint">Only casts for spells currently shown in the timeline are included.</p>
@@ -236,7 +264,6 @@
   select {
     @include selectionTokens.selection-dropdown;
   }
-
 
   .preview {
     margin: 14px 0;

@@ -1,6 +1,4 @@
 <script lang="ts">
-  import Button from './Button.svelte';
-  import Input from './Input.svelte';
   import Checkbox from './Checkbox.svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import type { ReportTimeline } from '../models/ReportTimeline';
@@ -87,56 +85,83 @@
 <details class="spell-selection" open>
   <summary>Spell selection · {spells.length - hidden.size} / {spells.length}</summary>
   <div class="spell-actions">
-    <Input aria-label="Search timeline spells" bind:value={search} placeholder="Find a spell…" />
+    <div class="form-field">
+      <div class="input-frame">
+        <input
+          id="spellselection-field-1"
+          class="input"
+          type="text"
+          aria-label="Search timeline spells"
+          bind:value={search}
+          placeholder="Find a spell…"
+        />
+      </div>
+    </div>
     <Checkbox label="Spell names" bind:checked={showSpellNames} />
     <div class="spell-presets" role="group" aria-label="Spell presets">
       {#each presets as option (option.key)}
-        <Button
-          variant="secondary-outline"
-          size="small"
-          class={['spell-selection-button']}
+        <button
+          class={['button', ['spell-selection-button']]}
+          data-tone={(preset === option.key) === true || (preset === option.key) === 'true'
+            ? 'primary'
+            : 'secondary'}
+          data-outline={!((preset === option.key) === true || (preset === option.key) === 'true')}
+          data-size="small"
           type="button"
           aria-pressed={preset === option.key}
           onclick={() => (preset = preset === option.key ? 'None' : option.key)}
-          ><img src={option.icon} alt="" />{option.label}</Button
+          ><img src={option.icon} alt="" />{option.label}</button
         >
       {/each}
     </div>
-    <Button
-      variant="secondary-outline"
-      size="small"
-      class={['spell-selection-button']}
+    <button
+      class={['button', ['spell-selection-button']]}
+      data-tone="secondary"
+      data-outline="true"
+      data-size="small"
       type="button"
-      onclick={() => (preset = 'None')}>Clear spells</Button
+      onclick={() => (preset = 'None')}>Clear spells</button
     >
   </div>
   <div class="spell-group-row">
     {#each spellGroups as group (group.label)}
       <div class="spell-group" role="group" aria-label={group.label}>
-        <Button
-          variant="secondary-outline"
-          size="small"
-          class={['spell-selection-button', `group-toggle`]}
+        <button
+          class={['button', ['spell-selection-button', `group-toggle`]]}
+          data-tone={group.spells.every((spell) => !hidden.has(spell.id)) === true ||
+          group.spells.every((spell) => !hidden.has(spell.id)) === 'true'
+            ? 'primary'
+            : 'secondary'}
+          data-outline={!(
+            group.spells.every((spell) => !hidden.has(spell.id)) === true ||
+            group.spells.every((spell) => !hidden.has(spell.id)) === 'true'
+          )}
+          data-size="small"
           type="button"
           aria-label={`Toggle ${group.label}`}
           aria-pressed={group.spells.every((spell) => !hidden.has(spell.id))}
           onclick={() => toggleGroup(group.spells.map((spell) => spell.id))}
-          title={`Show / hide ${group.label}`}>{group.label}</Button
+          title={`Show / hide ${group.label}`}>{group.label}</button
         >
         <div class="spell-buttons">
           {#each group.spells as spell (spell.id)}
             {@const appearance = spellAppearance(spell, castSpellIds.has(spell.id))}
-            <Button
-              variant="unstyled"
+            <button
               class={[
-                'spell-selection-button',
-                {
-                  'power-window': isPowerWindow(spell),
-                  muted: hidden.has(spell.id),
-                  'spell-dimmed': inspected !== null && inspected.id !== spell.id,
-                  'spell-highlighted': inspected?.id === spell.id
-                }
+                'button',
+                [
+                  'spell-selection-button',
+                  {
+                    'power-window': isPowerWindow(spell),
+                    muted: hidden.has(spell.id),
+                    'spell-dimmed': inspected !== null && inspected.id !== spell.id,
+                    'spell-highlighted': inspected?.id === spell.id
+                  }
+                ]
               ]}
+              data-tone="unstyled"
+              data-outline="false"
+              data-size="medium"
               type="button"
               style={`--spell-color: ${appearance.color}`}
               onmouseenter={() =>
@@ -164,7 +189,7 @@
                 <img src={spellIconUrl(spell.icon)} alt="" loading="lazy" />
               {/if}
               {#if showSpellNames || !spellIconUrl(spell.icon)}<span>{spell.name}</span>{/if}
-            </Button>
+            </button>
           {/each}
         </div>
       </div>

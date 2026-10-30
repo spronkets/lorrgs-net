@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from './lib/components/Button.svelte';
+  import { Moon, Sun, Wrench } from '@lucide/svelte';
   import * as WorldDataApi from './lib/worldDataApi';
   import * as HttpApi from './lib/common/http/apiClient';
 
@@ -13,7 +13,7 @@
   import ReportsPage from './pages/ReportsPage.svelte';
   import WorldDataPage from './pages/WorldDataPage.svelte';
   import RotationAnalyzerPage from './pages/RotationAnalyzerPage.svelte';
-  import { getApiEditionSlug, getRaidsForEdition } from './lib/raidCatalog';
+  import { EDITION_OPTIONS, getApiEditionSlug, getRaidsForEdition } from './lib/raidCatalog';
   import type { WorldDataSnapshot } from './lib/models/WorldDataSnapshot';
   import type { RaidCatalog } from './lib/models/RaidCatalog';
   import { MANUAL_REPORT_QUERY_KEYS } from './lib/manualReports';
@@ -126,7 +126,7 @@
       if (request !== worldDataRequest) return;
       if (!selectedVersion) {
         selectedVersion =
-          ['Anniversary', 'Mists of Pandaria', 'Era', 'Retail'].find(
+          EDITION_OPTIONS.find(
             (version) => getRaidsForEdition(initialRaidCatalog, version).length > 0
           ) || 'Anniversary';
       }
@@ -182,7 +182,7 @@
 </script>
 
 <svelte:window
-  on:keydown={(event) => {
+  onkeydown={(event) => {
     if (event.key === 'Escape' && toolsMenu?.open) {
       toolsMenu.open = false;
       toolsMenu.querySelector('summary')?.focus();
@@ -193,84 +193,91 @@
 <div class="app" class:theme-dark={theme === 'dark'} class:theme-light={theme === 'light'}>
   <header class="app-header">
     <nav class="app-nav" aria-label="Main navigation">
-      <Button
-        variant="unstyled"
-        class={['app-button', `brand-toggle`]}
+      <button
+        class={['button', ['app-button', `brand-toggle`]]}
+        data-tone="unstyled"
+        data-outline="false"
+        data-size="medium"
         type="button"
         onclick={() => (currentPage = 'home')}
         aria-label="LorrgsNET home"
       >
         LorrgsNET
-      </Button>
-      <Button
-        variant="unstyled"
-        class={['app-button', { active: currentPage === 'spec' }]}
+      </button>
+      <button
+        class={['button', ['app-button', { active: currentPage === 'spec' }]]}
+        data-tone="unstyled"
+        data-outline="false"
+        data-size="medium"
+        type="button"
         aria-current={currentPage === 'spec' ? 'page' : undefined}
         onclick={() => openRankings('spec')}
       >
         Spec Rankings
-      </Button>
-      <Button
-        variant="unstyled"
-        class={['app-button', { active: currentPage === 'comp' }]}
+      </button>
+      <button
+        class={['button', ['app-button', { active: currentPage === 'comp' }]]}
+        data-tone="unstyled"
+        data-outline="false"
+        data-size="medium"
+        type="button"
         aria-current={currentPage === 'comp' ? 'page' : undefined}
         onclick={() => openRankings('comp')}
       >
         Comp Rankings
-      </Button>
-      <Button
-        variant="unstyled"
-        class={['app-button', { active: currentPage === 'reports' }]}
+      </button>
+      <button
+        class={['button', ['app-button', { active: currentPage === 'reports' }]]}
+        data-tone="unstyled"
+        data-outline="false"
+        data-size="medium"
+        type="button"
         aria-current={currentPage === 'reports' ? 'page' : undefined}
-        onclick={() => (currentPage = 'reports')}>Load Report</Button
+        onclick={() => (currentPage = 'reports')}>Load Report</button
       >
       <details class="tools-menu" bind:this={toolsMenu}>
         <summary class:active={currentPage === 'worlddata' || currentPage === 'rotation'}
-          >Tools</summary
+          ><Wrench size={16} aria-hidden="true" />Tools</summary
         >
         <div class="tools-options">
-          <Button
-            variant="unstyled"
-            class={['app-button', { active: currentPage === 'worlddata' }]}
+          <button
+            class={['button', ['app-button', { active: currentPage === 'worlddata' }]]}
+            data-tone="unstyled"
+            data-outline="false"
+            data-size="medium"
+            type="button"
             onclick={() => openTool('worlddata')}
           >
             World Data
-          </Button>
-          <Button
-            variant="unstyled"
-            class={['app-button', { active: currentPage === 'rotation' }]}
+          </button>
+          <button
+            class={['button', ['app-button', { active: currentPage === 'rotation' }]]}
+            data-tone="unstyled"
+            data-outline="false"
+            data-size="medium"
+            type="button"
             onclick={() => openTool('rotation')}
           >
             Rotation Analyzer
-          </Button>
+          </button>
         </div>
       </details>
-      <Button
-        variant="unstyled"
+      <button
+        class={['button', ['app-button', `theme-toggle`]]}
+        data-tone="unstyled"
+        data-outline="false"
+        data-size="medium"
         type="button"
-        class={['app-button', `theme-toggle`]}
         onclick={toggleTheme}
         aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
       >
-        <svg
-          aria-hidden="true"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-        >
-          {#if theme === 'dark'}
-            <circle cx="12" cy="12" r="4" /><path
-              d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"
-            />
-          {:else}
-            <path d="M20 15.5A9 9 0 0 1 8.5 4 9 9 0 1 0 20 15.5Z" />
-          {/if}
-        </svg>
-      </Button>
+        {#if theme === 'dark'}
+          <Sun size={18} strokeWidth={1.8} aria-hidden="true" />
+        {:else}
+          <Moon size={18} strokeWidth={1.8} aria-hidden="true" />
+        {/if}
+      </button>
     </nav>
   </header>
 
@@ -332,7 +339,14 @@
   </footer>
 </div>
 
-<style>
+<style lang="scss">
+  @use './lib/styles/classes';
+  @use './lib/styles/factions';
+  @use './lib/styles/colors';
+
+  @include classes.class-styles;
+  @include factions.faction-styles;
+
   :global(body) {
     margin: 0;
     padding: 0;
@@ -348,9 +362,9 @@
   }
 
   .app {
-    --class-text-shade: #172433;
-    --class-text-share: 55%;
-    --class-text-ceiling: 0.49;
+    @include colors.display-theme;
+    @include classes.text-theme;
+
     --app-bg:
       radial-gradient(circle at 8% 10%, rgba(248, 232, 197, 0.24), transparent 42%),
       radial-gradient(circle at 88% 0%, rgba(72, 173, 167, 0.22), transparent 34%),
@@ -377,9 +391,9 @@
   }
 
   .app.theme-dark {
-    --class-text-shade: #ffffff;
-    --class-text-share: 72%;
-    --class-text-ceiling: 1;
+    @include colors.display-theme-dark;
+    @include classes.text-theme-dark;
+
     --app-bg:
       radial-gradient(circle at 10% 8%, rgba(96, 72, 34, 0.24), transparent 40%),
       radial-gradient(circle at 90% 0%, rgba(27, 114, 118, 0.24), transparent 35%),
@@ -464,14 +478,17 @@
     margin-left: auto;
   }
   .tools-menu summary {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    list-style: none;
     cursor: pointer;
     color: var(--nav-text);
     padding: 0.4rem 0.6rem;
     font-size: 0.85rem;
   }
-  .tools-menu summary.active {
-    color: var(--title-color);
-    font-weight: 700;
+  .tools-menu summary::-webkit-details-marker {
+    display: none;
   }
   .tools-options {
     position: absolute;
@@ -507,7 +524,8 @@
     color: inherit;
   }
 
-  .app-nav :global(button.app-button) {
+  .app-nav :global(button.app-button),
+  .tools-menu summary {
     background: var(--nav-bg);
     border: 1px solid var(--nav-line);
     color: var(--nav-text);
@@ -519,13 +537,16 @@
     transition: all 0.2s;
   }
 
-  .app-nav :global(button.app-button:hover) {
+  .app-nav :global(button.app-button:hover),
+  .tools-menu summary:hover {
     border-color: var(--nav-hover-line);
     background: var(--nav-hover-bg);
     transform: translateY(-1px);
   }
 
-  .app-nav :global(button.active.app-button) {
+  .app-nav :global(button.active.app-button),
+  .tools-menu summary.active,
+  .tools-menu[open] summary {
     background: linear-gradient(135deg, #1c6f7e, #2a8e8f);
     border-color: #1a6a77;
     color: #effaf9;

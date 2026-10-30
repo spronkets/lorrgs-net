@@ -1251,29 +1251,99 @@ public sealed class ReportTimelineServiceTests : IDisposable
         }
     }
 
-    [Fact]
-    public async Task BossLoadFiltersEventsAndPhasesAndKeepsEditionSpecificObservedPhases()
+    [Theory]
+    [InlineData(3470, "Boss")]
+    [InlineData(101194, "Zul'jin")]
+    public async Task BossLoadFiltersEventsAndPhasesAndKeepsEditionSpecificObservedPhases(int encounterId, string expectedName)
     {
         const string metadata = """
             {"data":{"reportData":{"report":{"fights":[{"id":1,"startTime":1000,"endTime":11000,
-            "encounterID":3470,"phaseTransitions":[{"id":3,"startTime":7000},
-            {"id":2,"startTime":999},{"id":4,"startTime":11001}]}],"masterData":{"abilities":[]}}}}}
+            "encounterID":3470,"enemyNPCs":[{"id":10}],"phaseTransitions":[{"id":3,"startTime":7000},
+            {"id":2,"startTime":999},{"id":4,"startTime":11001}]}],"masterData":{"abilities":[],"actors":[]}}}}}
             """;
-        using var handler = new QueueHandler(metadata, EventPage("""
+        var encounterMetadata = metadata.Replace("\"encounterID\":3470",
+            $"\"name\":\"Daakara\",\"encounterID\":{encounterId}", StringComparison.Ordinal);
+        if (encounterId == 3470)
+            encounterMetadata = metadata;
+        using var handler = new QueueHandler(encounterMetadata, EventPage("""
             [{"type":"applybuff","timestamp":2000,"abilityGameID":1},
              {"type":"cast","timestamp":2000,"abilityGameID":0},
              {"type":"cast","timestamp":999,"abilityGameID":1},
              {"type":"cast","timestamp":11001,"abilityGameID":1},
-             {"type":"cast","timestamp":5000,"abilityGameID":1}]
+             {"type":"cast","sourceID":10,"timestamp":5000,"abilityGameID":1}]
             """));
 
         var result = await CreateService(handler).LoadBossAsync("report", 1, "anniversary", false, CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal("Boss", result.Name);
+        Assert.Equal(expectedName, result.Name);
         Assert.Equal(new TimelinePhase(3, 6000), Assert.Single(result.Phases));
         Assert.Equal(new TimelineEvent(1, 4000, null, "cast"), Assert.Single(result.Events));
         Assert.Equal(new TimelineSpell(1, "Spell 1", null), Assert.Single(result.Spells));
+    }
+
+    [Fact]
+    public async Task BossMeleeKeepsRecordedDamageAvoidanceAndMissingResultsDistinct()
+    {
+        const string metadata = """
+            {"data":{"reportData":{"report":{"fights":[{"id":1,"name":"Boss",
+              "startTime":1000,"endTime":11000,"enemyNPCs":[{"id":10}],"phaseTransitions":[]}],
+              "masterData":{"abilities":[],"actors":[{"id":7,"name":"Tank"}]}}}}}
+            """;
+        using var handler = new QueueHandler(metadata, EventPage("""
+            [{"type":"cast","sourceID":10,"targetID":7,"timestamp":2000,"abilityGameID":1},
+             {"type":"damage","sourceID":10,"targetID":7,"timestamp":2000,"abilityGameID":1,"amount":3343},
+             {"type":"cast","sourceID":10,"targetID":7,"timestamp":3500,"abilityGameID":1},
+             {"type":"miss","sourceID":10,"targetID":7,"timestamp":3500,"abilityGameID":1},
+             {"type":"cast","sourceID":10,"targetID":7,"timestamp":5000,"abilityGameID":1}]
+            """));
+        var result = await CreateService(handler).LoadBossAsync("report", 1, "anniversary", false, default);
+        Assert.NotNull(result);
+        Assert.Equal(3, result.Events.Count);
+        Assert.Equal(new TimelineCastResult(7, "Tank", "damage", 3343),
+            Assert.Single(result.Events[0].CastResults!));
+        Assert.Equal(new TimelineCastResult(7, "Tank", "damage", 0, "Missed / avoided"),
+            Assert.Single(result.Events[1].CastResults!));
+        Assert.Null(result.Events[2].CastResults);
+    }
+
+    [Fact]
+    public async Task BossLoadIncludesRecordedCastDamageForEachEnemyAndTarget()
+    {
+        const string metadata = """
+            {"data":{"reportData":{"report":{"fights":[{"id":1,"name":"Boss",
+              "startTime":1000,"endTime":11000,"enemyNPCs":[{"id":10},{"id":11}],"phaseTransitions":[]}],
+              "masterData":{"abilities":[],"actors":[{"id":7,"name":"Player"}]}}}}}
+            """;
+        using var handler = new QueueHandler(metadata, EventPage("""
+            [{"type":"cast","sourceID":10,"targetID":7,"timestamp":2000,"abilityGameID":1},
+             {"type":"damage","sourceID":10,"targetID":7,"timestamp":2000,"abilityGameID":1,"amount":1250},
+             {"type":"cast","sourceID":11,"targetID":7,"timestamp":2000,"abilityGameID":1},
+             {"type":"damage","sourceID":11,"targetID":7,"timestamp":2000,"abilityGameID":1,"amount":500},
+             {"type":"cast","sourceID":7,"targetID":10,"timestamp":2000,"abilityGameID":1},
+             {"type":"damage","sourceID":7,"targetID":10,"timestamp":2000,"abilityGameID":1,"amount":9999},
+             {"type":"applybuff","sourceID":10,"targetID":10,"timestamp":3000,"abilityGameID":2},
+             {"type":"removebuff","sourceID":10,"targetID":10,"timestamp":4000,"abilityGameID":2},
+             {"type":"heal","sourceID":11,"targetID":10,"timestamp":5000,"abilityGameID":3,"amount":250},
+             {"type":"heal","sourceID":11,"targetID":10,"timestamp":6000,"abilityGameID":3,"amount":50,"tick":true},
+             {"type":"resourcechange","sourceID":11,"targetID":10,"timestamp":7000,"abilityGameID":4,
+              "resourceChangeType":0,"resourceChange":100,"waste":20},
+             {"type":"applybuff","sourceID":10,"targetID":10,"timestamp":8000,"abilityGameID":5}]
+            """));
+        var result = await CreateService(handler).LoadBossAsync("report", 1, "anniversary", false, CancellationToken.None);
+        Assert.NotNull(result);
+        var casts = result.Events.Where(item => item.Kind == "cast").ToArray();
+        Assert.Equal(2, casts.Length);
+        Assert.Equal(new TimelineCastResult(7, "Player", "damage", 1250),
+            Assert.Single(casts[0].CastResults!));
+        Assert.Equal(new TimelineCastResult(7, "Player", "damage", 500),
+            Assert.Single(casts[1].CastResults!));
+        Assert.Equal(9999, Assert.Single(result.Events.Where(item => item.Kind == "damage")).Amount);
+        Assert.Equal(1000, Assert.Single(result.Events.Where(item => item.Kind == "buff" && item.SpellId == 2)).Duration);
+        Assert.Equal(3000, Assert.Single(result.Events.Where(item => item.Kind == "buff" && item.SpellId == 5)).Duration);
+        Assert.Equal(250, Assert.Single(result.Events.Where(item => item.Kind == "heal")).Amount);
+        Assert.Equal(50, Assert.Single(result.Events.Where(item => item.Kind == "hot")).Amount);
+        Assert.Equal(80, Assert.Single(result.Events.Where(item => item.Kind == "mana-returned")).Amount);
     }
 
     [Fact]

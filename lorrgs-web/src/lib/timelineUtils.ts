@@ -5,6 +5,30 @@ import type { TimelineSpell } from './models/TimelineSpell';
 
 export const TIMELINE_ZOOM_LEVELS = [100, 200, 400, 800] as const;
 
+export function timelinePreview(
+  rect: Pick<DOMRect, 'left' | 'width' | 'top'>,
+  clientX: number,
+  duration: number,
+  axisDuration: number,
+  zoom: number,
+  viewportWidth: number
+) {
+  const timestamp = Math.max(0, Math.min(duration,
+    ((clientX - rect.left) / Math.max(1, rect.width)) * axisDuration));
+  const previewWidth = Math.max(1, Math.min(360, viewportWidth - 16) - 18);
+  const previewZoom = TIMELINE_ZOOM_LEVELS[TIMELINE_ZOOM_LEVELS.length - 1];
+  const span = Math.max(1, Math.min(duration,
+    (previewWidth * axisDuration) / Math.max(1, rect.width * (previewZoom / zoom))));
+  return {
+    timestamp,
+    start: Math.max(0, Math.min(timestamp - span / 2, duration - span)),
+    span,
+    zoom: previewZoom,
+    previewPixelsPerMillisecond: previewWidth / span,
+    trackTop: rect.top
+  };
+}
+
 export function isResourceHit(event: TimelineEvent): boolean {
   return (
     event.kind === 'heal' ||

@@ -93,7 +93,7 @@ it('immediately loads every kill and wipe across reports and bosses without sele
   await waitFor(() => expect(getCompRankingDetails).toHaveBeenCalledTimes(6));
   expect(lookupReport).toHaveBeenCalledTimes(2);
   expect(screen.getByRole('button', { name: 'Remove report ReportA' })).toHaveTextContent(/^Remove report$/);
-  expect(screen.getByRole('button', { name: 'Remove report ReportA' })).toHaveAttribute('data-tone', 'warning');
+  expect(screen.getByRole('button', { name: 'Remove report ReportA' })).toHaveAttribute('data-tone', 'danger');
   expect(screen.getByRole('button', { name: 'Remove report ReportA' })).toHaveAttribute('data-outline', 'true');
   expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Load selected pulls/ })).not.toBeInTheDocument();

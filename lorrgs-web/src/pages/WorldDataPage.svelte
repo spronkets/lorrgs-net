@@ -1,6 +1,4 @@
 <script lang="ts">
-  import Button from '../lib/components/Button.svelte';
-  import { getBlizzardClassColor } from '../lib/classColors';
   import { getWowheadIconUrl } from '../lib/wowheadIcons';
   import { getClassIconUrl, getRoleIconUrl, getSpecIconUrl } from '../lib/wowAssets';
 
@@ -9,10 +7,6 @@
   let activeTab = 'classes';
 
   const tabs = ['classes', 'specs', 'roles', 'bosses', 'zones', 'spells', 'trinkets', 'seasons'];
-
-  function classColor(classSlug: string, fallbackColor = '#7BA4BF'): string {
-    return getBlizzardClassColor(classSlug, fallbackColor);
-  }
 </script>
 
 <div class="world-data-page">
@@ -20,13 +14,16 @@
 
   <div class="tabs">
     {#each tabs as tab (tab)}
-      <Button
-        variant="unstyled"
-        class={['world-data-page-button', { active: activeTab === tab }]}
+      <button
+        class={['button', ['world-data-page-button', { active: activeTab === tab }]]}
+        data-tone="unstyled"
+        data-outline="false"
+        data-size="medium"
+        type="button"
         onclick={() => (activeTab = tab)}
       >
         {tab.charAt(0).toUpperCase() + tab.slice(1)}
-      </Button>
+      </button>
     {/each}
   </div>
 
@@ -39,14 +36,11 @@
               class="entry-icon"
               src={getClassIconUrl(cls.nameSlug)}
               alt={cls.name}
-              on:error={(e) => (e.target.style.display = 'none')}
+              onerror={(e) => (e.target.style.display = 'none')}
             />
-            <div
-              class="class-badge"
-              style="background-color: {classColor(cls.nameSlug, cls.color)}"
-            ></div>
+            <div class={`class-badge ${cls.nameSlug}`}></div>
             <div class="data-info">
-              <h4 class="class-text" style="--class-accent: {classColor(cls.nameSlug, cls.color)}">
+              <h4 class={`class-name ${cls.nameSlug}`}>
                 {cls.name}
               </h4>
               <p class="slug">{cls.nameSlug}</p>
@@ -65,17 +59,13 @@
                 spec.nameSlug
               )}
               alt={spec.fullName}
-              on:error={(e) => (e.target.style.display = 'none')}
+              onerror={(e) => (e.target.style.display = 'none')}
             />
             <div class="spec-info">
               <h4>{spec.fullName}</h4>
               <p class="slug">{spec.fullNameSlug}</p>
               <p
-                class="meta class-text"
-                style="--class-accent: {classColor(
-                  worldData.classes?.find((c) => c.id === spec.classId)?.nameSlug,
-                  worldData.classes?.find((c) => c.id === spec.classId)?.color
-                )}"
+                class={`meta class-name ${worldData.classes?.find((c) => c.id === spec.classId)?.nameSlug ?? ''}`}
               >
                 {worldData.classes?.find((c) => c.id === spec.classId)?.name}
               </p>
@@ -91,7 +81,7 @@
               class="entry-icon"
               src={getRoleIconUrl(role.nameSlug)}
               alt={role.name}
-              on:error={(e) => (e.target.style.display = 'none')}
+              onerror={(e) => (e.target.style.display = 'none')}
             />
             <div class="role-badge" style="background-color: {role.color}"></div>
             <div class="data-info">
@@ -134,7 +124,7 @@
               class="spell-icon"
               src={getWowheadIconUrl(spell.icon, 'spells')}
               alt={spell.name}
-              on:error={(e) => (e.target.style.display = 'none')}
+              onerror={(e) => (e.target.style.display = 'none')}
             />
             <div class="data-info">
               <h4>{spell.name}</h4>
@@ -152,7 +142,7 @@
               class="spell-icon"
               src={getWowheadIconUrl(trinket.icon, 'trinkets')}
               alt={trinket.name}
-              on:error={(e) => (e.target.style.display = 'none')}
+              onerror={(e) => (e.target.style.display = 'none')}
             />
             <div class="data-info">
               <h4>{trinket.name}</h4>
@@ -182,17 +172,11 @@
   </div>
 </div>
 
-<style>
-  .class-text {
-    color: oklch(
-      from
-        color-mix(
-          in srgb,
-          var(--class-accent) var(--class-text-share, 55%),
-          var(--class-text-shade, #172433)
-        )
-        min(l, var(--class-text-ceiling, 0.49)) c h
-    );
+<style lang="scss">
+  @use '../lib/styles/classes';
+
+  .class-name {
+    @include classes.text-color;
   }
   .world-data-page {
     animation: fadeIn 0.3s ease-in-out;

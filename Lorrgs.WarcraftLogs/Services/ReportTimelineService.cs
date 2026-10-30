@@ -214,10 +214,8 @@ public sealed class ReportTimelineService(
             endTime = end
         }, start, end, edition, cacheOnly, cancellationToken);
         if (pages is null || (cacheOnly && !pages.Value.Complete)) return null;
-        var events = pages.Value.Events.Where(item => Text(item, "type") == "cast" &&
-            Number(item, "abilityGameID") > 0 && Number(item, "timestamp") >= start && Number(item, "timestamp") <= end)
-            .Select(item => new TimelineEvent(checked((int)Number(item, "abilityGameID")),
-                Number(item, "timestamp") - start, null, "cast")).OrderBy(item => item.Timestamp).ToArray();
+        var events = BossTimelineEvents(pages.Value.Events, fight, start, end, pages.Value.Complete,
+            ActorNames(metadata.GetProperty("masterData"), edition));
         var phases = ObservedPhases(fight, start, end);
         var encounterId = checked((int)Number(fight, "encounterID"));
         // Older unexpired metadata cache entries contain the name but not encounterID.
@@ -228,7 +226,8 @@ public sealed class ReportTimelineService(
             phases = TimelineCorrections.CorrectPhases(encounterId, phases, events, end - start, pages.Value.Complete);
         if (!pages.Value.Complete)
             logger.LogWarning("Boss timeline page limit reached");
-        return new BossTimeline(reportCode, fightId, Text(fight, "name") ?? "Boss",
+        return new BossTimeline(reportCode, fightId,
+            encounterId == 101194 ? "Zul'jin" : Text(fight, "name") ?? "Boss",
             end - start, pages.Value.Complete, ObservedSpells(metadata.GetProperty("masterData"), events), events, phases);
     }
 
@@ -343,7 +342,7 @@ public sealed class ReportTimelineService(
         var reportEnd = fights.Max(item => Number(item, "endTime"));
         var start = Number(fight, "startTime");
         var end = Number(fight, "endTime");
-        const string filter = "type IN ('begincast','cast','applybuff','refreshbuff','removebuff','applybuffstack','removebuffstack','applydebuff','refreshdebuff','removedebuff','applydebuffstack','removedebuffstack','death','heal','damage','resourcechange','drain','interrupt')";
+        const string filter = "type IN ('begincast','cast','applybuff','refreshbuff','removebuff','applybuffstack','removebuffstack','applydebuff','refreshdebuff','removedebuff','applydebuffstack','removedebuffstack','death','heal','damage','miss','resourcechange','drain','interrupt')";
         return ReadEventsAsync(EventsQuery, cursor => new
         {
             code = reportCode,
@@ -360,20 +359,25 @@ public sealed class ReportTimelineService(
         var start = Number(timing, "startTime");
         var end = Number(timing, "endTime");
         var encounterId = checked((int)Number(timing, "encounterID"));
-        var enemies = timing.GetProperty("enemyNPCs").EnumerateArray()
-            .Select(enemy => checked((int)Number(enemy, "id"))).ToHashSet();
-        var bossEvents = rawEvents.Where(item => Text(item, "type") == "cast" &&
-            enemies.Contains(checked((int)Number(item, "sourceID"))) &&
-            Number(item, "abilityGameID") > 0 &&
-            Number(item, "timestamp") >= start && Number(item, "timestamp") <= end)
-            .Select(item => new TimelineEvent(checked((int)Number(item, "abilityGameID")),
-                Number(item, "timestamp") - start, null, "cast")).OrderBy(item => item.Timestamp).ToArray();
+        var bossEvents = BossTimelineEvents(rawEvents, timing, start, end, true,
+            ActorNames(metadata.GetProperty("masterData"), edition));
         var phases = ObservedPhases(timing, start, end);
         if (string.Equals(edition, "retail", StringComparison.OrdinalIgnoreCase))
             phases = TimelineCorrections.CorrectPhases(encounterId, phases, bossEvents, end - start, true);
         return new BossTimeline(reportCode, checked((int)Number(timing, "id")),
             encounterId == 101194 ? "Zul'jin" : Text(timing, "name") ?? "Boss",
             end - start, true, ObservedSpells(metadata.GetProperty("masterData"), bossEvents), bossEvents, phases);
+    }
+
+    private static TimelineEvent[] BossTimelineEvents(IEnumerable<JsonElement> rawEvents, JsonElement fight,
+        double start, double end, bool complete, IReadOnlyDictionary<int, string> actorNames)
+    {
+        var ordered = rawEvents.OrderBy(item => Number(item, "timestamp")).ToArray();
+        var enemies = fight.GetProperty("enemyNPCs").EnumerateArray()
+            .Select(enemy => checked((int)Number(enemy, "id"))).ToHashSet();
+        return enemies.SelectMany(actorId =>
+                NormalizeEvents(ordered, actorId, start, end, complete, actorNames, closeActiveBuffs: true))
+            .OrderBy(item => item.Timestamp).ToArray();
     }
 
     private async Task<JsonElement?> QueryAsync(string query, object variables, string edition,
@@ -704,7 +708,7 @@ public sealed class ReportTimelineService(
 
     internal static IReadOnlyList<TimelineEvent> NormalizeEvents(
         IEnumerable<JsonElement> rawEvents, int actorId, double start, double end, bool complete,
-        IReadOnlyDictionary<int, string>? actorNames = null)
+        IReadOnlyDictionary<int, string>? actorNames = null, bool closeActiveBuffs = false)
     {
         var result = new List<TimelineEvent>();
         var orderedEvents = rawEvents.OrderBy(e => Number(e, "timestamp")).ToArray();
@@ -819,6 +823,9 @@ public sealed class ReportTimelineService(
                 result.Add(new TimelineEvent(spellId, applied, relative - applied, "buff"));
             // A refresh extends the same measured interval; no guessed prepull application.
         }
+        if (closeActiveBuffs && complete)
+            foreach (var (spellId, applied) in buffs)
+                result.Add(new TimelineEvent(spellId, applied, end - start - applied, "buff"));
         return result.OrderBy(e => e.Timestamp).ThenBy(e => e.SpellId).ToArray();
     }
 
@@ -923,6 +930,28 @@ public sealed class ReportTimelineService(
                     actorNames?.GetValueOrDefault(actorId) ?? $"Actor {actorId}", "mana-returned", amount));
             else
                 entries[existing] = entries[existing] with { Amount = entries[existing].Amount + amount };
+        }
+        foreach (var item in events)
+        {
+            var timestamp = Number(item, "timestamp");
+            if (Text(item, "type") != "miss" || Number(item, "sourceID") != actorId ||
+                timestamp < start || timestamp > end)
+                continue;
+            var spellId = checked((int)Number(item, "abilityGameID"));
+            var targetId = checked((int)Number(item, "targetID"));
+            if (targetId <= 0 || !targetCasts.TryGetValue((spellId, targetId), out var timestamps))
+                continue;
+            var index = Array.BinarySearch(timestamps, timestamp);
+            if (index < 0) index = ~index - 1;
+            if (index < 0 || timestamp - timestamps[index] > 250) continue;
+            var key = (spellId, timestamps[index]);
+            if (ambiguousCasts.Contains(key)) continue;
+            if (!results.TryGetValue(key, out var entries))
+                results[key] = entries = [];
+            if (entries.Any(entry => entry.TargetId == targetId && entry.Kind == "damage")) continue;
+            entries.Add(new TimelineCastResult(targetId,
+                actorNames?.GetValueOrDefault(targetId) ?? $"Actor {targetId}", "damage", 0,
+                Outcome: "Missed / avoided"));
         }
         return results.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<TimelineCastResult>)pair.Value);
     }

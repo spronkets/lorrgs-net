@@ -133,6 +133,21 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
+it('uses labeled native fields and affixed composition inputs without duplicate IDs', async () => {
+  const { container } = renderPage();
+  const minimum = screen.getByRole('textbox', { name: 'Minimum kill time' });
+  expect(minimum.tagName).toBe('INPUT');
+  expect(screen.getByLabelText('Minimum kill time')).toBe(minimum);
+  expect(minimum).toHaveAttribute('placeholder', 'm:ss');
+  const count = screen.getAllByRole('spinbutton')[0];
+  const frame = count.closest('.input-frame.affixed');
+  expect(frame?.querySelector('.prefix')).not.toBeNull();
+  expect(frame?.querySelector('.suffix select')).not.toBeNull();
+  const ids = [...container.querySelectorAll('[id]')].map((element) => element.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(screen.getByRole('button', { name: 'Clear filters' })).toHaveAttribute('type', 'button');
+});
+
 it('does not request compositions for an unavailable raid restored from the URL', async () => {
   window.history.replaceState(
     {},

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from './Button.svelte';
   export let versions: string[] = [];
   export let selectedVersion = '';
+  export let disabledVersions: string[] = [];
   export let getVersionIconUrl: (_version: string) => string;
   export let variant: 'cards' | 'select' = 'cards';
   export let placeholder = '— choose an edition —';
@@ -9,7 +9,7 @@
   export let onselect: ((_version: string) => void) | undefined = undefined;
 
   function onSelect(version: string) {
-    if (!version || selectedVersion === version) return;
+    if (!version || selectedVersion === version || disabledVersions.includes(version)) return;
     onselect?.(version);
   }
 </script>
@@ -19,24 +19,35 @@
     <select
       class="edition-select"
       value={'' + selectedVersion}
-      on:change={(event) => onSelect((event.currentTarget as HTMLSelectElement).value)}
+      onchange={(event) => onSelect((event.currentTarget as HTMLSelectElement).value)}
     >
       <option value="">{placeholder}</option>
       {#each versions as version (version)}
-        <option value={'' + version}>{version}</option>
+        <option value={'' + version} disabled={disabledVersions.includes(version)}>{version}</option
+        >
       {/each}
     </select>
   </div>
 {:else}
   <div class="icon-strip" aria-label="Edition selection">
     {#each versions as version (version)}
-      <Button
-        variant="unstyled"
+      <button
         class={[
-          'edition-selector-button',
-          `icon-card`,
-          { 'version-card': true, active: selectedVersion === version }
+          'button',
+          [
+            'edition-selector-button',
+            `icon-card`,
+            {
+              'version-card': true,
+              active: selectedVersion === version,
+              disabled: disabledVersions.includes(version)
+            }
+          ]
         ]}
+        data-tone="unstyled"
+        data-outline="false"
+        data-size="medium"
+        disabled={disabledVersions.includes(version)}
         onclick={() => onSelect(version)}
         title={version}
         type="button"
@@ -45,18 +56,18 @@
           <span class="banner-image-stack">
             <img
               src={getVersionIconUrl(version)}
-              alt={version}
-              class="selector-icon banner banner-base"
+              alt=""
+              aria-hidden="true"
+              class="selector-icon banner-underlay"
             />
             <img
               src={getVersionIconUrl(version)}
-              alt=""
-              aria-hidden="true"
-              class="selector-icon banner banner-text-boost"
+              alt={version}
+              class="selector-icon banner banner-base"
             />
           </span>
         </span>
-      </Button>
+      </button>
     {/each}
   </div>
 {/if}
@@ -193,15 +204,16 @@
     z-index: 1;
   }
 
-  .selector-icon.banner-text-boost {
+  .selector-icon.banner-underlay {
     position: absolute;
     inset: 0;
-    z-index: 2;
     pointer-events: none;
-    opacity: var(--edition-logo-boost-opacity, 0);
-    clip-path: var(--edition-logo-boost-clip, inset(56% 8% 5% 8%));
-    filter: var(--edition-logo-boost-filter, none);
-    mix-blend-mode: multiply;
+    filter: brightness(0) invert(0.35) blur(0.6px);
+    transform: scale(1.025);
+  }
+
+  :global(.theme-dark) .selector-icon.banner-underlay {
+    display: none;
   }
 
   :global(.icon-card.version-card.edition-selector-button:not(.active):hover) .banner-frame {
@@ -210,14 +222,14 @@
     background: var(--select-hover-bg);
   }
 
-  :global(.icon-card.version-card.edition-selector-button:not(.active):hover)
-    .selector-icon.banner-base {
-    filter: var(--edition-logo-hover-filter, none);
+  :global(.icon-card.version-card.edition-selector-button:disabled) {
+    cursor: not-allowed;
+    opacity: 0.55;
   }
 
   :global(.icon-card.version-card.edition-selector-button:not(.active):hover)
-    .selector-icon.banner-text-boost {
-    filter: var(--edition-logo-boost-hover-filter, var(--edition-logo-boost-filter, none));
+    .selector-icon.banner-base {
+    filter: var(--edition-logo-hover-filter, none);
   }
 
   :global(.icon-card.version-card.edition-selector-button:hover) {
@@ -232,10 +244,6 @@
 
   :global(.icon-card.version-card.active.edition-selector-button) .selector-icon.banner-base {
     filter: var(--edition-logo-hover-filter, none);
-  }
-
-  :global(.icon-card.version-card.active.edition-selector-button) .selector-icon.banner-text-boost {
-    filter: var(--edition-logo-boost-hover-filter, var(--edition-logo-boost-filter, none));
   }
 
   :global(.icon-card.version-card.edition-selector-button:focus) {

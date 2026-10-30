@@ -20,6 +20,10 @@ describe('EditionSelector', () => {
     expect(cards[0]).toHaveClass('active');
     expect(cards[1]).not.toHaveClass('active');
     expect(container.querySelectorAll('img')).toHaveLength(4);
+    const underlay = cards[0].querySelector('.banner-underlay');
+    expect(underlay).toHaveAttribute('src', '/anniversary.svg');
+    expect(underlay).toHaveAttribute('alt', '');
+    expect(underlay).toHaveAttribute('aria-hidden', 'true');
     expect(container.querySelector('img[alt="Anniversary"]')).toHaveAttribute(
       'src',
       '/anniversary.svg'
@@ -118,5 +122,30 @@ describe('EditionSelector', () => {
     });
     expect(screen.getAllByRole('option')).toHaveLength(2);
     await fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } });
+  });
+
+  it('renders disabled editions as non-interactive cards and select options', async () => {
+    const onselect = vi.fn();
+    const editions = ['Anniversary', 'Forever', 'Retail'];
+    const props = {
+      versions: editions,
+      disabledVersions: ['Forever'],
+      selectedVersion: 'Anniversary',
+      getVersionIconUrl: (version: string) => `/${version}.svg`,
+      onselect
+    };
+    const { rerender } = render(EditionSelector, props);
+
+    const foreverCard = screen.getByRole('button', { name: 'Forever' });
+    expect(foreverCard).toBeDisabled();
+    expect(foreverCard.querySelector('img')).toHaveAttribute('src', '/Forever.svg');
+    await fireEvent.click(foreverCard);
+    expect(onselect).not.toHaveBeenCalled();
+
+    await rerender({ ...props, variant: 'select' });
+    const foreverOption = screen.getByRole('option', { name: 'Forever' });
+    expect(foreverOption).toBeDisabled();
+    await fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Forever' } });
+    expect(onselect).not.toHaveBeenCalled();
   });
 });

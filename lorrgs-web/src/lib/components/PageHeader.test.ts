@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/svelte';
 import { expect, it } from 'vitest';
-import RankingPageHeader from './RankingPageHeader.svelte';
+import PageHeader from './PageHeader.svelte';
 
 it('updates the page title and supporting description when the ranking context changes', async () => {
-  const { rerender } = render(RankingPageHeader, {
+  const { rerender } = render(PageHeader, {
     title: 'Spec Rankings',
     description: 'Compare players.'
   });

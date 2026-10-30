@@ -1,13 +1,12 @@
 <script lang="ts">
-  import Button from '../lib/components/Button.svelte';
   import { onMount, onDestroy, tick } from 'svelte';
   import { maska } from 'maska/svelte';
   import { killTimeMask } from '../lib/killTimeMask';
-  import Input from '../lib/components/Input.svelte';
+
   import Alert from '../lib/components/Alert.svelte';
   import Spinner from '../lib/components/Spinner.svelte';
   import EncounterFilters from '../lib/components/EncounterFilters.svelte';
-  import RankingPageHeader from '../lib/components/RankingPageHeader.svelte';
+  import PageHeader from '../lib/components/PageHeader.svelte';
   import CompRankingsResults from '../lib/components/CompRankingsResults.svelte';
   import BossIcon from '../lib/components/BossIcon.svelte';
   import * as API from '../lib/api';
@@ -15,6 +14,7 @@
   import type { CompRankingData } from '../lib/models/CompRankingData';
   import type { WorldDataSnapshot } from '../lib/models/WorldDataSnapshot';
   import {
+    EDITION_OPTIONS,
     getApiEditionSlug,
     getAvailableSpecsForVersion,
     getRaidBossOptions,
@@ -28,7 +28,7 @@
   export let raidCatalog: RaidCatalog = { editions: [], instances: {} };
   export let selectedVersion = 'Retail';
   export let oneditionchange: ((_version: string) => void) | undefined = undefined;
-  const versions = ['Anniversary', 'Mists of Pandaria', 'Era', 'Retail'];
+  const versions = EDITION_OPTIONS;
   const operators = [
     { value: 'eq', label: '=' },
     { value: 'lt', label: '<' },
@@ -269,7 +269,7 @@
 </script>
 
 <section class="comp-page">
-  <RankingPageHeader
+  <PageHeader
     title="Comp Rankings"
     description="Compare raid-wide cooldown usage across execution-ranked kills that match your composition criteria."
   />
@@ -282,7 +282,12 @@
       </div>
     </div>
   {/if}
-  <form on:submit|preventDefault={() => search()}>
+  <form
+    onsubmit={(event) => {
+      event.preventDefault();
+      void search();
+    }}
+  >
     <EncounterFilters
       {worldData}
       {raidCatalog}
@@ -305,22 +310,34 @@
           {#if selectedVersion === 'Retail'}<option value={5}>Mythic</option>{/if}
         </select>
       </label>
-      <Input
-        label="Minimum kill time"
-        action={(node) => maska(node, killTimeMask)}
-        type="text"
-        placeholder="m:ss"
-        bind:value={minTime}
-        onblur={() => (minTime = toKillTimeInput(minTime))}
-      />
-      <Input
-        label="Maximum kill time"
-        action={(node) => maska(node, killTimeMask)}
-        type="text"
-        placeholder="m:ss"
-        bind:value={maxTime}
-        onblur={() => (maxTime = toKillTimeInput(maxTime))}
-      />
+      <div class="form-field">
+        <label for="comprankingspage-field-1">Minimum kill time</label>
+        <div class="input-frame">
+          <input
+            id="comprankingspage-field-1"
+            class="input"
+            use:maska={killTimeMask}
+            type="text"
+            placeholder="m:ss"
+            bind:value={minTime}
+            onblur={() => (minTime = toKillTimeInput(minTime))}
+          />
+        </div>
+      </div>
+      <div class="form-field">
+        <label for="comprankingspage-field-2">Maximum kill time</label>
+        <div class="input-frame">
+          <input
+            id="comprankingspage-field-2"
+            class="input"
+            use:maska={killTimeMask}
+            type="text"
+            placeholder="m:ss"
+            bind:value={maxTime}
+            onblur={() => (maxTime = toKillTimeInput(maxTime))}
+          />
+        </div>
+      </div>
     </div>
     {#snippet countControl(
       type: Filter['type'],
@@ -334,38 +351,40 @@
         class:active={filters.some((filter) => filter.type === type && filter.key === key)}
       >
         {#each countFilters(type, key, filters) as filter (filter.id)}
-          <Input
-            compact
-            aria-label={`${label} count`}
-            type="number"
-            min="0"
-            max="100"
-            step="1"
-            placeholder="Any"
-            value={filter.count ?? ''}
-            oninput={(event) => updateCount(type, key, filter.id, event.currentTarget.value)}
-          >
-            {#snippet prefix()}
-              <span class="filter-identity" title={label}>
-                {#if icon}<img src={icon} alt="" />{:else}<span>{shortLabel}</span>{/if}
-              </span>
-            {/snippet}
-            {#snippet suffix()}
-              <select
-                class="comparison"
-                aria-label={`${label} comparison`}
-                value={filter.op}
-                disabled={filter.id === -1}
-                on:change={(event) =>
-                  (filters = filters.map((item) =>
-                    item.id === filter.id ? { ...item, op: event.currentTarget.value } : item
-                  ))}
+          <div class="form-field">
+            <div class="input-frame affixed compact">
+              <span class="prefix"
+                ><span class="filter-identity" title={label}>
+                  {#if icon}<img src={icon} alt="" />{:else}<span>{shortLabel}</span>{/if}
+                </span></span
+              ><input
+                id={`comp-${type}-${key}-${filter.id}`}
+                class="input compact"
+                aria-label={`${label} count`}
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                placeholder="Any"
+                value={filter.count ?? ''}
+                oninput={(event) => updateCount(type, key, filter.id, event.currentTarget.value)}
+              /><span class="suffix"
+                ><select
+                  class="comparison"
+                  aria-label={`${label} comparison`}
+                  value={filter.op}
+                  disabled={filter.id === -1}
+                  onchange={(event) =>
+                    (filters = filters.map((item) =>
+                      item.id === filter.id ? { ...item, op: event.currentTarget.value } : item
+                    ))}
+                >
+                  {#each operators as op (op.value)}<option value={op.value}>{op.label}</option
+                    >{/each}
+                </select></span
               >
-                {#each operators as op (op.value)}<option value={op.value}>{op.label}</option
-                  >{/each}
-              </select>
-            {/snippet}
-          </Input>
+            </div>
+          </div>
         {/each}
       </div>
     {/snippet}
@@ -400,33 +419,36 @@
         </section>
       </div>
       <div class="actions clear-actions">
-        <Button
-          variant="secondary-outline"
-          size="small"
-          class={['comp-rankings-page-button']}
+        <button
+          class={['button', ['comp-rankings-page-button']]}
+          data-tone="secondary"
+          data-outline="true"
+          data-size="small"
           type="button"
           onclick={() => {
             filters = [];
             minTime = '';
             maxTime = '';
-          }}>Clear filters</Button
+          }}>Clear filters</button
         >
       </div>
     </section>
     <div class="actions">
-      <Button
-        variant="primary"
-        size="small"
-        class={['comp-rankings-page-button', `primary`]}
+      <button
+        class={['button', ['comp-rankings-page-button', `primary`]]}
+        data-tone="primary"
+        data-outline="false"
+        data-size="small"
         type="submit"
-        disabled={!selectedBoss}>Search compositions</Button
+        disabled={!selectedBoss}>Search compositions</button
       >
-      {#if loading}<Button
-          variant="secondary-outline"
-          size="small"
-          class={['comp-rankings-page-button']}
+      {#if loading}<button
+          class={['button', ['comp-rankings-page-button']]}
+          data-tone="secondary"
+          data-outline="true"
+          data-size="small"
           type="button"
-          onclick={invalidate}>Cancel</Button
+          onclick={invalidate}>Cancel</button
         >{/if}
     </div>
   </form>
@@ -548,7 +570,8 @@
     border-radius: 3px;
   }
   select.comparison {
-    min-height: 32px;
+    min-height: 44px;
+    align-self: stretch;
     padding: 0.2rem;
     box-sizing: border-box;
     font-size: 0.8rem;
@@ -585,9 +608,6 @@
     }
     .composition-grid {
       grid-template-columns: repeat(auto-fill, 120px);
-    }
-    select.comparison {
-      min-height: 44px;
     }
   }
 </style>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from './Button.svelte';
+  import { ChevronDown } from '@lucide/svelte';
   import { tick } from 'svelte';
   import BossIcon from './BossIcon.svelte';
 
@@ -73,18 +73,20 @@
 </script>
 
 <svelte:window
-  on:click={(event) => {
+  onclick={(event) => {
     if (open && event.target instanceof Node && !root.contains(event.target)) open = false;
   }}
 />
 
 <div class="boss-selector" bind:this={root}>
   <span class="field-label">{label}</span>
-  <Button
-    variant="unstyled"
+  <button
+    class={['button', ['boss-selector-button', `trigger`]]}
+    data-tone="unstyled"
+    data-outline="false"
+    data-size="medium"
     type="button"
-    class={['boss-selector-button', `trigger`]}
-    bind:element={trigger}
+    bind:this={trigger}
     {disabled}
     aria-label={label}
     aria-haspopup="listbox"
@@ -99,10 +101,8 @@
   >
     <BossIcon slug={selected?.slug ?? ''} iconName={selected?.iconName} />
     <span>{selected?.name || placeholder}</span>
-    <svg class="chevron" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor">
-      <path d="m4 6 4 4 4-4" />
-    </svg>
-  </Button>
+    <ChevronDown class="chevron" aria-hidden="true" size={16} />
+  </button>
   {#if open}
     <div
       class="options"
@@ -111,7 +111,7 @@
       aria-label={label}
       aria-activedescendant={`boss-option-${active}`}
       bind:this={list}
-      on:keydown={handleKey}
+      onkeydown={handleKey}
     >
       {#each bosses as boss, index (boss.slug)}
         <div
@@ -120,8 +120,8 @@
           id={`boss-option-${index}`}
           aria-selected={value === boss.slug}
           class:active={active === index}
-          on:click={() => choose(index)}
-          on:keydown={handleKey}
+          onclick={() => choose(index)}
+          onkeydown={handleKey}
         >
           <BossIcon slug={boss.slug} iconName={boss.iconName} />
           <span>{boss.name}</span>
@@ -165,7 +165,7 @@
     outline: 2px solid var(--select-focus-border);
     outline-offset: 2px;
   }
-  .chevron {
+  .boss-selector-button :global(.chevron) {
     margin-left: auto;
     width: 16px;
     height: 16px;

@@ -40,6 +40,17 @@ describe('App version mapping', () => {
     expect(WorldDataApi.getSeasons).toHaveBeenLastCalledWith('midnight');
   });
 
+  it('loads Season of Discovery using its API edition slug', async () => {
+    mockWorldData();
+    history.replaceState({}, '', '/?edition=Season%20of%20Discovery');
+    render(App);
+
+    await screen.findByRole('heading', { name: 'Edition' });
+    expect(WorldDataApi.getClasses).toHaveBeenLastCalledWith('classic_sod');
+    expect(WorldDataApi.getBosses).toHaveBeenLastCalledWith('classic_sod');
+    expect(screen.getByRole('button', { name: 'Season of Discovery' })).toBeInTheDocument();
+  });
+
   it('does not replace the current edition data with an older in-flight response', async () => {
     mockWorldData();
     history.replaceState({}, '', '/?edition=Anniversary');

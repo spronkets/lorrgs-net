@@ -1,10 +1,9 @@
 <script lang="ts">
-  import Button from '../lib/components/Button.svelte';
   import * as WorldDataApi from '../lib/worldDataApi';
 
   import Alert from '../lib/components/Alert.svelte';
   import Spinner from '../lib/components/Spinner.svelte';
-  import Input from '../lib/components/Input.svelte';
+
   import { onMount } from 'svelte';
   import * as API from '../lib/api';
 
@@ -252,17 +251,30 @@
   </p>
 
   <div class="panel">
-    <Input label="Report Code" bind:value={reportCode} placeholder="e.g. abcDEF123xyz" />
-    <Button
-      variant="primary"
-      size="small"
-      class={['rotation-analyzer-page-button']}
+    <div class="form-field">
+      <label for="rotationanalyzerpage-field-1">Report Code</label>
+      <div class="input-frame">
+        <input
+          id="rotationanalyzerpage-field-1"
+          class="input"
+          type="text"
+          bind:value={reportCode}
+          placeholder="e.g. abcDEF123xyz"
+        />
+      </div>
+    </div>
+    <button
+      class={['button', ['rotation-analyzer-page-button']]}
+      data-tone="primary"
+      data-outline="false"
+      data-size="small"
+      type="button"
       onclick={runLookup}
       disabled={loadingLookup}
     >
       {#if loadingLookup}<Spinner inline />{/if}
       {loadingLookup ? 'Looking up...' : 'Lookup Report'}
-    </Button>
+    </button>
   </div>
 
   {#if lookup}
@@ -285,33 +297,47 @@
         </select>
       </label>
 
-      <Input
-        label="Parse Percentile (optional)"
-        bind:value={parsePercentile}
-        type="number"
-        min="0"
-        max="100"
-        placeholder="0-100"
-      />
+      <div class="form-field">
+        <label for="rotationanalyzerpage-field-2">Parse Percentile (optional)</label>
+        <div class="input-frame">
+          <input
+            id="rotationanalyzerpage-field-2"
+            class="input"
+            bind:value={parsePercentile}
+            type="number"
+            min="0"
+            max="100"
+            placeholder="0-100"
+          />
+        </div>
+      </div>
 
-      <Input
-        label="Item Level (optional)"
-        bind:value={itemLevel}
-        type="number"
-        min="1"
-        placeholder="e.g. 525"
-      />
+      <div class="form-field">
+        <label for="rotationanalyzerpage-field-3">Item Level (optional)</label>
+        <div class="input-frame">
+          <input
+            id="rotationanalyzerpage-field-3"
+            class="input"
+            bind:value={itemLevel}
+            type="number"
+            min="1"
+            placeholder="e.g. 525"
+          />
+        </div>
+      </div>
 
-      <Button
-        variant="primary"
-        size="small"
-        class={['rotation-analyzer-page-button']}
+      <button
+        class={['button', ['rotation-analyzer-page-button']]}
+        data-tone="primary"
+        data-outline="false"
+        data-size="small"
+        type="button"
         onclick={runAnalysis}
         disabled={loadingAnalysis}
       >
         {#if loadingAnalysis}<Spinner inline />{/if}
         {loadingAnalysis ? 'Analyzing...' : 'Analyze Rotation'}
-      </Button>
+      </button>
     </div>
   {/if}
 

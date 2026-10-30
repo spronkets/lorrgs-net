@@ -1,6 +1,12 @@
 <script lang="ts">
   import type { WorldDataSnapshot } from '../models/WorldDataSnapshot';
-  import { getRaidBossOptions, getRaidsForEdition, groupRaidsByPhase } from '../raidCatalog';
+  import {
+    DISABLED_EDITION_OPTIONS,
+    EDITION_OPTIONS,
+    getRaidBossOptions,
+    getRaidsForEdition,
+    groupRaidsByPhase
+  } from '../raidCatalog';
   import type { RaidCatalog } from '../models/RaidCatalog';
   import { getVersionIconUrl } from '../selectionIcons';
   import EditionSelector from './EditionSelector.svelte';
@@ -11,7 +17,7 @@
   export let selectedVersion = '';
   export let selectedRaid = '';
   export let selectedBoss = '';
-  const versions = ['Anniversary', 'Mists of Pandaria', 'Era', 'Retail'];
+  const versions = EDITION_OPTIONS;
   export let oneditionchange: ((_version: string) => void) | undefined = undefined;
   $: raids = getRaidsForEdition(raidCatalog, selectedVersion);
   $: raid = raids.find((item) => item.slug === selectedRaid);
@@ -30,8 +36,14 @@
 </script>
 
 <section class="encounter-filters" aria-label="Encounter selection">
-  <h3>Edition</h3>
-  <EditionSelector {versions} {selectedVersion} {getVersionIconUrl} onselect={selectVersion} />
+  <h3 class="edition-label">Edition</h3>
+  <EditionSelector
+    {versions}
+    {selectedVersion}
+    disabledVersions={DISABLED_EDITION_OPTIONS}
+    {getVersionIconUrl}
+    onselect={selectVersion}
+  />
   <RaidBossSelectors
     raidPhaseGroups={groupRaidsByPhase(raids)}
     {bosses}
@@ -54,12 +66,10 @@
     gap: 16px;
     margin-bottom: 24px;
   }
-  h3 {
+  .edition-label {
+    @include selectionTokens.selection-label;
+
     margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
   }
   .encounter-filters :global(label > span) {
     font-size: 1rem;

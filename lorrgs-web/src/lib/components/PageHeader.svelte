@@ -3,13 +3,13 @@
   export let description: string;
 </script>
 
-<header class="ranking-page-header">
+<header class="page-header">
   <h2>{title}</h2>
   <p>{description}</p>
 </header>
 
 <style>
-  .ranking-page-header {
+  .page-header {
     margin-bottom: 24px;
   }
   h2 {

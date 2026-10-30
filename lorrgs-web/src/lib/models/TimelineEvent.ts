@@ -26,5 +26,6 @@ export type TimelineEvent = {
     targetName: string;
     kind: 'heal' | 'damage' | 'mana-returned';
     amount: number;
+    outcome?: string | null;
   }[] | null;
 };

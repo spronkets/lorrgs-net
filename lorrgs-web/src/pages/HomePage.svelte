@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Button from '../lib/components/Button.svelte';
   import Alert from '../lib/components/Alert.svelte';
   import Spinner from '../lib/components/Spinner.svelte';
   import { onMount, tick } from 'svelte';
@@ -10,12 +9,12 @@
   import type { WowRole } from '../lib/models/WowRole';
   import type { WowSpec } from '../lib/models/WowSpec';
   import EncounterFilters from '../lib/components/EncounterFilters.svelte';
-  import RankingPageHeader from '../lib/components/RankingPageHeader.svelte';
+  import PageHeader from '../lib/components/PageHeader.svelte';
   import RankingsList from '../lib/components/RankingsList.svelte';
   import BossIcon from '../lib/components/BossIcon.svelte';
-  import { getBlizzardClassColor } from '../lib/classColors';
   import { getClassIconUrl, getSpecIconUrl } from '../lib/wowAssets';
   import {
+    EDITION_OPTIONS,
     getApiEditionSlug,
     getAvailableSpecsForVersion,
     getRaidBossOptions,
@@ -45,7 +44,7 @@
   let lastRankingsRequestKey = '';
   let hasHydratedQuery = false;
 
-  const versionOrder = ['Anniversary', 'Mists of Pandaria', 'Era', 'Retail'];
+  const versionOrder = EDITION_OPTIONS;
   const versions = versionOrder;
 
   $: raids = getRaidsForEdition(raidCatalog, selectedVersion);
@@ -150,11 +149,6 @@
   function getSpecClassSlug(spec: WowSpec): string {
     const matchedClass = getSpecClass(spec);
     return matchedClass?.nameSlug || 'other';
-  }
-
-  function getSpecClassColor(spec: WowSpec): string {
-    const matchedClass = getSpecClass(spec);
-    return getBlizzardClassColor(matchedClass?.nameSlug, matchedClass?.color || '#7BA4BF');
   }
 
   function loadSelectionsFromQuery() {
@@ -302,12 +296,12 @@
 </script>
 
 <div class="home-page" class:comparison-open={isSelectionCollapsed}>
-  <RankingPageHeader
+  <PageHeader
     title="Spec Rankings"
     description="Compare cooldown usage across ranked players of a chosen specialization."
   />
   {#if isSelectionCollapsed && selectedSpecMeta && selectedBoss}
-    <div class="selection-collapsed" style="--class-accent: {getSpecClassColor(selectedSpecMeta)}">
+    <div class={`selection-collapsed class-accent ${getSpecClassSlug(selectedSpecMeta)}`}>
       <p class="label">Current Selection</p>
       <div class="selection-overview">
         <div>
@@ -326,7 +320,7 @@
                   alt=""
                 />
                 <img
-                  class="class-icon"
+                  class={`class-icon ${getSpecClassSlug(selectedSpecMeta)}`}
                   src={getClassIconUrl(getSpecClassSlug(selectedSpecMeta))}
                   alt={selectedClassMeta?.name || 'Class'}
                 />
@@ -341,12 +335,13 @@
           </h2>
         </div>
       </div>
-      <Button
-        variant="secondary-outline"
-        size="small"
-        class={['home-page-button', `edit-selection`]}
+      <button
+        class={['button', ['home-page-button', `edit-selection`]]}
+        data-tone="secondary"
+        data-outline="true"
+        data-size="small"
         type="button"
-        onclick={expandSelections}>Change selection</Button
+        onclick={expandSelections}>Change selection</button
       >
     </div>
   {:else}
@@ -365,14 +360,21 @@
         </h3>
         <div class="spec-grid">
           {#each specs as spec (spec.fullNameSlug)}
-            <Button
-              variant="unstyled"
+            <button
               class={[
-                'home-page-button',
-                `spec-card`,
-                { disabled: !selectedBoss, active: selectedSpec === spec.fullNameSlug }
+                'button',
+                [
+                  'home-page-button',
+                  `spec-card`,
+                  'class-accent',
+                  getSpecClassSlug(spec),
+                  { disabled: !selectedBoss, active: selectedSpec === spec.fullNameSlug }
+                ]
               ]}
-              style="--class-accent: {getSpecClassColor(spec)}"
+              data-tone="unstyled"
+              data-outline="false"
+              data-size="medium"
+              type="button"
               onclick={() => selectSpec(spec)}
               title={selectedBoss ? `View ${spec.fullName}` : 'Select a boss first'}
             >
@@ -384,14 +386,14 @@
                   loading="lazy"
                 />
                 <img
-                  class="class-icon"
+                  class={`class-icon ${getSpecClassSlug(spec)}`}
                   src={getClassIconUrl(getSpecClassSlug(spec))}
                   alt={getSpecClass(spec)?.name || 'Class'}
                   loading="lazy"
                 />
               </div>
               <span class="spec-name">{spec.fullName}</span>
-            </Button>
+            </button>
           {/each}
         </div>
       </div>
@@ -412,6 +414,7 @@
 </div>
 
 <style lang="scss">
+  @use '../lib/styles/classes';
   @use '../lib/styles/selection-tokens' as selectionTokens;
 
   .home-page {
@@ -649,15 +652,7 @@
   }
 
   .selection-title .spec-value {
-    color: oklch(
-      from
-        color-mix(
-          in srgb,
-          var(--class-accent, var(--summary-value)) var(--class-text-share, 55%),
-          var(--class-text-shade, #172433)
-        )
-        min(l, var(--class-text-ceiling, 0.49)) c h
-    );
+    @include classes.text-color(var(--class-accent, var(--summary-value)));
   }
 
   .versus {

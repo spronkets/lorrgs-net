@@ -55,6 +55,6 @@ public sealed class TimelineLoader(IReportTimelineService service, ILogger<Timel
         !string.IsNullOrWhiteSpace(reportCode) && reportCode.Length <= 32 &&
         reportCode.All(char.IsAsciiLetterOrDigit) && fightId > 0 &&
         (boss || sourceId is > 0 || !string.IsNullOrWhiteSpace(playerName)) &&
-        new[] { "retail", "anniversary", "mistsofpandaria", "era" }.Contains(edition);
+        new[] { "retail", "anniversary", "mistsofpandaria", "era", "classic_sod" }.Contains(edition);
 
 }
