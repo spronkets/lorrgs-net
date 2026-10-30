@@ -158,7 +158,10 @@ public sealed class ReportTimelineService(
     {
         if (reports is not IList<RankingReport> { IsReadOnly: false } mutableReports)
             throw new InvalidOperationException("Ranking report collection must support removal of inaccessible reports.");
-        logger.LogWarning("Removing inaccessible ranking report");
+        logger.LogWarning("Removing inaccessible ranking report {ReportCode} fights={FightIds}",
+            report.ReportId is { Length: > 0 and <= 32 } code && code.All(char.IsAsciiLetterOrDigit)
+                ? code : "[invalid]",
+            report.Fights.Select(fight => fight.FightId).Where(id => id > 0).ToArray());
         mutableReports.Remove(report);
     }
 

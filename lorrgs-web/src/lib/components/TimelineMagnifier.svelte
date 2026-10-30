@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SvelteMap } from 'svelte/reactivity';
   import type { InspectedSpell } from '../models/InspectedSpell';
   import type { TimelineMagnification } from '../models/TimelineMagnification';
   import {
@@ -44,36 +45,67 @@
   let modalHeight = $state(0);
   let viewportWidth = $state(1024);
   let viewportHeight = $state(768);
+  const costTimeline = $derived(magnifier?.timeline);
+  const manaCosts = $derived.by(() => {
+    const costs = new SvelteMap<number, SvelteMap<number, number>>();
+    for (const event of costTimeline?.events ?? []) {
+      if (
+        event.kind !== 'mana-spent' ||
+        event.isManaDrain ||
+        (event.sourceName && event.sourceName !== costTimeline?.playerName)
+      )
+        continue;
+      let spellCosts = costs.get(event.spellId);
+      if (!spellCosts) {
+        spellCosts = new SvelteMap<number, number>();
+        costs.set(event.spellId, spellCosts);
+      }
+      spellCosts.set(
+        event.timestamp,
+        (spellCosts.get(event.timestamp) ?? 0) + Math.max(0, event.amount ?? 0)
+      );
+    }
+    return costs;
+  });
   const visibleEvents = $derived(
     magnifier
       ? (magnifier.events ??
-          visibleTimelineEvents(
-            magnifier.timeline,
-            magnifier.resourceMode ? new Set() : hidden,
-            magnifier.resourceMode ? true : showCasts,
-            magnifier.resourceMode ? true : showBuffs,
-            magnifier.resourceMode === 'mana' ? false : showDeaths,
-            magnifier.resourceMode === 'health' && showDirectHeals,
-            magnifier.resourceMode === 'health' && showHots,
-            magnifier.resourceMode === 'health' && showDamageTaken,
-            magnifier.resourceMode === 'mana' && showManaSpent,
-            magnifier.resourceMode === 'mana' && showManaReceived
-          ))
+          visibleTimelineEvents(magnifier.timeline, magnifier.resourceMode ? new Set() : hidden, {
+            showCasts: magnifier.resourceMode ? true : showCasts,
+            showBuffs: magnifier.resourceMode ? true : showBuffs,
+            showDeaths: magnifier.resourceMode === 'mana' ? false : showDeaths,
+            showDirectHeals: magnifier.resourceMode === 'health' && showDirectHeals,
+            showHots: magnifier.resourceMode === 'health' && showHots,
+            showDamageTaken: magnifier.resourceMode === 'health' && showDamageTaken,
+            showManaSpent: magnifier.resourceMode === 'mana' && showManaSpent,
+            showManaReceived: magnifier.resourceMode === 'mana' && showManaReceived
+          }))
       : []
   );
   const activeEvents = $derived(
     visibleEvents.filter((event) => {
       if (magnifier?.timestamp == null) return true;
       const time = magnifier.timestamp;
-      if (event.kind !== 'cast' && magnifier.hoveredEvent?.kind === event.kind &&
-          magnifier.hoveredEvent.spellId === event.spellId &&
-          magnifier.hoveredEvent.timestamp === event.timestamp) return true;
+      if (
+        event.kind !== 'cast' &&
+        magnifier.hoveredEvent?.kind === event.kind &&
+        magnifier.hoveredEvent.spellId === event.spellId &&
+        magnifier.hoveredEvent.timestamp === event.timestamp
+      )
+        return true;
       if (isResourceHit(event)) {
         const hovered = magnifier.hoveredEvent;
-        return (hovered?.kind === event.kind && hovered.spellId === event.spellId &&
-          hovered.timestamp === event.timestamp) ||
-          (time <= event.timestamp && time >= event.timestamp -
-            (magnifier.previewPixelsPerMillisecond ? 22 / magnifier.previewPixelsPerMillisecond : 0));
+        return (
+          (hovered?.kind === event.kind &&
+            hovered.spellId === event.spellId &&
+            hovered.timestamp === event.timestamp) ||
+          (time <= event.timestamp &&
+            time >=
+              event.timestamp -
+                (magnifier.previewPixelsPerMillisecond
+                  ? 22 / magnifier.previewPixelsPerMillisecond
+                  : 0))
+        );
       }
       if (event.kind === 'cast') {
         const hovered = magnifier.hoveredEvent;
@@ -114,14 +146,17 @@
         ({ event }) =>
           magnifier &&
           (event.castStart ?? event.timestamp) -
-            ((event.kind === 'cast' || isResourceHit(event) || event.displayBelow) && magnifier.previewPixelsPerMillisecond
+            ((event.kind === 'cast' || isResourceHit(event) || event.displayBelow) &&
+            magnifier.previewPixelsPerMillisecond
               ? 22 / magnifier.previewPixelsPerMillisecond
               : 0) <=
             magnifier.start + magnifier.span &&
           event.timestamp +
             (event.kind === 'buff'
               ? (event.duration ?? 0)
-              : event.kind !== 'cast' && !isResourceHit(event) && magnifier.previewPixelsPerMillisecond
+              : event.kind !== 'cast' &&
+                  !isResourceHit(event) &&
+                  magnifier.previewPixelsPerMillisecond
                 ? (event.kind === 'death' ? 2 : 22) / magnifier.previewPixelsPerMillisecond
                 : 0) >=
             magnifier.start
@@ -144,15 +179,19 @@
   {@const start = magnifier.start}
   {@const span = magnifier.span}
   {@const health = magnifier.timeline.healthCapacities?.findLast(
-    (sample) => sample.timestamp <= (magnifier.timestamp ?? magnifier.start))}
+    (sample) => sample.timestamp <= (magnifier.timestamp ?? magnifier.start)
+  )}
   {@const nextHealth = magnifier.timeline.healthCapacities?.find(
-    (sample) => sample.timestamp > (magnifier.timestamp ?? magnifier.start))}
-  {@const nearbyEstimate = nextHealth?.estimatedMaxHealth != null &&
+    (sample) => sample.timestamp > (magnifier.timestamp ?? magnifier.start)
+  )}
+  {@const nearbyEstimate =
+    nextHealth?.estimatedMaxHealth != null &&
     nextHealth.timestamp - (magnifier.timestamp ?? magnifier.start) <= 1000
-      ? nextHealth.estimatedMaxHealth : null}
+      ? nextHealth.estimatedMaxHealth
+      : null}
   {@const maximumHealth = health?.maxHealth ?? health?.estimatedMaxHealth ?? nearbyEstimate}
-  {@const estimated = health?.maxHealth == null &&
-    (health?.estimatedMaxHealth != null || nearbyEstimate != null)}
+  {@const estimated =
+    health?.maxHealth == null && (health?.estimatedMaxHealth != null || nearbyEstimate != null)}
   <div
     class="timeline-magnifier"
     class:health={magnifier.resourceMode === 'health'}
@@ -178,9 +217,18 @@
       <div class="hover-time">At {preciseTimelineTime(magnifier.timestamp)}</div>
     {/if}
     {#if magnifier.resourceMode === 'mana'}
-      <div>Max mana: {magnifier.timeline.maxMana?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? 'Unavailable'}</div>
+      <div>
+        Max mana: {magnifier.timeline.maxMana?.toLocaleString(undefined, {
+          maximumFractionDigits: 2
+        }) ?? 'Unavailable'}
+      </div>
     {/if}
-    <div class="magnified-track" style:height={magnifier.mergedResources && visibleEvents.some((event) => event.displayBelow) ? '108px' : '68px'}>
+    <div
+      class="magnified-track"
+      style:height={magnifier.mergedResources && visibleEvents.some((event) => event.displayBelow)
+        ? '108px'
+        : '68px'}
+    >
       {#each lanes as { event }, index (index)}
         {@const spell = magnifier.timeline.spells.find((item) => item.id === event.spellId)}
         {@const appearance = spellAppearance(spell, castSpellIds.has(event.spellId))}
@@ -196,9 +244,11 @@
           ></span>
         {/if}
         {#if event.displayBelow && event.kind === 'buff'}
-          <span class="cast-window"
+          <span
+            class="cast-window"
             style={`--spell-color: ${resourceColor ?? appearance.color}; left: ${((event.timestamp - start) / span) * 100}%; width: ${((event.duration ?? 0) / span) * 100}%; top: 47px`}
-            aria-label={timelineEventDetail(event, spell)}></span>
+            aria-label={timelineEventDetail(event, spell)}
+          ></span>
         {/if}
         {#if event.kind === 'cast' && event.castStart != null}
           <span
@@ -225,7 +275,8 @@
               alt=""
             />
           {:else if event.kind === 'marker'}<span aria-label="Inferred marker">◇</span>
-          {:else if resourceColor && (event.kind !== 'buff' || event.displayBelow)}{spell?.name ?? `Spell ${event.spellId}`}
+          {:else if resourceColor && (event.kind !== 'buff' || event.displayBelow)}{spell?.name ??
+              `Spell ${event.spellId}`}
           {:else if event.kind === 'death'}†
           {:else if event.kind === 'cast'}◆{/if}</span
         >
@@ -247,16 +298,12 @@
     </div>
     <ul class="event-details">
       {#each details as event, index (index)}
-        {@const healthEvent = event.kind === 'heal' || event.kind === 'hot' || event.kind === 'damage'}
+        {@const healthEvent =
+          event.kind === 'heal' || event.kind === 'hot' || event.kind === 'damage'}
         {@const spell = magnifier.timeline.spells.find((spell) => spell.id === event.spellId)}
         {@const parts = timelineEventDetails({ ...event, sourceName: null }, spell, false)}
-        {@const manaCost = event.kind === 'cast'
-          ? magnifier.timeline.events.filter((cost) =>
-              cost.kind === 'mana-spent' && !cost.isManaDrain && cost.spellId === event.spellId &&
-              cost.timestamp === event.timestamp &&
-              (!cost.sourceName || cost.sourceName === magnifier.timeline.playerName))
-            .reduce((total, cost) => total + Math.max(0, cost.amount ?? 0), 0)
-          : 0}
+        {@const manaCost =
+          event.kind === 'cast' ? (manaCosts.get(event.spellId)?.get(event.timestamp) ?? 0) : 0}
         {@const casting =
           event.kind === 'cast' &&
           event.castStart != null &&
@@ -264,8 +311,11 @@
           magnifier.timestamp != null &&
           event.castStart <= magnifier.timestamp &&
           magnifier.timestamp < event.timestamp}
-        {@const channeling = event.kind === 'buff' && isChanneledSpell(spell) &&
-          magnifier.timestamp != null && event.timestamp <= magnifier.timestamp &&
+        {@const channeling =
+          event.kind === 'buff' &&
+          isChanneledSpell(spell) &&
+          magnifier.timestamp != null &&
+          event.timestamp <= magnifier.timestamp &&
           magnifier.timestamp < event.timestamp + (event.duration ?? 0)}
         <li
           class:ability-group={event.kind !== 'buff' &&
@@ -281,52 +331,71 @@
               {channeling
                 ? `${preciseTimelineTime(event.timestamp)} - ${preciseTimelineTime(event.timestamp + (event.duration ?? 0))} (${Number(((event.duration ?? 0) / 1000).toFixed(2))}s)`
                 : casting
-                ? `${preciseTimelineTime(event.castStart ?? event.timestamp)} - ${preciseTimelineTime(event.timestamp)} (${Number(((event.timestamp - (event.castStart ?? event.timestamp)) / 1000).toFixed(2))}s)`
-                : parts[0]}
+                  ? `${preciseTimelineTime(event.castStart ?? event.timestamp)} - ${preciseTimelineTime(event.timestamp)} (${Number(((event.timestamp - (event.castStart ?? event.timestamp)) / 1000).toFixed(2))}s)`
+                  : parts[0]}
             </span>
             <span class="detail-name">
-              {parts[1]}{#if event.sourceName}<span class="health-source">{` (${event.sourceName})`}</span>{/if}
-              {#if manaCost > 0}<span class="mana-cost mana-loss">{` -${manaCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}</span>{/if}
+              {parts[1]}{#if event.sourceName}<span class="health-source"
+                  >{` (${event.sourceName})`}</span
+                >{/if}
+              {#if manaCost > 0}<span class="mana-cost mana-loss"
+                  >{` -${manaCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}</span
+                >{/if}
             </span>
             <span class="detail-result">
-          {#if healthEvent}
-            {@const change = event.healthBeforePercent != null && event.healthAfterPercent != null
-              ? Number((event.healthAfterPercent - event.healthBeforePercent).toFixed(2))
-              : null}
-              <span class="health-result"
-                title={event.healthBeforeIsPreviousSnapshot
-                  ? 'Percentage change since the last recorded health snapshot before this event.'
-                  : undefined}
-              >
-                {#if event.amount != null}
-                  <span class:health-gain={event.kind !== 'damage'} class:health-loss={event.kind === 'damage'}>{parts[2]}</span>
-                {/if}
-                {#if change != null}
-                  <span class:health-gain={change >= 0} class:health-loss={change < 0}>
-                    ({change >= 0 ? '+' : ''}{change}%)
-                  </span>
-                {/if}
-              </span>
-          {:else if event.kind === 'mana-spent' || event.kind === 'mana-returned'}
-            {#if event.amount != null && Number(event.amount.toFixed(2)) > 0}
-              <span class="mana-cost" class:mana-loss={event.kind === 'mana-spent'}>{event.kind === 'mana-spent' ? '-' : '+'}{event.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-            {/if}
-          {:else}
-          {#each parts.slice(2) as detail, detailIndex (detailIndex)}
-            {#if detail !== 'Cast' && detail !== 'Buff'}
-              <span>{`${detail} `}</span>
-            {/if}
-          {/each}
-          {/if}
-          {#if event.kind === 'cast'}
-            <span class="cast-results">
-              {#each event.castResults?.filter((result) => Number(result.amount.toFixed(2)) > 0) ?? [] as result (`${result.targetId}-${result.kind}`)}
-                <span class:health-gain={result.kind === 'heal'} class:health-loss={result.kind === 'damage'}>
-                  {result.kind === 'heal' ? '+' : '-'}{result.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })} to {result.targetName}
+              {#if healthEvent}
+                {@const change =
+                  event.healthBeforePercent != null && event.healthAfterPercent != null
+                    ? Number((event.healthAfterPercent - event.healthBeforePercent).toFixed(2))
+                    : null}
+                <span
+                  class="health-result"
+                  title={event.healthBeforeIsPreviousSnapshot
+                    ? 'Percentage change since the last recorded health snapshot before this event.'
+                    : undefined}
+                >
+                  {#if event.amount != null}
+                    <span
+                      class:health-gain={event.kind !== 'damage'}
+                      class:health-loss={event.kind === 'damage'}>{parts[2]}</span
+                    >
+                  {/if}
+                  {#if change != null}
+                    <span class:health-gain={change >= 0} class:health-loss={change < 0}>
+                      ({change >= 0 ? '+' : ''}{change}%)
+                    </span>
+                  {/if}
                 </span>
-              {/each}
-            </span>
-          {/if}
+              {:else if event.kind === 'mana-spent' || event.kind === 'mana-returned'}
+                {#if event.amount != null && Number(event.amount.toFixed(2)) > 0}
+                  <span class="mana-cost" class:mana-loss={event.kind === 'mana-spent'}
+                    >{event.kind === 'mana-spent' ? '-' : '+'}{event.amount.toLocaleString(
+                      undefined,
+                      { maximumFractionDigits: 2 }
+                    )}</span
+                  >
+                {/if}
+              {:else}
+                {#each parts.slice(2) as detail, detailIndex (detailIndex)}
+                  {#if detail !== 'Cast' && detail !== 'Buff'}
+                    <span>{`${detail} `}</span>
+                  {/if}
+                {/each}
+              {/if}
+              {#if event.kind === 'cast'}
+                <span class="cast-results">
+                  {#each event.castResults?.filter((result) => Number(result.amount.toFixed(2)) > 0) ?? [] as result (`${result.targetId}-${result.kind}`)}
+                    <span
+                      class:health-gain={result.kind === 'heal'}
+                      class:health-loss={result.kind === 'damage'}
+                    >
+                      {result.kind === 'heal' ? '+' : '-'}{result.amount.toLocaleString(undefined, {
+                        maximumFractionDigits: 2
+                      })} to {result.targetName}
+                    </span>
+                  {/each}
+                </span>
+              {/if}
             </span>
           </div>
         </li>

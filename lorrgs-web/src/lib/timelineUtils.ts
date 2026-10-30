@@ -6,8 +6,13 @@ import type { TimelineSpell } from './models/TimelineSpell';
 export const TIMELINE_ZOOM_LEVELS = [100, 200, 400, 800] as const;
 
 export function isResourceHit(event: TimelineEvent): boolean {
-  return event.kind === 'heal' || event.kind === 'hot' || event.kind === 'damage' ||
-    event.kind === 'mana-spent' || event.kind === 'mana-returned';
+  return (
+    event.kind === 'heal' ||
+    event.kind === 'hot' ||
+    event.kind === 'damage' ||
+    event.kind === 'mana-spent' ||
+    event.kind === 'mana-returned'
+  );
 }
 
 export function timelineKey(report: RankingReport): string {
@@ -29,7 +34,9 @@ export function timelineTime(milliseconds: number): string {
 
 export function preciseTimelineTime(milliseconds: number): string {
   const value = Math.max(0, Math.round(milliseconds / 10) * 10);
-  const fraction = String((value % 1000) / 10).padStart(2, '0').replace(/0+$/, '');
+  const fraction = String((value % 1000) / 10)
+    .padStart(2, '0')
+    .replace(/0+$/, '');
   return `${timelineTime(value)}${fraction ? `.${fraction}` : ''}`;
 }
 
@@ -47,14 +54,17 @@ export function timelineEventDetails(
 ): string[] {
   if (event.kind === 'heal' || event.kind === 'hot' || event.kind === 'damage') {
     const percent = (value: number) => Number(value.toFixed(2));
-    const delta = event.healthBeforePercent != null && event.healthAfterPercent != null
-      ? percent(event.healthAfterPercent - event.healthBeforePercent)
-      : null;
+    const delta =
+      event.healthBeforePercent != null && event.healthAfterPercent != null
+        ? percent(event.healthAfterPercent - event.healthBeforePercent)
+        : null;
     return [
       preciseTimelineTime(event.timestamp),
       spell?.name ?? `Spell ${event.spellId}`,
       ...(event.amount != null
-        ? [`${event.kind === 'damage' ? '-' : '+'}${event.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}`]
+        ? [
+            `${event.kind === 'damage' ? '-' : '+'}${event.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+          ]
         : []),
       `(${event.healthAfterPercent != null ? `${percent(event.healthAfterPercent)}%` : 'unknown'}, ${delta != null ? `${delta >= 0 ? '+' : ''}${delta}%` : 'unknown change'}${event.sourceName ? `, by ${event.sourceName}` : ''})`
     ];
@@ -76,7 +86,9 @@ export function timelineEventDetails(
     ...(event.kind === 'cast' && spell?.name.trim().toLowerCase() === 'melee'
       ? []
       : [labels[event.kind]]),
-    ...(event.amount != null ? [event.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })] : []),
+    ...(event.amount != null
+      ? [event.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })]
+      : []),
     ...(event.sourceName ? [`by ${event.sourceName}`] : []),
     ...(includeTiming && event.castStart != null
       ? [`Cast started ${preciseTimelineTime(event.castStart)}`]
@@ -183,8 +195,12 @@ export function timelineSpellGroups(timelines: ReportTimeline[]) {
 }
 
 export function isChanneledSpell(spell: TimelineSpell | undefined): boolean {
-  return spell != null &&
-    /^(evocation|tranquility|hurricane|blizzard|arcane missiles|mind flay|mind sear|drain life|drain mana|drain soul|health funnel|hellfire|rain of fire|penance|divine hymn|hymn of hope|starshards|volley|first aid|.* bandage)( \(rank \d+\))?$/i.test(spell.name);
+  return (
+    spell != null &&
+    /^(evocation|tranquility|hurricane|blizzard|arcane missiles|mind flay|mind sear|drain life|drain mana|drain soul|health funnel|hellfire|rain of fire|penance|divine hymn|hymn of hope|starshards|volley|first aid|.* bandage)( \(rank \d+\))?$/i.test(
+      spell.name
+    )
+  );
 }
 
 export const healingSpellNames =
@@ -199,13 +215,26 @@ export function resourceEventColor(
   if (event.kind === 'damage') return '#ff6969';
   if (event.kind === 'heal' || event.kind === 'hot') return '#69d98b';
   if (event.kind === 'cast') {
-    if (event.castResults?.some((result) => result.kind === 'heal') ||
-        spell && healingSpellNames.test(spell.name)) return '#69d98b';
+    if (
+      event.castResults?.some((result) => result.kind === 'heal') ||
+      (spell && healingSpellNames.test(spell.name))
+    )
+      return '#69d98b';
     if (event.castResults?.some((result) => result.kind === 'damage')) return '#ff6969';
   }
-  if (spell && /\b(healing potion|rejuvenation potion|healthstone|healing stone|ironshield|stoneshield|armor potion|healing injector)\b/i.test(spell.name))
+  if (
+    spell &&
+    /\b(healing potion|rejuvenation potion|healthstone|healing stone|ironshield|stoneshield|armor potion|healing injector)\b/i.test(
+      spell.name
+    )
+  )
     return '#69d98b';
-  if (spell && /\b(mana potion|mana injector|mana gem|dark rune|demonic rune|innervate|evocation|mana tide|divine plea|shadowfiend|hymn of hope|life tap|arcane torrent)\b/i.test(spell.name))
+  if (
+    spell &&
+    /\b(mana potion|mana injector|mana gem|dark rune|demonic rune|innervate|evocation|mana tide|divine plea|shadowfiend|hymn of hope|life tap|arcane torrent)\b/i.test(
+      spell.name
+    )
+  )
     return '#69aaff';
   if (event.displayBelow) {
     return '#69d98b';
@@ -215,17 +244,30 @@ export function resourceEventColor(
   return undefined;
 }
 
+export type TimelineVisibilityOptions = {
+  showCasts: boolean;
+  showBuffs: boolean;
+  showDeaths: boolean;
+  showDirectHeals?: boolean;
+  showHots?: boolean;
+  showDamageTaken?: boolean;
+  showManaSpent?: boolean;
+  showManaReceived?: boolean;
+};
+
 export function visibleTimelineEvents(
   timeline: ReportTimeline,
   hidden: Set<number>,
-  showCasts: boolean,
-  showBuffs: boolean,
-  showDeaths: boolean,
-  showDirectHeals = false,
-  showHots = false,
-  showDamageTaken = false,
-  showManaSpent = false,
-  showManaReceived = false
+  {
+    showCasts,
+    showBuffs,
+    showDeaths,
+    showDirectHeals = false,
+    showHots = false,
+    showDamageTaken = false,
+    showManaSpent = false,
+    showManaReceived = false
+  }: TimelineVisibilityOptions
 ): TimelineEvent[] {
   return timeline.events
     .filter((event) =>
@@ -237,7 +279,8 @@ export function visibleTimelineEvents(
             (event.kind === 'heal' && showDirectHeals) ||
             (event.kind === 'hot' && showHots) ||
             (event.kind === 'damage' && showDamageTaken) ||
-            (event.kind === 'mana-spent' && (showManaSpent || showDamageTaken && event.isManaDrain)) ||
+            (event.kind === 'mana-spent' &&
+              (showManaSpent || (showDamageTaken && event.isManaDrain))) ||
             (event.kind === 'mana-returned' && showManaReceived))
     )
     .map((event) =>
@@ -249,11 +292,7 @@ export function visibleTimelineEvents(
 
 export function timelineEventTop(event: TimelineEvent): number {
   if (event.displayBelow) return 75;
-  return event.kind === 'buff'
-      ? 47
-      : event.kind === 'death'
-        ? 28
-        : 19;
+  return event.kind === 'buff' ? 47 : event.kind === 'death' ? 28 : 19;
 }
 export function fightDuration(report: RankingReport, timeline?: ReportTimeline): number {
   return timeline?.duration || report.fights?.[0]?.duration || report.duration || 0;

@@ -14,6 +14,26 @@ public sealed class ReportTimelineServiceTests : IDisposable
     public void Dispose() => fixture.Dispose();
 
     [Theory]
+    [InlineData("ValidReport123", "ValidReport123")]
+    [InlineData("bad\r\nforged", "[invalid]")]
+    public async Task UnavailablePhaseReportsLogValidatedIdentity(string reportCode, string loggedCode)
+    {
+        using var handler = new QueueHandler("""{"data":{"reportData":{"r0":null}}}""");
+        var logger = new RecordingLogger();
+        var service = new ReportTimelineService(fixture.CreateClient(handler), logger);
+        var reports = new List<RankingReport>
+        {
+            new() { ReportId = reportCode, Title = "Phase report",
+                Fights = [new RankingFight { FightId = 42, Name = "Boss" }] }
+        };
+        await service.PopulateFightPhasesAsync(reports, "retail", default);
+        Assert.Empty(reports);
+        Assert.Contains(logger.Messages, message =>
+            message.Contains($"Removing inaccessible ranking report {loggedCode} fights=42", StringComparison.Ordinal));
+        Assert.All(logger.Messages, message => Assert.DoesNotContain("\r\n", message));
+    }
+
+    [Theory]
     [InlineData("\r")]
     [InlineData("\n")]
     [InlineData("\r\n")]
@@ -619,6 +639,32 @@ public sealed class ReportTimelineServiceTests : IDisposable
             """);
         var result = ReportTimelineService.NormalizeEvents(events, 7, 0, 300000, true);
         Assert.Equal(new TimelineEvent(28515, 1000, null, "cast"), Assert.Single(result));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PostFightReapplicationDoesNotPairItsRemovalWithAnEarlierUnclosedBuff(bool complete)
+    {
+        var events = ParseEvents("""
+            [{"type":"applybuff","timestamp":1000,"targetID":7,"abilityGameID":99},
+             {"type":"applybuff","timestamp":101000,"targetID":7,"abilityGameID":99},
+             {"type":"removebuff","timestamp":110000,"targetID":7,"abilityGameID":99}]
+            """);
+        Assert.Empty(ReportTimelineService.NormalizeEvents(events, 7, 0, 100000, complete));
+    }
+
+    [Fact]
+    public void PostFightReapplicationDoesNotSuppressAnAlreadyMeasuredInFightInterval()
+    {
+        var events = ParseEvents("""
+            [{"type":"applybuff","timestamp":1000,"targetID":7,"abilityGameID":99},
+             {"type":"removebuff","timestamp":90000,"targetID":7,"abilityGameID":99},
+             {"type":"applybuff","timestamp":101000,"targetID":7,"abilityGameID":99},
+             {"type":"removebuff","timestamp":110000,"targetID":7,"abilityGameID":99}]
+            """);
+        Assert.Equal(new TimelineEvent(99, 1000, 89000, "buff"),
+            Assert.Single(ReportTimelineService.NormalizeEvents(events, 7, 0, 100000, true)));
     }
 
     [Fact]

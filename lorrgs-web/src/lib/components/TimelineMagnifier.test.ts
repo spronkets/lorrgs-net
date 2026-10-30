@@ -7,11 +7,25 @@ describe('TimelineMagnifier', () => {
   it('uses green on healing cast preview icons and their measured connectors', () => {
     const timeline = response(rows[0].report);
     timeline.spells = [{ id: 1, name: 'Chain Heal', icon: 'spell_nature_healingwavegreater.jpg' }];
-    timeline.events = [{ spellId: 1, timestamp: 12000, castStart: 10000, duration: 2000, kind: 'cast' }];
+    timeline.events = [
+      { spellId: 1, timestamp: 12000, castStart: 10000, duration: 2000, kind: 'cast' }
+    ];
     const { container } = render(TimelineMagnifier, {
-      magnifier: { timeline, timestamp: 11000, start: 10000, span: 10000, x: 200, y: 400, zoom: 800 },
-      inspected: null, hidden: new Set<number>(), castSpellIds: new Set([1]),
-      showCasts: true, showBuffs: true, showDeaths: true
+      magnifier: {
+        timeline,
+        timestamp: 11000,
+        start: 10000,
+        span: 10000,
+        x: 200,
+        y: 400,
+        zoom: 800
+      },
+      inspected: null,
+      hidden: new Set<number>(),
+      castSpellIds: new Set([1]),
+      showCasts: true,
+      showBuffs: true,
+      showDeaths: true
     });
     for (const selector of ['.magnified-event.cast', '.cast-connectors', '.cast-window'])
       expect(container.querySelector(selector)).toHaveStyle({ '--spell-color': '#69d98b' });
@@ -23,55 +37,129 @@ describe('TimelineMagnifier', () => {
     const timeline = response(rows[0].report);
     timeline.events = [{ spellId: 1, timestamp: 12000, duration: null, kind, amount: 1250.125 }];
     const { container } = render(TimelineMagnifier, {
-      magnifier: { timeline, events: timeline.events, timestamp: 12000,
-        start: 10000, span: 10000, x: 200, y: 400, zoom: 800 },
-      inspected: null, hidden: new Set<number>(), castSpellIds: new Set<number>(),
-      showCasts: true, showBuffs: true, showDeaths: true
+      magnifier: {
+        timeline,
+        events: timeline.events,
+        timestamp: 12000,
+        start: 10000,
+        span: 10000,
+        x: 200,
+        y: 400,
+        zoom: 800
+      },
+      inspected: null,
+      hidden: new Set<number>(),
+      castSpellIds: new Set<number>(),
+      showCasts: true,
+      showBuffs: true,
+      showDeaths: true
     });
     expect(container.querySelector('.detail-result .mana-cost')).toHaveTextContent(amount);
-    expect(container.querySelector('.detail-result .mana-cost')?.classList.contains('mana-loss'))
-      .toBe(kind === 'mana-spent');
-    expect(container.querySelector('.detail-result')).not.toHaveTextContent(/Mana returned|Mana spent/);
+    expect(
+      container.querySelector('.detail-result .mana-cost')?.classList.contains('mana-loss')
+    ).toBe(kind === 'mana-spent');
+    expect(container.querySelector('.detail-result')).not.toHaveTextContent(
+      /Mana returned|Mana spent/
+    );
   });
   it('shows recorded mana cost beside the cast name even when mana events are hidden', async () => {
     const timeline = response(rows[0].report);
     timeline.spells = [{ id: 1, name: 'Holy Light', icon: null }];
     timeline.events = [
       { spellId: 1, timestamp: 12000, castStart: 10000, duration: 2000, kind: 'cast' },
-      { spellId: 1, timestamp: 12000, duration: null, kind: 'mana-spent',
-        amount: 250.125, sourceName: timeline.playerName },
+      {
+        spellId: 1,
+        timestamp: 12000,
+        duration: null,
+        kind: 'mana-spent',
+        amount: 250.125,
+        sourceName: timeline.playerName
+      },
       { spellId: 1, timestamp: 13000, duration: null, kind: 'mana-spent', amount: 999 },
-      { spellId: 1, timestamp: 12000, duration: null, kind: 'mana-spent',
-        amount: 888, sourceName: 'Enemy' }
+      {
+        spellId: 1,
+        timestamp: 12000,
+        duration: null,
+        kind: 'mana-spent',
+        amount: 888,
+        sourceName: 'Enemy'
+      },
+      {
+        spellId: 1,
+        timestamp: 12000,
+        duration: null,
+        kind: 'mana-spent',
+        amount: 999,
+        isManaDrain: true
+      }
     ];
     const input = {
-      magnifier: { timeline, timestamp: 11000, start: 10000, span: 10000,
-        x: 200, y: 400, zoom: 800 },
-      inspected: null, hidden: new Set<number>(), castSpellIds: new Set([1]),
-      showCasts: true, showBuffs: true, showDeaths: true
+      magnifier: {
+        timeline,
+        timestamp: 11000,
+        start: 10000,
+        span: 10000,
+        x: 200,
+        y: 400,
+        zoom: 800
+      },
+      inspected: null,
+      hidden: new Set<number>(),
+      castSpellIds: new Set([1]),
+      showCasts: true,
+      showBuffs: true,
+      showDeaths: true
     };
     const { container, rerender } = render(TimelineMagnifier, input);
     expect(container.querySelector('.detail-name')).toHaveTextContent('Holy Light -250.13');
     expect(container.querySelector('.detail-name .mana-cost')).toHaveClass('mana-loss');
     expect(container.querySelectorAll('.event-details li')).toHaveLength(1);
-    await rerender({ ...input, magnifier: { ...input.magnifier, timestamp: 12000,
-      hoveredEvent: timeline.events[0] } });
+    await rerender({
+      ...input,
+      magnifier: { ...input.magnifier, timestamp: 12000, hoveredEvent: timeline.events[0] }
+    });
     expect(container.querySelector('.detail-name')).toHaveTextContent('Holy Light -250.13');
-    await rerender({ ...input, magnifier: { ...input.magnifier,
-      timeline: { ...timeline, events: [timeline.events[0]] } } });
+    await rerender({
+      ...input,
+      magnifier: {
+        ...input.magnifier,
+        timeline: {
+          ...timeline,
+          events: [
+            ...timeline.events,
+            { spellId: 1, timestamp: 12000, duration: null, kind: 'mana-spent', amount: 25 },
+            { spellId: 2, timestamp: 12000, duration: null, kind: 'mana-spent', amount: 777 }
+          ]
+        }
+      }
+    });
+    expect(container.querySelector('.detail-name')).toHaveTextContent('Holy Light -275.13');
+    await rerender({
+      ...input,
+      magnifier: { ...input.magnifier, timeline: { ...timeline, events: [timeline.events[0]] } }
+    });
     expect(container.querySelector('.mana-cost')).toBeNull();
   });
   it('labels recorded channel intervals without extending them past removal', async () => {
     const timeline = response(rows[0].report);
     timeline.spells = [{ id: 12051, name: 'Evocation', icon: null }];
-    timeline.events = [
-      { spellId: 12051, timestamp: 10000, duration: 6000, kind: 'buff' }
-    ];
+    timeline.events = [{ spellId: 12051, timestamp: 10000, duration: 6000, kind: 'buff' }];
     const input = {
-      magnifier: { timeline, timestamp: 12000, start: 10000, span: 10000,
-        x: 200, y: 400, zoom: 800 },
-      inspected: null, hidden: new Set<number>(), castSpellIds: new Set<number>(),
-      showCasts: true, showBuffs: true, showDeaths: true
+      magnifier: {
+        timeline,
+        timestamp: 12000,
+        start: 10000,
+        span: 10000,
+        x: 200,
+        y: 400,
+        zoom: 800
+      },
+      inspected: null,
+      hidden: new Set<number>(),
+      castSpellIds: new Set<number>(),
+      showCasts: true,
+      showBuffs: true,
+      showDeaths: true
     };
     const { container, rerender } = render(TimelineMagnifier, input);
     expect(container.querySelector('.detail-name')).toHaveTextContent(/^Evocation$/);
@@ -79,30 +167,64 @@ describe('TimelineMagnifier', () => {
     await rerender({ ...input, magnifier: { ...input.magnifier, timestamp: 16000 } });
     expect(container.querySelector('.detail-name')).toBeNull();
   });
-  it.each([[-100, 16], [2000, 648]])(
-    'clamps the complete zoom window inside the viewport at pointer x=%s', (x, left) => {
-      const { container } = render(TimelineMagnifier, {
-        magnifier: { timeline: response(rows[0].report), start: 0, span: 10000,
-          x, y: -100, trackTop: -100, zoom: 800 },
-        inspected: null, hidden: new Set<number>(), castSpellIds: new Set<number>(),
-        showCasts: true, showBuffs: true, showDeaths: true
-      });
-      expect(container.querySelector('.timeline-magnifier'))
-        .toHaveStyle({ left: `${left}px`, top: '16px' });
-    }
-  );
+  it.each([
+    [-100, 16],
+    [2000, 648]
+  ])('clamps the complete zoom window inside the viewport at pointer x=%s', (x, left) => {
+    const { container } = render(TimelineMagnifier, {
+      magnifier: {
+        timeline: response(rows[0].report),
+        start: 0,
+        span: 10000,
+        x,
+        y: -100,
+        trackTop: -100,
+        zoom: 800
+      },
+      inspected: null,
+      hidden: new Set<number>(),
+      castSpellIds: new Set<number>(),
+      showCasts: true,
+      showBuffs: true,
+      showDeaths: true
+    });
+    expect(container.querySelector('.timeline-magnifier')).toHaveStyle({
+      left: `${left}px`,
+      top: '16px'
+    });
+  });
   it('mirrors the merged resource lane and buff duration bars in the zoom preview', () => {
     const timeline = response(rows[0].report);
     timeline.events = [
       { spellId: 1, timestamp: 12000, duration: null, kind: 'cast', displayBelow: false },
-      { spellId: 2, timestamp: 12000, duration: null, kind: 'heal', displayBelow: true, amount: 100 },
+      {
+        spellId: 2,
+        timestamp: 12000,
+        duration: null,
+        kind: 'heal',
+        displayBelow: true,
+        amount: 100
+      },
       { spellId: 3, timestamp: 12000, duration: 3000, kind: 'buff', displayBelow: true }
     ];
     const { container } = render(TimelineMagnifier, {
-      magnifier: { timeline, events: timeline.events, mergedResources: true,
-        timestamp: 12000, start: 10000, span: 10000, x: 200, y: 400, zoom: 800 },
-      inspected: null, hidden: new Set<number>(), castSpellIds: new Set([1]),
-      showCasts: true, showBuffs: true, showDeaths: true
+      magnifier: {
+        timeline,
+        events: timeline.events,
+        mergedResources: true,
+        timestamp: 12000,
+        start: 10000,
+        span: 10000,
+        x: 200,
+        y: 400,
+        zoom: 800
+      },
+      inspected: null,
+      hidden: new Set<number>(),
+      castSpellIds: new Set([1]),
+      showCasts: true,
+      showBuffs: true,
+      showDeaths: true
     });
     expect(container.querySelector('.magnified-track')).toHaveStyle({ height: '108px' });
     expect(container.querySelectorAll('.magnified-event.below')).toHaveLength(2);
@@ -112,15 +234,29 @@ describe('TimelineMagnifier', () => {
     expect(container.querySelector('.cast-window')).not.toBeNull();
   });
   it.each(['heal', 'hot', 'damage', 'mana-spent', 'mana-returned'] as const)(
-    'aligns %s preview icons and hover detection to the left of the landing line', (kind) => {
+    'aligns %s preview icons and hover detection to the left of the landing line',
+    (kind) => {
       const timeline = response(rows[0].report);
       timeline.events = [{ spellId: 31884, timestamp: 12000, duration: null, kind }];
       const { container } = render(TimelineMagnifier, {
-        magnifier: { timeline, events: timeline.events, resourceMode: 'health',
-          timestamp: 11900, start: 10000, span: 10000, previewPixelsPerMillisecond: 0.1,
-          x: 200, y: 400, zoom: 800 },
-        inspected: null, hidden: new Set<number>(), castSpellIds: new Set<number>(),
-        showCasts: true, showBuffs: true, showDeaths: true
+        magnifier: {
+          timeline,
+          events: timeline.events,
+          resourceMode: 'health',
+          timestamp: 11900,
+          start: 10000,
+          span: 10000,
+          previewPixelsPerMillisecond: 0.1,
+          x: 200,
+          y: 400,
+          zoom: 800
+        },
+        inspected: null,
+        hidden: new Set<number>(),
+        castSpellIds: new Set<number>(),
+        showCasts: true,
+        showBuffs: true,
+        showDeaths: true
       });
       expect(container.querySelector('.magnified-event')).toHaveClass('cast-icon');
       expect(container.querySelector('.cast-connectors')).toHaveClass('instant');
@@ -130,7 +266,9 @@ describe('TimelineMagnifier', () => {
   );
   it('uses only cursor-time health evidence and invalidates it across aura changes', async () => {
     const timeline = {
-      ...response(rows[0].report), maxHealth: 20000, estimatedMaxHealth: 19000,
+      ...response(rows[0].report),
+      maxHealth: 20000,
+      estimatedMaxHealth: 19000,
       healthCapacities: [
         { timestamp: 10000, maxHealth: null, estimatedMaxHealth: 16127 },
         { timestamp: 13000, maxHealth: null, estimatedMaxHealth: null },
@@ -141,21 +279,33 @@ describe('TimelineMagnifier', () => {
     };
     const input = {
       magnifier: {
-        timeline, resourceMode: 'health' as const, timestamp: 12000,
-        start: 10000, span: 10000, x: 200, y: 400, zoom: 800
+        timeline,
+        resourceMode: 'health' as const,
+        timestamp: 12000,
+        start: 10000,
+        span: 10000,
+        x: 200,
+        y: 400,
+        zoom: 800
       },
-      inspected: null, hidden: new Set<number>(), castSpellIds: new Set<number>(),
-      showCasts: true, showBuffs: true, showDeaths: true
+      inspected: null,
+      hidden: new Set<number>(),
+      castSpellIds: new Set<number>(),
+      showCasts: true,
+      showBuffs: true,
+      showDeaths: true
     };
     const { rerender } = render(TimelineMagnifier, input);
     expect(screen.getByText('Health ~16,127')).toBeInTheDocument();
     expect(screen.queryByText(/Max health:/)).not.toBeInTheDocument();
     await rerender({
-      ...input, magnifier: { ...input.magnifier, timestamp: 14000 }
+      ...input,
+      magnifier: { ...input.magnifier, timestamp: 14000 }
     });
     expect(screen.getByText('Health 17,000')).toBeInTheDocument();
     await rerender({
-      ...input, magnifier: { ...input.magnifier, timestamp: 13500 }
+      ...input,
+      magnifier: { ...input.magnifier, timestamp: 13500 }
     });
     expect(screen.getByText('Health')).toBeInTheDocument();
     await rerender({ ...input, magnifier: { ...input.magnifier, timestamp: 8999 } });
@@ -170,31 +320,54 @@ describe('TimelineMagnifier', () => {
   it('shows each recorded target result throughout the cast hover interval', async () => {
     const timeline = response(rows[0].report);
     timeline.spells = [{ id: 1, name: 'Holy Shock', icon: null }];
-    timeline.events = [{
-      spellId: 1, timestamp: 12000, castStart: 10000, duration: 2000, kind: 'cast',
-      castResults: [
-        { targetId: 8, targetName: 'Ally', kind: 'heal', amount: 1250 },
-        { targetId: 10, targetName: 'Other Ally', kind: 'heal', amount: 750.125 },
-        { targetId: 11, targetName: 'Zero Heal', kind: 'heal', amount: 0 },
-        { targetId: 12, targetName: 'Zero Damage', kind: 'damage', amount: 0 },
-        { targetId: 13, targetName: 'Rounded Zero', kind: 'heal', amount: 0.001 },
-        { targetId: 9, targetName: 'Enemy', kind: 'damage', amount: 2500 }
-      ]
-    }];
+    timeline.events = [
+      {
+        spellId: 1,
+        timestamp: 12000,
+        castStart: 10000,
+        duration: 2000,
+        kind: 'cast',
+        castResults: [
+          { targetId: 8, targetName: 'Ally', kind: 'heal', amount: 1250 },
+          { targetId: 10, targetName: 'Other Ally', kind: 'heal', amount: 750.125 },
+          { targetId: 11, targetName: 'Zero Heal', kind: 'heal', amount: 0 },
+          { targetId: 12, targetName: 'Zero Damage', kind: 'damage', amount: 0 },
+          { targetId: 13, targetName: 'Rounded Zero', kind: 'heal', amount: 0.001 },
+          { targetId: 9, targetName: 'Enemy', kind: 'damage', amount: 2500 }
+        ]
+      }
+    ];
     const input = {
       magnifier: {
-        timeline, events: timeline.events, hoveredEvent: timeline.events[0],
-        timestamp: 12000, start: 10000, span: 10000, x: 200, y: 400, zoom: 800
+        timeline,
+        events: timeline.events,
+        hoveredEvent: timeline.events[0],
+        timestamp: 12000,
+        start: 10000,
+        span: 10000,
+        x: 200,
+        y: 400,
+        zoom: 800
       },
-      inspected: null, hidden: new Set<number>(), castSpellIds: new Set([1]),
-      showCasts: true, showBuffs: true, showDeaths: true
+      inspected: null,
+      hidden: new Set<number>(),
+      castSpellIds: new Set([1]),
+      showCasts: true,
+      showBuffs: true,
+      showDeaths: true
     };
     const { container, rerender } = render(TimelineMagnifier, input);
     expect(container.querySelectorAll('.cast-results > .health-gain')).toHaveLength(2);
-    expect(container.querySelectorAll('.cast-results > .health-gain')[0]).toHaveTextContent('+1,250 to Ally');
-    expect(container.querySelectorAll('.cast-results > .health-gain')[1]).toHaveTextContent('+750.13 to Other Ally');
+    expect(container.querySelectorAll('.cast-results > .health-gain')[0]).toHaveTextContent(
+      '+1,250 to Ally'
+    );
+    expect(container.querySelectorAll('.cast-results > .health-gain')[1]).toHaveTextContent(
+      '+750.13 to Other Ally'
+    );
     expect(container.querySelector('.health-loss')).toHaveTextContent('-2,500 to Enemy');
-    expect(container.querySelector('.cast-results')).not.toHaveTextContent(/Zero Heal|Zero Damage|Rounded Zero/);
+    expect(container.querySelector('.cast-results')).not.toHaveTextContent(
+      /Zero Heal|Zero Damage|Rounded Zero/
+    );
     const row = container.querySelector('.detail-row');
     expect(row?.children).toHaveLength(3);
     expect(row?.querySelector('.detail-time')).toHaveTextContent('0:12');
@@ -209,28 +382,50 @@ describe('TimelineMagnifier', () => {
   it('shows health before and after the hovered heal alongside its ability and healer', () => {
     const timeline = response(rows[0].report);
     timeline.spells = [{ id: 1, name: 'Holy Light', icon: null }];
-    timeline.events = [{
-      spellId: 1, timestamp: 12000, duration: null, kind: 'heal',
-      sourceName: 'zzOLDHealing Stream Totem VI', amount: 3000,
-      healthBeforePercent: 40, healthAfterPercent: 70,
-      healthBeforeIsPreviousSnapshot: true
-    }];
+    timeline.events = [
+      {
+        spellId: 1,
+        timestamp: 12000,
+        duration: null,
+        kind: 'heal',
+        sourceName: 'zzOLDHealing Stream Totem VI',
+        amount: 3000,
+        healthBeforePercent: 40,
+        healthAfterPercent: 70,
+        healthBeforeIsPreviousSnapshot: true
+      }
+    ];
     const { container } = render(TimelineMagnifier, {
       magnifier: {
-        timeline, events: timeline.events, hoveredEvent: timeline.events[0],
-        resourceMode: 'health', timestamp: 12000, start: 10000, span: 10000,
-        x: 200, y: 400, zoom: 800
+        timeline,
+        events: timeline.events,
+        hoveredEvent: timeline.events[0],
+        resourceMode: 'health',
+        timestamp: 12000,
+        start: 10000,
+        span: 10000,
+        x: 200,
+        y: 400,
+        zoom: 800
       },
-      inspected: null, hidden: new Set<number>(), castSpellIds: new Set<number>(),
-      showCasts: true, showBuffs: true, showDeaths: true
+      inspected: null,
+      hidden: new Set<number>(),
+      castSpellIds: new Set<number>(),
+      showCasts: true,
+      showBuffs: true,
+      showDeaths: true
     });
     const details = container.querySelector('.event-details');
     expect(details).toHaveTextContent('Holy Light');
-    expect(details?.querySelector('.health-source')).toHaveTextContent('(zzOLDHealing Stream Totem VI)');
+    expect(details?.querySelector('.health-source')).toHaveTextContent(
+      '(zzOLDHealing Stream Totem VI)'
+    );
     expect(details?.querySelector('.health-result')).toHaveTextContent('+3,000 (+30%)');
     expect(details?.querySelector('.health-result')).not.toHaveTextContent('70%');
     expect(details?.querySelectorAll('.health-gain')).toHaveLength(2);
-    expect(details?.querySelector('.health-detail-line')).toHaveTextContent('Holy Light (zzOLDHealing Stream Totem VI)');
+    expect(details?.querySelector('.health-detail-line')).toHaveTextContent(
+      'Holy Light (zzOLDHealing Stream Totem VI)'
+    );
     expect(details?.querySelector('.health-gain')).toHaveTextContent('+3,000');
     expect(details).not.toHaveTextContent('Direct heal received');
   });
@@ -272,10 +467,20 @@ describe('TimelineMagnifier', () => {
       { id: 2, name: 'Holy Shock', icon: null }
     ];
     timeline.events = [
-      { spellId: 1, timestamp: 12000, duration: null, kind: 'cast',
-        castResults: [{ targetId: 8, targetName: 'Boss', kind: 'damage', amount: 172 }] },
-      { spellId: 1, timestamp: 12000, duration: null, kind: 'cast',
-        castResults: [{ targetId: 8, targetName: 'Boss', kind: 'damage', amount: 256 }] },
+      {
+        spellId: 1,
+        timestamp: 12000,
+        duration: null,
+        kind: 'cast',
+        castResults: [{ targetId: 8, targetName: 'Boss', kind: 'damage', amount: 172 }]
+      },
+      {
+        spellId: 1,
+        timestamp: 12000,
+        duration: null,
+        kind: 'cast',
+        castResults: [{ targetId: 8, targetName: 'Boss', kind: 'damage', amount: 256 }]
+      },
       { spellId: 2, timestamp: 12000, duration: null, kind: 'cast' },
       { spellId: 2, timestamp: 12000, duration: null, kind: 'cast' },
       { spellId: 1, timestamp: 12500, duration: null, kind: 'cast' }
@@ -298,8 +503,12 @@ describe('TimelineMagnifier', () => {
       showDeaths: true
     });
     expect(container.querySelectorAll('.event-details li')).toHaveLength(4);
-    expect(container.querySelectorAll('.event-details li')[0]).toHaveTextContent('0:12 Melee -172 to Boss');
-    expect(container.querySelectorAll('.event-details li')[1]).toHaveTextContent('0:12 Melee -256 to Boss');
+    expect(container.querySelectorAll('.event-details li')[0]).toHaveTextContent(
+      '0:12 Melee -172 to Boss'
+    );
+    expect(container.querySelectorAll('.event-details li')[1]).toHaveTextContent(
+      '0:12 Melee -256 to Boss'
+    );
     expect(container.querySelector('.event-details')).not.toHaveTextContent('TWIST');
     expect(container.querySelectorAll('.magnified-event')).toHaveLength(5);
   });

@@ -106,8 +106,9 @@
   );
   const endTime = $derived(fightDuration(report, timeline));
   const estimatedHealthRange = $derived.by(() => {
-    const values = (timeline?.healthCapacities ?? [])
-      .flatMap((sample) => sample.estimatedMaxHealth != null ? [sample.estimatedMaxHealth] : []);
+    const values = (timeline?.healthCapacities ?? []).flatMap((sample) =>
+      sample.estimatedMaxHealth != null ? [sample.estimatedMaxHealth] : []
+    );
     if (values.length === 0 && timeline?.estimatedMaxHealth != null)
       values.push(timeline.estimatedMaxHealth);
     if (values.length === 0) return null;
@@ -126,9 +127,8 @@
   );
   const events = $derived(
     timeline
-      ? laneEvents(visibleTimelineEvents(
-            timeline,
-            hidden,
+      ? laneEvents(
+          visibleTimelineEvents(timeline, hidden, {
             showCasts,
             showBuffs,
             showDeaths,
@@ -137,11 +137,20 @@
             showDamageTaken,
             showManaSpent,
             showManaReceived
-          )).map((event) => ({ event }))
+          })
+        ).map((event) => ({ event }))
       : []
   );
   function laneEvents(events: TimelineEvent[]) {
-    return mergedResources ? withResourceLanes(events, timeline?.spells ?? [], timeline?.events ?? [], showReceivedBuffs, timeline?.playerName) : events;
+    return mergedResources
+      ? withResourceLanes(
+          events,
+          timeline?.spells ?? [],
+          timeline?.events ?? [],
+          showReceivedBuffs,
+          timeline?.playerName
+        )
+      : events;
   }
   const gaps = $derived(
     inspected
@@ -158,11 +167,7 @@
   function updateMagnifier(mouse: MouseEvent) {
     const track =
       mouse.currentTarget instanceof HTMLElement ? mouse.currentTarget.closest('.track') : null;
-    if (
-      !timeline ||
-      !track ||
-      zoom === TIMELINE_ZOOM_LEVELS.at(-1)
-    ) {
+    if (!timeline || !track || zoom === TIMELINE_ZOOM_LEVELS.at(-1)) {
       magnifier = null;
       return;
     }
@@ -388,7 +393,8 @@
   >
     {#if survivalMode && resourceMode === 'mana'}
       <span class="resource-capacity"
-        >Max mana: {timeline?.maxMana?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? 'Unavailable'}</span
+        >Max mana: {timeline?.maxMana?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ??
+          'Unavailable'}</span
       >
     {/if}
     <TimelinePhases
@@ -455,9 +461,11 @@
           ></span>
         {/if}
         {#if event.displayBelow && event.kind === 'buff'}
-          <span class="cast-window"
+          <span
+            class="cast-window"
             style={`--spell-color: ${resourceColor ?? appearance.color}; left: ${(event.timestamp / axisDuration) * 100}%; width: ${((event.duration ?? 0) / axisDuration) * 100}%; top: 47px`}
-            aria-label={title}></span>
+            aria-label={title}
+          ></span>
         {/if}
         {#if event.kind === 'cast' && event.castStart != null}
           <span

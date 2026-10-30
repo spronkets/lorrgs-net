@@ -57,6 +57,8 @@
 # application is not extended to fight end; any recorded cast remains visible.
 # Report-wide loading retains post-fight buff removals for matching; verified
 # intervals extending beyond the selected fight are clipped to its end.
+# A post-fight reapplication invalidates an unclosed earlier application so a later
+# removal cannot falsely establish continuous in-fight uptime for the new buff.
 # Incoming healing, damage and mana events include sourceName when the source
 # actor is identified in report master data.
 # Event queries request includeResources: true for recorded maxHealth/maxMana.

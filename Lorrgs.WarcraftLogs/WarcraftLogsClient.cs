@@ -368,7 +368,7 @@ public class WarcraftLogsClient(
             var age = DateTimeOffset.UtcNow - new DateTimeOffset(File.GetLastWriteTimeUtc(path));
             if (age > maxAge)
             {
-                File.Delete(path);
+                TryDeleteGraphQlCacheFile(path);
                 return null;
             }
 
@@ -377,7 +377,7 @@ public class WarcraftLogsClient(
             if (!IsCacheableGraphQlData(document.RootElement))
             {
                 _logger.LogWarning("Discarding incomplete WarcraftLogs GraphQL cache entry");
-                File.Delete(path);
+                TryDeleteGraphQlCacheFile(path);
                 return null;
             }
             return json;
@@ -386,13 +386,25 @@ public class WarcraftLogsClient(
         catch (JsonException)
         {
             _logger.LogWarning("Discarding malformed WarcraftLogs GraphQL cache entry");
-            File.Delete(path);
+            TryDeleteGraphQlCacheFile(path);
             return null;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to read WarcraftLogs GraphQL cache file {Path}", path);
             return null;
+        }
+    }
+
+    private void TryDeleteGraphQlCacheFile(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Failed to delete WarcraftLogs GraphQL cache file {Path}", path);
         }
     }
 

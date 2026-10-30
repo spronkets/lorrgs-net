@@ -36,12 +36,21 @@ describe('aligned timeline utilities', () => {
     expect(resourceEventColor({ ...cast, kind: 'damage' }, spell)).toBe('#ff6969');
     expect(resourceEventColor({ ...cast, kind: 'mana-spent' }, spell)).toBe('#d9ad69');
     expect(resourceEventColor({ ...cast, kind: 'mana-returned' }, spell)).toBe('#69aaff');
-    expect(resourceEventColor({ ...cast, castResults: [
-      { targetId: 2, targetName: 'Ally', kind: 'heal', amount: 100 }
-    ] }, { ...spell, name: 'Unknown Heal' })).toBe('#69d98b');
-    expect(resourceEventColor({ ...cast, castResults: [
-      { targetId: 2, targetName: 'Boss', kind: 'damage', amount: 100 }
-    ] }, { ...spell, name: 'Shadow Bolt' })).toBe('#ff6969');
+    expect(
+      resourceEventColor(
+        { ...cast, castResults: [{ targetId: 2, targetName: 'Ally', kind: 'heal', amount: 100 }] },
+        { ...spell, name: 'Unknown Heal' }
+      )
+    ).toBe('#69d98b');
+    expect(
+      resourceEventColor(
+        {
+          ...cast,
+          castResults: [{ targetId: 2, targetName: 'Boss', kind: 'damage', amount: 100 }]
+        },
+        { ...spell, name: 'Shadow Bolt' }
+      )
+    ).toBe('#ff6969');
   });
   it('uses amber for mana spent and keeps mana gains blue in either lane', () => {
     for (const displayBelow of [false, true]) {
@@ -57,12 +66,22 @@ describe('aligned timeline utilities', () => {
     [false, true, ['mana-returned']],
     [true, true, ['mana-spent', 'mana-returned']]
   ] as const)('filters mana spent=%s and received=%s independently', (spent, received, kinds) => {
-    const sample: ReportTimeline = { ...timeline, events: [
-      { spellId: 1, timestamp: 1000, duration: null, kind: 'mana-spent' },
-      { spellId: 2, timestamp: 2000, duration: null, kind: 'mana-returned' }
-    ] };
-    expect(visibleTimelineEvents(sample, new Set(), false, false, false,
-      false, false, false, spent, received).map((event) => event.kind)).toEqual(kinds);
+    const sample: ReportTimeline = {
+      ...timeline,
+      events: [
+        { spellId: 1, timestamp: 1000, duration: null, kind: 'mana-spent' },
+        { spellId: 2, timestamp: 2000, duration: null, kind: 'mana-returned' }
+      ]
+    };
+    expect(
+      visibleTimelineEvents(sample, new Set(), {
+        showCasts: false,
+        showBuffs: false,
+        showDeaths: false,
+        showManaSpent: spent,
+        showManaReceived: received
+      }).map((event) => event.kind)
+    ).toEqual(kinds);
   });
   it('rounds timestamps to at most two decimals with correct minute carry', () => {
     expect(preciseTimelineTime(79644)).toBe('1:19.64');
@@ -73,33 +92,72 @@ describe('aligned timeline utilities', () => {
   });
   it('shows heal health transitions with explicit snapshot provenance and unknown values', () => {
     const heal = {
-      spellId: 1, timestamp: 1000, duration: null, kind: 'heal' as const,
-      sourceName: 'Healer', healthBeforePercent: 40, healthAfterPercent: 70.24
+      spellId: 1,
+      timestamp: 1000,
+      duration: null,
+      kind: 'heal' as const,
+      sourceName: 'Healer',
+      healthBeforePercent: 40,
+      healthAfterPercent: 70.24
     };
     expect(timelineEventDetail(heal, undefined)).toContain('(70.24%, +30.24%, by Healer)');
-    expect(timelineEventDetail({ ...heal, healthBeforeIsPreviousSnapshot: true }, undefined))
-      .toContain('(70.24%, +30.24%, by Healer)');
-    expect(timelineEventDetail({ ...heal, healthBeforePercent: null }, undefined))
-      .toContain('(70.24%, unknown change, by Healer)');
-    expect(timelineEventDetail({ ...heal, healthBeforePercent: 0 }, undefined))
-      .toContain('(70.24%, +70.24%, by Healer)');
-    expect(timelineEventDetail({ ...heal, healthBeforePercent: null, healthAfterPercent: null }, undefined))
-      .toContain('(unknown, unknown change, by Healer)');
-    expect(timelineEventDetail({
-      ...heal, kind: 'damage', amount: 1500, healthBeforePercent: 70, healthAfterPercent: 55
-    }, { id: 1, name: 'Melee', icon: null })).toContain('Melee · -1,500 · (55%, -15%, by Healer)');
+    expect(
+      timelineEventDetail({ ...heal, healthBeforeIsPreviousSnapshot: true }, undefined)
+    ).toContain('(70.24%, +30.24%, by Healer)');
+    expect(timelineEventDetail({ ...heal, healthBeforePercent: null }, undefined)).toContain(
+      '(70.24%, unknown change, by Healer)'
+    );
+    expect(timelineEventDetail({ ...heal, healthBeforePercent: 0 }, undefined)).toContain(
+      '(70.24%, +70.24%, by Healer)'
+    );
+    expect(
+      timelineEventDetail(
+        { ...heal, healthBeforePercent: null, healthAfterPercent: null },
+        undefined
+      )
+    ).toContain('(unknown, unknown change, by Healer)');
+    expect(
+      timelineEventDetail(
+        {
+          ...heal,
+          kind: 'damage',
+          amount: 1500,
+          healthBeforePercent: 70,
+          healthAfterPercent: 55
+        },
+        { id: 1, name: 'Melee', icon: null }
+      )
+    ).toContain('Melee · -1,500 · (55%, -15%, by Healer)');
   });
   it('colors health changes and consumables and identifies the source in details', () => {
-    const heal = { spellId: 1, timestamp: 1000, duration: null, kind: 'heal' as const, sourceName: 'Healer' };
+    const heal = {
+      spellId: 1,
+      timestamp: 1000,
+      duration: null,
+      kind: 'heal' as const,
+      sourceName: 'Healer'
+    };
     expect(resourceEventColor(heal, { id: 1, name: 'Holy Light', icon: null })).toBe('#69d98b');
     expect(resourceEventColor({ ...heal, kind: 'damage' }, undefined)).toBe('#ff6969');
-    expect(resourceEventColor(heal, { id: 1, name: 'Super Healing Potion', icon: null })).toBe('#69d98b');
-    expect(resourceEventColor({ ...heal, kind: 'cast', displayBelow: false },
-      { id: 1, name: 'Evocation', icon: null })).toBe('#69aaff');
+    expect(resourceEventColor(heal, { id: 1, name: 'Super Healing Potion', icon: null })).toBe(
+      '#69d98b'
+    );
+    expect(
+      resourceEventColor(
+        { ...heal, kind: 'cast', displayBelow: false },
+        { id: 1, name: 'Evocation', icon: null }
+      )
+    ).toBe('#69aaff');
     expect(timelineEventDetail(heal, undefined)).toContain('by Healer');
   });
   it('omits inferred wording for buffs without claiming a measured end time', () => {
-    const event = { spellId: 31884, timestamp: 0, duration: 20000, kind: 'buff' as const, isInferred: true };
+    const event = {
+      spellId: 31884,
+      timestamp: 0,
+      duration: 20000,
+      kind: 'buff' as const,
+      isInferred: true
+    };
     const detail = timelineEventDetail(event, timeline.spells[0]);
     expect(detail).not.toContain('inferred');
     expect(detail).not.toContain('measured');
@@ -114,12 +172,24 @@ describe('aligned timeline utilities', () => {
         { kind: 'marker', spellId: 267134, timestamp: 10000, duration: 0, isInferred: true }
       ]
     };
-    expect(visibleTimelineEvents(sample, new Set(), true, true, true)[0]).toMatchObject({
+    expect(
+      visibleTimelineEvents(sample, new Set(), {
+        showCasts: true,
+        showBuffs: true,
+        showDeaths: true
+      })[0]
+    ).toMatchObject({
       timestamp: 0,
       duration: 26000,
       isInferred: true
     });
-    expect(visibleTimelineEvents(sample, new Set(), false, true, true)).toHaveLength(1);
+    expect(
+      visibleTimelineEvents(sample, new Set(), {
+        showCasts: false,
+        showBuffs: true,
+        showDeaths: true
+      })
+    ).toHaveLength(1);
     expect(sample.events[0].timestamp).toBe(-4000);
   });
   it('measures consecutive casts only, sorting and deduplicating timestamps without inventing edge gaps', () => {
@@ -182,9 +252,13 @@ describe('aligned timeline utilities', () => {
         ?.spells.map((spell) => spell.id)
     ).toEqual([12345]);
     expect(isPowerWindow(sample.spells[1])).toBe(true);
-    expect(visibleTimelineEvents(sample, new Set(), true, true, true)).toContainEqual(
-      sample.events[3]
-    );
+    expect(
+      visibleTimelineEvents(sample, new Set(), {
+        showCasts: true,
+        showBuffs: true,
+        showDeaths: true
+      })
+    ).toContainEqual(sample.events[3]);
   });
 
   it('keeps time zero visible and does not normalize timestamps to fight duration', () => {
@@ -193,12 +267,20 @@ describe('aligned timeline utilities', () => {
   });
 
   it('filters real event kinds and spell selection independently of death markers', () => {
-    expect(visibleTimelineEvents(timeline, new Set([31884]), true, true, true)).toEqual([
-      timeline.events[2]
-    ]);
-    expect(visibleTimelineEvents(timeline, new Set(), false, true, false)).toEqual([
-      timeline.events[1]
-    ]);
+    expect(
+      visibleTimelineEvents(timeline, new Set([31884]), {
+        showCasts: true,
+        showBuffs: true,
+        showDeaths: true
+      })
+    ).toEqual([timeline.events[2]]);
+    expect(
+      visibleTimelineEvents(timeline, new Set(), {
+        showCasts: false,
+        showBuffs: true,
+        showDeaths: false
+      })
+    ).toEqual([timeline.events[1]]);
   });
 
   it('constructs icons only from valid filenames on the fixed icon host', () => {

@@ -86,6 +86,26 @@ public sealed class WarcraftLogsClientCacheTests : IDisposable
         Assert.Single(Directory.GetFiles(fixture.CacheDirectory, "*.json"));
     }
 
+    [Theory]
+    [InlineData("""{"reportData":""")]
+    [InlineData("""{"reportData":{"report":{"fights":[]}}}""")]
+    public async Task UndeletableInvalidCacheEntryStillBehavesAsAMiss(string invalidData)
+    {
+        const string valid = """{"data":{"value":42}}""";
+        using var handler = new QueueHandler(valid, valid);
+        var client = fixture.CreateClient(handler);
+        await client.QueryGraphQLAsync("query LockedInvalid");
+        var path = Assert.Single(Directory.GetFiles(fixture.CacheDirectory, "*.json"));
+        await File.WriteAllTextAsync(path, invalidData);
+        using (var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            Assert.Null(await client.TryQueryGraphQLFromCacheAsync("query LockedInvalid"));
+            var fresh = await client.QueryGraphQLAsync("query LockedInvalid");
+            Assert.Equal(42, fresh.GetProperty("value").GetInt32());
+        }
+        Assert.Equal(2, handler.GraphQlRequests);
+    }
+
     [Fact]
     public async Task SuccessfulResponsesPersistAcrossClientsWithoutNetworkOrTokenRequests()
     {
