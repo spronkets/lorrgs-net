@@ -1463,14 +1463,15 @@ public sealed class ReportTimelineServiceTests : IDisposable
     {
         const string metadata = """
             {"data":{"reportData":{"report":{"fights":[{"id":88,"name":"Nek'zali the Soulcoiler",
+            "encounterID":3470,"enemyNPCs":[{"id":10}],
             "startTime":10000,"endTime":110000,"phaseTransitions":[
             {"id":2,"startTime":30000},{"id":3,"startTime":100000}]}],
-            "masterData":{"abilities":[]}}}}}
+            "masterData":{"abilities":[],"actors":[]}}}}}
             """;
         const string events = """
             {"data":{"reportData":{"report":{"events":{"data":[
-            {"type":"cast","timestamp":30000,"abilityGameID":1295124},
-            {"type":"cast","timestamp":85000,"abilityGameID":1292248}
+            {"type":"cast","sourceID":10,"timestamp":30000,"abilityGameID":1295124},
+            {"type":"cast","sourceID":10,"timestamp":85000,"abilityGameID":1292248}
             ],"nextPageTimestamp":null}}}}}
             """;
         using var handler = new QueueHandler(metadata, events);
