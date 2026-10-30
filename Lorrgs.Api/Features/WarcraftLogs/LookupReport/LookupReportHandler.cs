@@ -19,7 +19,11 @@ public sealed class LookupReportHandler(ILogger<LookupReportHandler> logger, Rep
         try
         {
             var data = await reports.LoadAsync(request.ReportCode, cancellationToken);
-
+            if (data.TryGetProperty("reportData", out var reportData) &&
+                reportData.TryGetProperty("report", out var report) && report.ValueKind == JsonValueKind.Object)
+                logger.LogInformation("Retrieved report metadata report={ReportCode} title={ReportTitle}",
+                    report.TryGetProperty("code", out var code) ? code.GetString() : null,
+                    report.TryGetProperty("title", out var title) ? title.GetString() : null);
             return TypedResults.Ok(data);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -28,12 +32,12 @@ public sealed class LookupReportHandler(ILogger<LookupReportHandler> logger, Rep
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
-            logger.LogWarning(ex, "WarcraftLogs rate limit hit while looking up report {ReportCode}", request.ReportCode);
+            logger.LogWarning("WarcraftLogs rate limit hit while looking up report");
             return TypedResults.Json(new ApiErrorResponse("Warcraft Logs rate limit reached. Please retry shortly."), statusCode: StatusCodes.Status429TooManyRequests);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to lookup report {ReportCode}", request.ReportCode);
+            logger.LogError("Failed to lookup report exceptionType={ExceptionType}", ex.GetType().FullName);
             return TypedResults.Json(new ApiErrorResponse("Failed to lookup report metadata"), statusCode: 500);
         }
     }

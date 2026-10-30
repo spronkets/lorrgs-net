@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Mvc;
-using Lorrgs.Api.Features.WorldData.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Lorrgs.Api.Features.WorldData.GetSpecs;
@@ -11,7 +9,6 @@ public static class GetSpecsHandler
         [AsParameters] GetSpecsRequest request, CancellationToken ct)
     {
         var logger = loggerFactory.CreateLogger("GetSpecs");
-        logger.LogInformation("Fetching specs: roleId={RoleId}, classId={ClassId}", request.RoleId, request.ClassId);
         var specs = data.Specs.AsEnumerable();
 
         if (request.RoleId.HasValue)
@@ -21,6 +18,7 @@ public static class GetSpecsHandler
             specs = specs.Where(s => s.ClassId == request.ClassId);
 
         var result = specs.OrderBy(s => s.FullName).ToList();
+        logger.LogInformation("Found {SpecCount} specs", result.Count);
 
         return TypedResults.Ok(new GetSpecsResponse(result));
     }

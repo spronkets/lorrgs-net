@@ -10,6 +10,25 @@ namespace Lorrgs.Api.Tests;
 public sealed class RaidCatalogClientTests
 {
     [Fact]
+    public async Task AnniversarySunwellIsUnavailable()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"))
+            .Build();
+        var options = new RaidCatalogOptions();
+        configuration.Bind(options);
+        var client = new RaidCatalogClient(NullLogger<RaidCatalogClient>.Instance, Options.Create(options));
+        var catalog = await client.GetCatalogAsync();
+        var sunwell = Assert.Single(catalog.Instances["anniversary"], raid => raid.Slug == "sunwellplateau");
+        Assert.False(sunwell.IsAvailable);
+        Assert.Equal(4, Assert.Single(catalog.Editions, edition => edition.Slug == "anniversary").ActivePhase);
+        Assert.All(catalog.Instances["anniversary"].Where(raid => raid.Phase <= 4),
+            raid => Assert.True(raid.IsAvailable));
+        Assert.All(catalog.Instances.Where(entry => entry.Key != "anniversary").SelectMany(entry => entry.Value),
+            raid => Assert.True(raid.IsAvailable));
+    }
+
+    [Fact]
     public async Task AnniversaryZulAmanUsesClassicFreshZoneAndOriginalFinalBoss()
     {
         var configuration = new ConfigurationBuilder()
@@ -47,13 +66,13 @@ public sealed class RaidCatalogClientTests
         {
             Editions =
             [
-                new() { Slug = "retail", Name = "Retail", Order = 2, Public = false },
+                new() { Slug = "retail", Name = "Retail", Order = 2 },
                 new()
                 {
-                    Slug = "anniversary", Name = "Anniversary", Order = 1, Public = true,
+                    Slug = "anniversary", Name = "Anniversary", Order = 1, ActivePhase = 1,
                     Raids = [new()
                     {
-                        Slug = "zulaman", Name = "Zul'Aman", ZoneId = 1, Phase = 2, Public = false,
+                        Slug = "zulaman", Name = "Zul'Aman", ZoneId = 1, Phase = 2,
                         Bosses = ["ZULPHIX", "Unknown Boss", " "]
                     }]
                 }
@@ -64,7 +83,6 @@ public sealed class RaidCatalogClientTests
         var catalog = await client.GetCatalogAsync();
 
         Assert.Equal(["anniversary", "retail"], catalog.Editions.Select(edition => edition.Slug));
-        Assert.False(catalog.Editions[1].Public);
         Assert.Empty(catalog.Instances["RETAIL"]);
         var raid = Assert.Single(catalog.Instances["ANNIVERSARY"]);
         Assert.Equal("anniversary", raid.Edition);
@@ -72,7 +90,7 @@ public sealed class RaidCatalogClientTests
         Assert.Equal("Zul'Aman", raid.Name);
         Assert.Equal(1, raid.ZoneId);
         Assert.Equal(2, raid.Phase);
-        Assert.False(raid.Public);
+        Assert.False(raid.IsAvailable);
         Assert.Equal(2, raid.Bosses.Count);
         Assert.True(raid.Bosses[0].Mapped);
         Assert.True(raid.Bosses[0].Id > 0);
@@ -95,5 +113,29 @@ public sealed class RaidCatalogClientTests
         var catalog = await client.GetCatalogAsync();
         Assert.Empty(catalog.Editions);
         Assert.Empty(catalog.Instances);
+    }
+
+    [Theory]
+    [InlineData(0, false, false, false)]
+    [InlineData(3, true, false, false)]
+    [InlineData(4, true, true, false)]
+    [InlineData(5, true, true, true)]
+    public async Task ActivePhaseDeterminesRaidAvailability(int activePhase, bool earlier, bool current, bool future)
+    {
+        var client = new RaidCatalogClient(NullLogger<RaidCatalogClient>.Instance,
+            Options.Create(new RaidCatalogOptions
+            {
+                Editions = [new()
+                {
+                    Slug = "anniversary", ActivePhase = activePhase,
+                    Raids = [new() { Phase = 3 }, new() { Phase = 4 }, new() { Phase = 5 }]
+                }]
+            }));
+
+        var catalog = await client.GetCatalogAsync();
+
+        Assert.Equal(activePhase, Assert.Single(catalog.Editions).ActivePhase);
+        Assert.Equal([earlier, current, future],
+            catalog.Instances["anniversary"].Select(raid => raid.IsAvailable));
     }
 }

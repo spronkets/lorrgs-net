@@ -11,7 +11,7 @@ public sealed class MarkSpecRankingDirtyHandler(ILogger<MarkSpecRankingDirtyHand
         MarkSpecRankingDirtyRequest request, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        logger.LogInformation("Marking spec ranking dirty: {SpecSlug}/{BossSlug}", request.SpecSlug, request.BossSlug);
+        logger.LogInformation("Marking spec ranking dirty");
 
         if (!data.TryResolveSpecRankingQuery(request.SpecSlug, request.BossSlug, request.Edition, request.ZoneId, request.EncounterId, request.ClassName, request.SpecName, out var queryContext, out var queryError))
         {

@@ -1,6 +1,4 @@
 using Lorrgs.Api.Shared.Responses;
-using Microsoft.AspNetCore.Mvc;
-using Lorrgs.Api.Features.WorldData.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Lorrgs.Api.Features.WorldData.GetZoneBosses;
@@ -12,10 +10,10 @@ public static class GetZoneBossesHandler
         [AsParameters] GetZoneBossesRequest request, CancellationToken ct)
     {
         var logger = loggerFactory.CreateLogger("GetZoneBosses");
-        logger.LogInformation("Fetching bosses for zone: {ZoneSlug}", request.ZoneSlug);
         var zone = data.GetZone(request.ZoneSlug);
         if (zone == null)
         {
+            logger.LogWarning("Zone not found");
             return TypedResults.NotFound(new ApiErrorResponse($"Zone not found: {request.ZoneSlug}"));
         }
 
@@ -23,6 +21,8 @@ public static class GetZoneBossesHandler
             .Where(b => b.RaidId == zone.Id)
             .ToList();
 
+        logger.LogInformation("Found {BossCount} bosses for zone: {ZoneId} {ZoneName}",
+            bosses.Count, zone.Id, zone.Name);
         return TypedResults.Ok(new GetZoneBossesResponse(bosses));
     }
 }

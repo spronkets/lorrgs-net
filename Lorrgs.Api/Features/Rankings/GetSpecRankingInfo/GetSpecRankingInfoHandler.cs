@@ -12,7 +12,7 @@ public sealed class GetSpecRankingInfoHandler(ILogger<GetSpecRankingInfoHandler>
     public async Task<Results<Ok<SpecRankingData>, BadRequest<ApiErrorResponse>, NotFound<ApiErrorResponse>, JsonHttpResult<ApiErrorResponse>>> Handle(
         GetSpecRankingInfoRequest request, CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Fetching spec ranking info: {SpecSlug}/{BossSlug}", request.SpecSlug, request.BossSlug);
+        logger.LogInformation("Fetching spec ranking info");
 
         if (!data.TryResolveSpecRankingQuery(request.SpecSlug, request.BossSlug, request.Edition, request.ZoneId, request.EncounterId, request.ClassName, request.SpecName, out var queryContext, out var queryError))
         {
@@ -72,16 +72,12 @@ public sealed class GetSpecRankingInfoHandler(ILogger<GetSpecRankingInfoHandler>
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
-            logger.LogWarning(ex,
-                "WarcraftLogs rate limit hit while fetching spec ranking info {SpecSlug}/{BossSlug} edition={Edition} difficulty={Difficulty} metric={Metric}",
-                request.SpecSlug, request.BossSlug, request.Edition, request.Difficulty, request.Metric);
+            logger.LogWarning("WarcraftLogs rate limit hit while fetching spec ranking info");
             return TypedResults.Json(new ApiErrorResponse("Warcraft Logs rate limit reached. Please retry shortly."), statusCode: StatusCodes.Status429TooManyRequests);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex,
-                "Error fetching spec ranking info {SpecSlug}/{BossSlug} edition={Edition} difficulty={Difficulty} metric={Metric}",
-                request.SpecSlug, request.BossSlug, request.Edition, request.Difficulty, request.Metric);
+            logger.LogError("Error fetching spec ranking info exceptionType={ExceptionType}", ex.GetType().FullName);
             return TypedResults.Json(new ApiErrorResponse("Failed to fetch ranking info"), statusCode: 500);
         }
     }

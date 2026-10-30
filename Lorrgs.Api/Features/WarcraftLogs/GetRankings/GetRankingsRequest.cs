@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Lorrgs.Api.Features.WarcraftLogs.GetRankings;

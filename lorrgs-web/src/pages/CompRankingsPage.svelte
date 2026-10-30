@@ -56,7 +56,7 @@
   let requestId = 0;
   let lastSelection = '';
   $: raids = getRaidsForEdition(raidCatalog, selectedVersion);
-  $: raid = raids.find((item) => item.slug === selectedRaid);
+  $: raid = raids.find((item) => item.slug === selectedRaid && item.isAvailable !== false);
   $: bosses = getRaidBossOptions(raid).map((boss) => ({
     ...boss,
     iconName: worldData.bosses?.find((entry) => entry.nameSlug === boss.slug)?.icon
@@ -409,9 +409,6 @@
     </section>
     <div class="actions">
       <button class="primary" type="submit" disabled={!selectedBoss}>Search compositions</button>
-      <button type="button" disabled={!selectedBoss || loading} on:click={() => search(true, page)}
-        >Refresh from Warcraft Logs</button
-      >
       {#if loading}<button type="button" on:click={invalidate}>Cancel</button>{/if}
     </div>
   </form>

@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { ReportTimeline } from './models/ReportTimeline';
 import {
-  eventLanes,
   castIntervals,
   isPowerWindow,
   spellAppearance,
   spellIconUrl,
   timelineSpellGroups,
   timelineTime,
+  preciseTimelineTime,
+  timelineEventDetail,
+  resourceEventColor,
   visibleTimelineEvents
 } from './timelineUtils';
 
@@ -27,6 +29,83 @@ const timeline: ReportTimeline = {
 };
 
 describe('aligned timeline utilities', () => {
+  it('colors recorded event semantics before spell names and colors healing casts without results', () => {
+    const cast = { spellId: 1, timestamp: 1000, duration: null, kind: 'cast' as const };
+    const spell = { id: 1, name: 'Chain Heal (Rank 5)', icon: null };
+    expect(resourceEventColor(cast, spell)).toBe('#69d98b');
+    expect(resourceEventColor({ ...cast, kind: 'damage' }, spell)).toBe('#ff6969');
+    expect(resourceEventColor({ ...cast, kind: 'mana-spent' }, spell)).toBe('#d9ad69');
+    expect(resourceEventColor({ ...cast, kind: 'mana-returned' }, spell)).toBe('#69aaff');
+    expect(resourceEventColor({ ...cast, castResults: [
+      { targetId: 2, targetName: 'Ally', kind: 'heal', amount: 100 }
+    ] }, { ...spell, name: 'Unknown Heal' })).toBe('#69d98b');
+    expect(resourceEventColor({ ...cast, castResults: [
+      { targetId: 2, targetName: 'Boss', kind: 'damage', amount: 100 }
+    ] }, { ...spell, name: 'Shadow Bolt' })).toBe('#ff6969');
+  });
+  it('uses amber for mana spent and keeps mana gains blue in either lane', () => {
+    for (const displayBelow of [false, true]) {
+      const event = { spellId: 1, timestamp: 1000, duration: null, displayBelow };
+      const spell = { id: 1, name: 'Mana Potion', icon: null };
+      expect(resourceEventColor({ ...event, kind: 'mana-spent' }, spell)).toBe('#d9ad69');
+      expect(resourceEventColor({ ...event, kind: 'mana-returned' }, spell)).toBe('#69aaff');
+    }
+  });
+  it.each([
+    [false, false, []],
+    [true, false, ['mana-spent']],
+    [false, true, ['mana-returned']],
+    [true, true, ['mana-spent', 'mana-returned']]
+  ] as const)('filters mana spent=%s and received=%s independently', (spent, received, kinds) => {
+    const sample: ReportTimeline = { ...timeline, events: [
+      { spellId: 1, timestamp: 1000, duration: null, kind: 'mana-spent' },
+      { spellId: 2, timestamp: 2000, duration: null, kind: 'mana-returned' }
+    ] };
+    expect(visibleTimelineEvents(sample, new Set(), false, false, false,
+      false, false, false, spent, received).map((event) => event.kind)).toEqual(kinds);
+  });
+  it('rounds timestamps to at most two decimals with correct minute carry', () => {
+    expect(preciseTimelineTime(79644)).toBe('1:19.64');
+    expect(preciseTimelineTime(80728)).toBe('1:20.73');
+    expect(preciseTimelineTime(59999)).toBe('1:00');
+    expect(preciseTimelineTime(10700)).toBe('0:10.7');
+    expect(preciseTimelineTime(0)).toBe('0:00');
+  });
+  it('shows heal health transitions with explicit snapshot provenance and unknown values', () => {
+    const heal = {
+      spellId: 1, timestamp: 1000, duration: null, kind: 'heal' as const,
+      sourceName: 'Healer', healthBeforePercent: 40, healthAfterPercent: 70.24
+    };
+    expect(timelineEventDetail(heal, undefined)).toContain('(70.24%, +30.24%, by Healer)');
+    expect(timelineEventDetail({ ...heal, healthBeforeIsPreviousSnapshot: true }, undefined))
+      .toContain('(70.24%, +30.24%, by Healer)');
+    expect(timelineEventDetail({ ...heal, healthBeforePercent: null }, undefined))
+      .toContain('(70.24%, unknown change, by Healer)');
+    expect(timelineEventDetail({ ...heal, healthBeforePercent: 0 }, undefined))
+      .toContain('(70.24%, +70.24%, by Healer)');
+    expect(timelineEventDetail({ ...heal, healthBeforePercent: null, healthAfterPercent: null }, undefined))
+      .toContain('(unknown, unknown change, by Healer)');
+    expect(timelineEventDetail({
+      ...heal, kind: 'damage', amount: 1500, healthBeforePercent: 70, healthAfterPercent: 55
+    }, { id: 1, name: 'Melee', icon: null })).toContain('Melee · -1,500 · (55%, -15%, by Healer)');
+  });
+  it('colors health changes and consumables and identifies the source in details', () => {
+    const heal = { spellId: 1, timestamp: 1000, duration: null, kind: 'heal' as const, sourceName: 'Healer' };
+    expect(resourceEventColor(heal, { id: 1, name: 'Holy Light', icon: null })).toBe('#69d98b');
+    expect(resourceEventColor({ ...heal, kind: 'damage' }, undefined)).toBe('#ff6969');
+    expect(resourceEventColor(heal, { id: 1, name: 'Super Healing Potion', icon: null })).toBe('#69d98b');
+    expect(resourceEventColor({ ...heal, kind: 'cast', displayBelow: false },
+      { id: 1, name: 'Evocation', icon: null })).toBe('#69aaff');
+    expect(timelineEventDetail(heal, undefined)).toContain('by Healer');
+  });
+  it('omits inferred wording for buffs without claiming a measured end time', () => {
+    const event = { spellId: 31884, timestamp: 0, duration: 20000, kind: 'buff' as const, isInferred: true };
+    const detail = timelineEventDetail(event, timeline.spells[0]);
+    expect(detail).not.toContain('inferred');
+    expect(detail).not.toContain('measured');
+    expect(detail).toContain('displayed uptime');
+    expect(event.isInferred).toBe(true);
+  });
   it('clips inferred prepull intervals for display and treats markers as cast-layer annotations', () => {
     const sample: ReportTimeline = {
       ...timeline,
@@ -111,7 +190,6 @@ describe('aligned timeline utilities', () => {
   it('keeps time zero visible and does not normalize timestamps to fight duration', () => {
     expect(timelineTime(0)).toBe('0:00');
     expect(timelineTime(125500)).toBe('2:05');
-    expect(eventLanes(timeline.events).map(({ event }) => event.timestamp)).toEqual([0, 0, 230000]);
   });
 
   it('filters real event kinds and spell selection independently of death markers', () => {

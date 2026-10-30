@@ -1,7 +1,7 @@
 <script lang="ts">
   import Alert from './Alert.svelte';
   import Spinner from './Spinner.svelte';
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import Toast from './Toast.svelte';
   import CopyNoteDialog from './CopyNoteDialog.svelte';
   import SpellSelection from './SpellSelection.svelte';
@@ -45,6 +45,49 @@
   let hidden = $state<Set<number>>(new Set());
   let scrollContainer: HTMLDivElement;
   let viewportWidth = $state(0);
+  let identityWidth = $state(220);
+  $effect(() => {
+    reports;
+    let disposed = false;
+    let observer: ResizeObserver | undefined;
+    void tick().then(() => {
+      if (disposed || !scrollContainer) return;
+      const details = scrollContainer.querySelectorAll<HTMLElement>(
+        '.player-details, .player-heading'
+      );
+      const measure = () => {
+        identityWidth = Math.max(
+          220,
+          ...Array.from(details, (element) => {
+            const identity = element.parentElement;
+            const inset = identity
+              ? identity.offsetWidth -
+                identity.clientWidth +
+                (parseFloat(getComputedStyle(identity).paddingLeft) || 0) +
+                (parseFloat(getComputedStyle(identity).paddingRight) || 0)
+              : 0;
+            const children = Array.from(element.children);
+            const gap = parseFloat(getComputedStyle(element).columnGap) || 0;
+            const contentWidth =
+              children.reduce((width, child) => width + child.getBoundingClientRect().width, 0) +
+              Math.max(0, children.length - 1) * gap;
+            return Math.ceil(contentWidth + inset);
+          })
+        );
+      };
+      measure();
+      const resizeObserver = new ResizeObserver(measure);
+      observer = resizeObserver;
+      details.forEach((element) => resizeObserver.observe(element));
+      details.forEach((element) =>
+        Array.from(element.children).forEach((child) => resizeObserver.observe(child))
+      );
+    });
+    return () => {
+      disposed = true;
+      observer?.disconnect();
+    };
+  });
   let previousFirstKey = '';
   let referenceKey = $state('');
   let bossReferences = $state<Record<string, BossTimeline>>({});
@@ -80,7 +123,11 @@
   let showCasts = $state(true);
   let showBuffs = $state(true);
   let showDeaths = $state(true);
-  let separateSpells = $state(false);
+  let showDirectHeals = $state(false);
+  const showHots = $derived(showDirectHeals);
+  let showDamageTaken = $state(false);
+  let showManaReceived = $state(false);
+  let showReceivedBuffs = $state(false);
   let clipboardNotification = $state<{ message: string; variant: 'success' | 'error' } | null>(
     null
   );
@@ -88,9 +135,66 @@
   let noteSelection = $state<{ timeline: ReportTimeline; report: RankingReport } | null>(null);
   let magnifier = $state<TimelineMagnification | null>(null);
   $effect(() => {
-    if (separateSpells || zoom === TIMELINE_ZOOM_LEVELS.at(-1)) magnifier = null;
+    if (zoom === TIMELINE_ZOOM_LEVELS.at(-1)) magnifier = null;
   });
-  const timelines = $derived([...loader.loaded.values()]);
+  $effect(() => {
+    // Discard the hovered row snapshot when its visible event selection changes.
+    void [
+      hidden,
+      showCasts,
+      showBuffs,
+      showDeaths,
+      showDirectHeals,
+      showHots,
+      showDamageTaken,
+      showManaReceived,
+      showReceivedBuffs
+    ];
+    magnifier = null;
+  });
+  const timelines = $derived(
+    reports.flatMap(({ report }) => {
+      const timeline = loader.loaded.get(timelineKey(report));
+      return timeline ? [timeline] : [];
+    })
+  );
+  const selectableTimelines = $derived(
+    timelines.map((timeline) => {
+      const events = timeline.events.filter((event) =>
+        event.kind === 'mana-spent'
+          ? showDamageTaken && event.isManaDrain
+          : event.kind === 'mana-returned'
+            ? showManaReceived
+          : event.kind === 'heal'
+            ? showDirectHeals
+            : event.kind === 'hot'
+              ? showHots
+              : event.kind === 'damage'
+                ? showDamageTaken
+                : true
+      );
+      const healingIds = new Set(
+        timeline.events
+          .filter(
+            (event) =>
+              event.kind === 'heal' ||
+              event.kind === 'hot' ||
+              event.kind === 'damage' ||
+              event.kind === 'mana-spent' ||
+              event.kind === 'mana-returned'
+          )
+          .map((event) => event.spellId)
+      );
+      const visibleIds = new Set(events.map((event) => event.spellId));
+      return {
+        ...timeline,
+        events,
+        spells: timeline.spells.filter(
+          (spell) => !healingIds.has(spell.id) || visibleIds.has(spell.id)
+        )
+      };
+    })
+  );
   const selectedClassId = $derived(
     compositionMode ? 0 : classId || reports[0]?.report.players?.[0]?.classId || 0
   );
@@ -167,7 +271,7 @@
   <div class="timeline-controls">
     <fieldset>
       <legend>Timeline</legend>
-      {#each [{ name: 'Spell icons', key: 'icons' }, { name: 'Casts', key: 'casts' }, { name: 'Buff durations', key: 'buffs' }, { name: 'Deaths', key: 'deaths' }, { name: 'Separate spells', key: 'lanes' }] as option (option.key)}
+      {#each [{ name: 'Spell icons', key: 'icons' }, { name: 'Casts', key: 'casts' }, { name: 'Buff durations', key: 'buffs' }, { name: 'Deaths', key: 'deaths' }, { name: 'Show received buffs', key: 'received-buffs' }, { name: 'Show healing received', key: 'health' }, { name: 'Show damage taken', key: 'damage' }, { name: 'Show mana received', key: 'mana-received' }] as option (option.key)}
         <label class="option-toggle" title={option.name}>
           <input
             type="checkbox"
@@ -180,14 +284,23 @@
                   ? showBuffs
                   : option.key === 'deaths'
                     ? showDeaths
-                    : separateSpells}
+                    : option.key === 'health'
+                      ? showDirectHeals
+                      : option.key === 'received-buffs'
+                        ? showReceivedBuffs
+                        : option.key === 'damage'
+                        ? showDamageTaken
+                        : showManaReceived}
             onchange={(event) => {
               const checked = event.currentTarget.checked;
               if (option.key === 'icons') showIcons = checked;
               else if (option.key === 'casts') showCasts = checked;
               else if (option.key === 'buffs') showBuffs = checked;
               else if (option.key === 'deaths') showDeaths = checked;
-              else separateSpells = checked;
+              else if (option.key === 'health') showDirectHeals = checked;
+              else if (option.key === 'received-buffs') showReceivedBuffs = checked;
+              else if (option.key === 'damage') showDamageTaken = checked;
+              else if (option.key === 'mana-received') showManaReceived = checked;
             }}
           />
           <span aria-hidden="true">
@@ -212,8 +325,17 @@
                 <path d="M7 10v4m4-4v4" />
               {:else if option.key === 'deaths'}
                 <path d="M12 3v18M6 9h12" />
-              {:else}
-                <path d="M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1" />
+              {:else if option.key === 'health'}
+                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" />
+                <path d="M8 12h8m-4-4v8" />
+              {:else if option.key === 'received-buffs'}
+                <path d="m12 3 2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5L12 3Zm7 13v6m-3-3h6" />
+              {:else if option.key === 'damage'}
+                <path d="M12 3s-7 8-7 12a7 7 0 0 0 14 0c0-4-7-12-7-12Z" />
+                <path d="M9 16a3 3 0 0 0 3 3" />
+              {:else if option.key === 'mana-received'}
+                <path d="M9 3h6m-5 0v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M8 15h8" />
+                <path d="M12 12v6" />
               {/if}
             </svg>
           </span>
@@ -228,27 +350,16 @@
         {/each}
       </select>
     </label>
-    <button
-      type="button"
-      disabled={loader.batchLoading || pending.length === 0}
-      onclick={() => loader.loadNext()}
-    >
-      {#if loader.batchLoading}<Spinner inline />{/if}
-      {loader.batchLoading
-        ? 'Loading timelines…'
-        : loader.stopped
-          ? 'Resume timeline loading'
-          : pending.length
-            ? 'Load next 3 timelines'
-            : 'All timelines loaded'}
-    </button>
-    <span class="load-progress" role="status"
-      >{queue.filter((report) => loader.loaded.has(timelineKey(report))).length} / {queue.length} timelines
-      ready</span
-    >
+    {#if loader.batchLoading}
+      <span role="status" aria-label="Loading timelines"><Spinner inline /></span>
+    {:else if pending.length}
+      <button type="button" onclick={() => loader.loadNext()}>
+        {loader.stopped ? 'Resume timeline loading' : 'Load next 3 timelines'}
+      </button>
+    {/if}
   </div>
   <SpellSelection
-    {timelines}
+    timelines={selectableTimelines}
     classId={selectedClassId}
     {edition}
     {compositionMode}
@@ -278,11 +389,15 @@
     {showCasts}
     {showBuffs}
     {showDeaths}
+    {showDirectHeals}
+    {showHots}
+    {showDamageTaken}
+    {showManaReceived}
   />
   <p class="mobile-timeline-hint">
     Full fight fits at 100%. Increase Zoom to inspect crowded casts.
   </p>
-  <div class="timeline-panel" class:composition-panel={compositionMode}>
+  <div class="timeline-panel composition-panel">
     <div class="spell-inspector" aria-live="polite" aria-atomic="true">
       {#if inspected}
         <span class="color-key" style={`background: ${inspected.color}`}></span>
@@ -305,13 +420,15 @@
       aria-label="Aligned player timelines"
     >
       <div
-        class="timeline-grid"
-        class:grouped-grid={compositionMode}
-        style={`--timeline-zoom: ${zoom}; --timeline-viewport-width: ${viewportWidth ? `${viewportWidth}px` : '100%'}`}
+        class="timeline-grid grouped-grid"
+        style={`--timeline-zoom: ${zoom}; --timeline-position-column-width: 24px; --timeline-position-width: ${compositionMode ? '0px' : 'calc(var(--timeline-position-column-width) + 8px)'}; --timeline-identity-width: ${identityWidth}px; --timeline-viewport-width: ${viewportWidth ? `${viewportWidth}px` : '100%'}`}
       >
         {#snippet timeAxis(label = 'Player')}
           <div class="axis-row">
-            <div class="identity axis-label">{label}</div>
+            {#if !compositionMode}<div class="position-label">#</div>{/if}
+            <div class="identity axis-label">
+              <span>{label}</span>
+            </div>
             <div class="axis">
               {#each labelTicks as tick (tick)}
                 <span
@@ -350,13 +467,16 @@
             {@render bossRow()}
           </div>
         {:else}
-          {@render timeAxis()}
-          {@render bossRow()}
+          <section aria-label="Boss timelines" class="role-timelines">
+            {@render timeAxis('Boss')}
+            {@render bossRow()}
+          </section>
         {/if}
         {#each timelineGroups as group (group.name)}
           {#snippet groupRows()}
             {#each group.rows as { report, rank } (timelineKey(report))}
               <TimelineRow
+                mergedResources
                 {compositionMode}
                 report={reportWithReference(report)}
                 isReference={referenceReport !== undefined &&
@@ -376,7 +496,11 @@
                 {showCasts}
                 {showBuffs}
                 {showDeaths}
-                {separateSpells}
+                {showDirectHeals}
+                {showHots}
+                {showDamageTaken}
+                {showManaReceived}
+                {showReceivedBuffs}
                 loading={loader.loadingKeys.has(timelineKey(report))}
                 error={loader.errors.get(timelineKey(report))}
                 bind:inspected
@@ -396,7 +520,10 @@
               </div>
             </section>
           {:else}
-            {@render groupRows()}
+            <section aria-label="Player timelines" class="role-timelines">
+              {@render timeAxis()}
+              {@render groupRows()}
+            </section>
           {/if}
         {/each}
         {#if !reports.length}<Alert>No loaded reports match these filters.</Alert>{/if}
@@ -407,7 +534,6 @@
 
 <style lang="scss">
   @use '../styles/selection-tokens' as selectionTokens;
-
   .workspace {
     @include selectionTokens.apply-selection-tokens;
   }
@@ -461,7 +587,11 @@
     min-width: 0;
   }
   .timeline-grid {
-    width: calc(var(--timeline-zoom) * 1% - 248px * (var(--timeline-zoom) / 100 - 1));
+    width: calc(
+      var(--timeline-zoom) * 1% -
+        (var(--timeline-identity-width) + 28px + var(--timeline-position-width)) *
+        (var(--timeline-zoom) / 100 - 1)
+    );
   }
   .mobile-timeline-hint {
     display: none;
@@ -548,11 +678,6 @@
   .timeline-controls {
     align-items: end;
   }
-  .load-progress {
-    font-size: 11px;
-    color: var(--muted);
-    padding: 6px 0;
-  }
   fieldset {
     display: flex;
     flex-wrap: wrap;
@@ -620,22 +745,38 @@
     height: 30px;
   }
   .identity {
-    width: 220px;
+    width: var(--timeline-identity-width);
     flex-shrink: 0;
     padding: 6px 8px;
     position: sticky;
-    left: 0;
+    left: var(--timeline-position-width);
     background: var(--panel);
     border-right: 1px solid var(--line);
     z-index: 3;
   }
   .axis-label {
+    display: flex;
+    align-items: center;
     font-size: 11px;
     z-index: 6;
   }
+  .position-label {
+    width: var(--timeline-position-width);
+    flex-shrink: 0;
+    text-align: center;
+    position: sticky;
+    left: 0;
+    z-index: 7;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
   .axis {
     position: relative;
-    width: calc(100% - 248px);
+    width: calc(100% - var(--timeline-identity-width) - 28px - var(--timeline-position-width));
     flex-shrink: 0;
   }
   .axis .end-label {

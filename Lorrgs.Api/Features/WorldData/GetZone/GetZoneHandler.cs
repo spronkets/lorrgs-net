@@ -1,5 +1,4 @@
 using Lorrgs.Api.Shared.Responses;
-using Microsoft.AspNetCore.Mvc;
 using Lorrgs.Api.Features.WorldData.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -12,13 +11,14 @@ public static class GetZoneHandler
         [AsParameters] GetZoneRequest request, CancellationToken ct)
     {
         var logger = loggerFactory.CreateLogger("GetZone");
-        logger.LogInformation("Fetching zone: {ZoneSlug}", request.ZoneSlug);
         var zone = data.GetZone(request.ZoneSlug);
         if (zone == null)
         {
+            logger.LogWarning("Zone not found");
             return TypedResults.NotFound(new ApiErrorResponse($"Zone not found: {request.ZoneSlug}"));
         }
 
+        logger.LogInformation("Found zone: {ZoneId} {ZoneName}", zone.Id, zone.Name);
         return TypedResults.Ok(zone);
     }
 }

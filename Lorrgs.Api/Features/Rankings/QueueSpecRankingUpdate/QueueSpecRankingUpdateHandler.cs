@@ -8,7 +8,7 @@ public sealed class QueueSpecRankingUpdateHandler(ILogger<QueueSpecRankingUpdate
         QueueSpecRankingUpdateRequest request, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        logger.LogInformation("Queuing spec ranking update: {SpecSlug}/{BossSlug}", request.SpecSlug, request.BossSlug);
+        logger.LogInformation("Queuing spec ranking update");
 
         // TODO: Implement task queue with Azure Service Bus
         // For now, return placeholder response

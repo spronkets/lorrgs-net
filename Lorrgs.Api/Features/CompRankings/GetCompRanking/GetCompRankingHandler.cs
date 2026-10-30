@@ -41,7 +41,7 @@ public sealed class GetCompRankingHandler(ICompRankingService service, ILogger<G
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Composition search failed encounter={EncounterId} edition={Edition}", request.EncounterId, normalizedEdition);
+            logger.LogError("Composition search failed exceptionType={ExceptionType}", ex.GetType().FullName);
             return TypedResults.Problem(statusCode: 502, title: "Unable to load composition rankings from Warcraft Logs.");
         }
 

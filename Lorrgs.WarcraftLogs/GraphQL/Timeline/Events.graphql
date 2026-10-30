@@ -7,7 +7,7 @@ query TimelineEvents(
       events(
         fightIDs: $fightIds, startTime: $startTime, endTime: $endTime,
         dataType: All, filterExpression: $filter, limit: 10000, useAbilityIDs: true,
-        useActorIDs: true
+        useActorIDs: true, includeResources: true
       ) {
         data
         nextPageTimestamp

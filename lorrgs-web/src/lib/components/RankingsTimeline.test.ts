@@ -17,6 +17,185 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('ranking cooldown comparison', () => {
+  it('shows opt-in self-use mana events above the original timeline without adding rows', async () => {
+    const report = {
+      ...rows[0].report,
+      timeline: {
+        ...response(rows[0].report),
+        maxHealth: 12000,
+        maxMana: 5500,
+        spells: [
+          { id: 1, name: 'Holy Light', icon: '' },
+          { id: 2, name: 'Mana Potion', icon: '' }
+        ],
+        events: [
+          { spellId: 1, timestamp: 1000, duration: null, kind: 'cast' as const },
+          { spellId: 1, timestamp: 1000, duration: null, kind: 'mana-spent' as const, amount: 250 },
+          {
+            spellId: 2,
+            timestamp: 2000,
+            duration: null,
+            kind: 'mana-returned' as const,
+            amount: 500
+          }
+        ]
+      }
+    };
+    const { container } = render(RankingsTimeline, {
+      reports: [{ report, rank: 1 }],
+      edition: 'anniversary'
+    });
+    expect(container.querySelector('.survival-row')).toBeNull();
+    expect(container.querySelector('.timeline-controls fieldset'))
+      .toContainElement(screen.getByRole('checkbox', { name: 'Show healing received' }));
+    expect(container.querySelector('.timeline-controls fieldset'))
+      .toContainElement(screen.getByRole('checkbox', { name: 'Show mana received' }));
+    expect(screen.getByRole('checkbox', { name: 'Show healing received' }).closest('label'))
+      .toHaveClass('option-toggle');
+    expect(screen.getByRole('checkbox', { name: 'Show mana received' }).closest('label'))
+      .toHaveClass('option-toggle');
+    expect(screen.queryByRole('checkbox', { name: 'Show mana spent' })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Show mana received' })).not.toBeChecked();
+    expect(container.querySelector('.mana-event')).toBeNull();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show mana received' }));
+    expect(container.querySelectorAll('.mana-event')).toHaveLength(1);
+    expect(container.querySelector('.mana-event[aria-label*="Holy Light"]')).toBeNull();
+    await waitFor(() =>
+      expect(container.querySelectorAll('.player-row .mana-event:not(.below)')).toHaveLength(1)
+    );
+    expect(container.querySelector('.player-row .mana-event[aria-label*="Holy Light"]')).toBeNull();
+    expect(container.querySelector('.player-row .mana-event[aria-label*="Mana Potion"]')).not.toBeNull();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show healing received' }));
+    expect(container.querySelectorAll('.player-row')).toHaveLength(1);
+    expect(container.querySelector('.survival-row')).toBeNull();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show healing received' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show mana received' }));
+    expect(container.querySelectorAll('.mana-event')).toHaveLength(0);
+    expect(container.querySelector('.mana-event[aria-label*="Mana Potion"]')).toBeNull();
+    await waitFor(() => expect(container.querySelector('.mana-event')).toBeNull());
+    expect(fetchTimeline).not.toHaveBeenCalled();
+  });
+  it('keeps defensives and health consumables above without duplicates', async () => {
+    const names = ['Shield Wall', 'Pain Suppression', 'Super Healing Potion', 'Haste Potion'];
+    const report = {
+      ...rows[0].report,
+      timeline: {
+        ...response(rows[0].report),
+        spells: names.map((name, index) => ({ id: index + 1, name, icon: '' })),
+        events: names.map((_, index) => ({
+          spellId: index + 1,
+          timestamp: 1000 * (index + 1),
+          duration: null,
+          kind: index === 1 ? ('buff' as const) : ('cast' as const)
+        }))
+      }
+    };
+    const { container } = render(RankingsTimeline, {
+      reports: [{ report, rank: 1 }],
+      edition: 'anniversary'
+    });
+    expect(container.querySelector('.survival-row')).toBeNull();
+    const survival = container.querySelector('.player-row')!;
+    expect(survival.querySelector('[aria-label*="Shield Wall"]')).not.toBeNull();
+    expect(survival.querySelector('[aria-label*="Pain Suppression"]')).not.toBeNull();
+    expect(survival).toHaveTextContent('Super Healing Potion');
+    expect(survival.querySelectorAll('.event.below')).toHaveLength(0);
+    expect(survival.querySelectorAll('.event:not(.below)')).toHaveLength(4);
+    expect(survival.querySelector('.event[aria-label*="Super Healing Potion"]'))
+      .toHaveStyle({ '--spell-color': '#69d98b' });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show healing received' }));
+    expect(survival.querySelectorAll('.event.below')).toHaveLength(0);
+    expect(container.querySelectorAll('.player-row')).toHaveLength(1);
+    expect(fetchTimeline).not.toHaveBeenCalled();
+  });
+  it('toggles direct heals and HoT ticks independently of damage taken', async () => {
+    const report = {
+      ...rows[0].report,
+      timeline: {
+        ...response(rows[0].report),
+        spells: [
+          { id: 1, name: 'Direct healing', icon: '' },
+          { id: 2, name: 'Periodic healing', icon: '' },
+          { id: 3, name: 'Incoming damage', icon: '' },
+          { id: 4, name: 'Mana Burn', icon: '' }
+        ],
+        events: [
+          { spellId: 1, timestamp: 1000, duration: null, kind: 'heal' as const },
+          { spellId: 2, timestamp: 2000, duration: null, kind: 'hot' as const },
+          { spellId: 3, timestamp: 3000, duration: null, kind: 'damage' as const },
+          { spellId: 4, timestamp: 3000, duration: null, kind: 'mana-spent' as const,
+            amount: 125, isManaDrain: true, sourceName: 'Enemy' }
+        ]
+      }
+    };
+    const { container } = render(RankingsTimeline, {
+      reports: [{ report, rank: 1 }],
+      edition: 'anniversary'
+    });
+    expect(container.querySelectorAll('.player-row .healing')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Direct healing' })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Show damage taken' })).not.toBeChecked();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show healing received' }));
+    await waitFor(() => expect(container.querySelectorAll('.player-row .healing.below')).toHaveLength(2));
+    expect(container.querySelector('.damage-taken')).toBeNull();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show damage taken' }));
+    expect(container.querySelector('.mana-event.below')).toHaveStyle({ '--spell-color': '#d9ad69' });
+    expect(screen.getByRole('button', { name: 'Mana Burn' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(container.querySelectorAll('.player-row .damage-taken')).toHaveLength(1)
+    );
+    expect(screen.getByRole('button', { name: 'Direct healing' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Periodic healing' })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show healing received' }));
+    await waitFor(() => expect(container.querySelectorAll('.player-row .healing')).toHaveLength(0));
+    expect(container.querySelectorAll('.damage-taken.below')).toHaveLength(1);
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show damage taken' }));
+    expect(container.querySelector('.damage-taken')).toBeNull();
+    expect(container.querySelector('.mana-event')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mana Burn' })).not.toBeInTheDocument();
+  });
+  it('removes spells exclusive to filtered players and restores them without refetching', async () => {
+    const reports = rows.slice(0, 2).map((row, index) => ({
+      ...row,
+      report: {
+        ...row.report,
+        timeline: {
+          ...response(row.report),
+          spells: [{ id: 100 + index, name: index ? 'Healer ability' : 'Tank ability', icon: '' }],
+          events: [{ spellId: 100 + index, timestamp: 1000, duration: null, kind: 'cast' as const }]
+        }
+      }
+    }));
+    const { rerender } = render(RankingsTimeline, {
+      reports,
+      edition: 'anniversary',
+      compositionMode: true
+    });
+    await screen.findByRole('button', { name: 'Tank ability' });
+    expect(screen.getByRole('button', { name: 'Healer ability' })).toBeInTheDocument();
+    await rerender({ reports: reports.slice(1), edition: 'anniversary', compositionMode: true });
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Tank ability' })).not.toBeInTheDocument()
+    );
+    expect(screen.getByRole('button', { name: 'Healer ability' })).toBeInTheDocument();
+    await rerender({ reports, edition: 'anniversary', compositionMode: true });
+    await screen.findByRole('button', { name: 'Tank ability' });
+    expect(fetchTimeline).not.toHaveBeenCalled();
+  });
+  it('gives spec boss and player timelines separate matching axis headers', () => {
+    const { container } = render(RankingsTimeline, { reports: rows, edition: 'anniversary' });
+    const boss = screen.getByRole('region', { name: 'Boss timelines' });
+    const players = screen.getByRole('region', { name: 'Player timelines' });
+    expect(boss.querySelector('.axis-label')).toHaveTextContent('Boss');
+    expect(players.querySelector('.axis-label')).toHaveTextContent('Player');
+    expect(boss.querySelector('.boss-row')).not.toBeNull();
+    expect(boss.querySelector('.player-row')).toBeNull();
+    expect(players.querySelectorAll('.player-row')).toHaveLength(rows.length);
+    expect(boss.querySelector('.axis')?.textContent).toBe(
+      players.querySelector('.axis')?.textContent
+    );
+    expect(container.querySelectorAll('.position-label')).toHaveLength(2);
+  });
   it('updates the matching player phases when corrected boss data arrives after player data', async () => {
     let resolveBoss!: (_timeline: ReturnType<typeof bossResponse>) => void;
     vi.mocked(getBossTimeline).mockImplementation(
@@ -80,7 +259,7 @@ describe('ranking cooldown comparison', () => {
       'href',
       expect.stringContaining('Report1')
     );
-    expect(container.querySelector('.player-row .rank')?.textContent).toBe('5.');
+    expect(container.querySelector('.player-row .rank')?.textContent).toBe('5');
     await rerender({ reports: reports.slice(2), edition: 'anniversary' });
     await waitFor(() =>
       expect(container.querySelector('.boss-row a')).toHaveAttribute(
@@ -107,7 +286,10 @@ describe('ranking cooldown comparison', () => {
     }));
     const { container, rerender } = render(RankingsTimeline, { reports, edition: 'anniversary' });
     await screen.findByRole('button', { name: '0:30 · Boss Strike' });
-    expect(container.querySelector('.boss-row')?.nextElementSibling).toHaveClass('player-row');
+    expect(container.querySelector('.boss-row')?.parentElement?.nextElementSibling).toHaveAttribute(
+      'aria-label',
+      'Player timelines'
+    );
     expect(container.querySelectorAll('.boss-row [aria-label="Phase 2 at 1:00"]')).toHaveLength(1);
     expect(container.querySelectorAll('.player-row [aria-label="Phase 2 at 1:00"]')).toHaveLength(
       5
@@ -119,7 +301,7 @@ describe('ranking cooldown comparison', () => {
         expect.stringContaining('Report4')
       )
     );
-    expect(container.querySelector('.player-row .rank')?.textContent).toBe('5.');
+    expect(container.querySelector('.player-row .rank')?.textContent).toBe('5');
     expect(getBossTimeline).not.toHaveBeenCalled();
     expect(fetchTimeline).not.toHaveBeenCalled();
   });
@@ -133,7 +315,9 @@ describe('ranking cooldown comparison', () => {
         Number(option.value)
       )
     ).toEqual([...TIMELINE_ZOOM_LEVELS]);
-    const spell = await screen.findByRole('button', { name: /0:10 · Avenging Wrath · DPS/ });
+    const spell = await screen.findByRole('button', {
+      name: /0:10 · Avenging Wrath · Cast · DPS/
+    });
     await fireEvent.mouseEnter(spell);
     expect(screen.getByRole('tooltip')).toBeInTheDocument();
     await fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: String(maximum) } });
@@ -146,30 +330,23 @@ describe('ranking cooldown comparison', () => {
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     await fireEvent.mouseLeave(spell);
     await fireEvent.mouseEnter(spell);
-    expect(screen.getByRole('tooltip')).toHaveTextContent(`${previous * 2}%`);
+    expect(screen.getByRole('tooltip')).toHaveTextContent(`${maximum}%`);
     expect(fetchTimeline).toHaveBeenCalledTimes(1);
   });
 
-  it('closes the magnifier while spells are separated and restores it when combined', async () => {
+  it('keeps spells combined with magnification and no separate-spells control', async () => {
     const { container } = render(RankingsTimeline, {
       reports: rows.slice(0, 1),
       edition: 'anniversary'
     });
-    const spell = await screen.findByRole('button', { name: /0:10 · Avenging Wrath · DPS/ });
-    const separate = screen.getByRole('checkbox', { name: 'Separate spells' });
+    const spell = await screen.findByRole('button', {
+      name: /0:10 · Avenging Wrath · Cast · DPS/
+    });
+    expect(screen.queryByRole('checkbox', { name: 'Separate spells' })).not.toBeInTheDocument();
     await fireEvent.mouseEnter(spell);
     expect(screen.getByRole('tooltip')).toBeInTheDocument();
     expect(container.querySelector('.magnified-section')).not.toBeNull();
-    await fireEvent.click(separate);
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
-    expect(container.querySelector('.magnified-section')).toBeNull();
-    await fireEvent.mouseLeave(spell);
-    await fireEvent.mouseEnter(spell);
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
-    expect(container.querySelector('.magnified-section')).toBeNull();
     expect(spell).toHaveClass('spell-highlighted');
-    await fireEvent.click(separate);
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     await fireEvent.mouseLeave(spell);
     await fireEvent.mouseEnter(spell);
     expect(screen.getByRole('tooltip')).toBeInTheDocument();
@@ -186,7 +363,7 @@ describe('ranking cooldown comparison', () => {
     await waitFor(() =>
       expect(screen.getAllByRole('button', { name: 'Copy note' })).toHaveLength(5)
     );
-    expect(screen.getByText('5 / 5 timelines ready')).toBeInTheDocument();
+    expect(screen.queryByText(/timelines ready|All timelines loaded/)).not.toBeInTheDocument();
     expect(screen.queryByText('Loading report events…')).not.toBeInTheDocument();
     expect(fetchTimeline).not.toHaveBeenCalled();
   });
@@ -194,7 +371,7 @@ describe('ranking cooldown comparison', () => {
   it('uses fixed-size SVG toolbar icons and preserves their accessible toggles', async () => {
     render(RankingsTimeline, { reports: rows.slice(0, 1), edition: 'anniversary' });
     await screen.findByRole('button', { name: 'Copy note' });
-    for (const name of ['Spell icons', 'Casts', 'Buff durations', 'Deaths', 'Separate spells']) {
+    for (const name of ['Spell icons', 'Casts', 'Buff durations', 'Deaths', 'Show received buffs', 'Show healing received', 'Show damage taken', 'Show mana received']) {
       const toggle = screen.getByRole('checkbox', { name });
       const icon = toggle.nextElementSibling;
       expect(icon).toHaveAttribute('aria-hidden', 'true');
@@ -363,7 +540,7 @@ describe('ranking cooldown comparison', () => {
     ]);
     await rerender({ reports: rows.slice(0, 3), edition: 'anniversary' });
     expect(fetchTimeline).toHaveBeenCalledTimes(5);
-    expect(screen.getByText('3 / 3 timelines ready')).toBeInTheDocument();
+    expect(screen.queryByText(/timelines ready|All timelines loaded/)).not.toBeInTheDocument();
   });
 
   it('links selector hover and keyboard event focus to matching spells across rows', async () => {
@@ -389,7 +566,7 @@ describe('ranking cooldown comparison', () => {
     expect(shields[0]).not.toHaveClass('spell-dimmed');
     await fireEvent.focus(shields[0]);
     expect(
-      screen.getByText(/Player0 · Effect on player · buff at 0:20 · 0:08 measured uptime/)
+      screen.getByText(/Player0 · 0:20 · Divine Shield · Buff · 0:08 measured uptime/)
     ).toBeInTheDocument();
     expect(shields[1]).toHaveClass('spell-highlighted');
     await fireEvent.blur(shields[0]);
@@ -413,8 +590,20 @@ describe('ranking cooldown comparison', () => {
     const bloodlust = await screen.findByRole('button', { name: 'Bloodlust' });
     expect(bloodlust).toHaveClass('power-window');
     expect(screen.getByRole('group', { name: 'DPS / power windows' })).toContainElement(bloodlust);
-    const marker = screen.getByRole('button', { name: /0:30 · Bloodlust · 0:40 uptime · DPS/ });
+    const marker = screen.getByRole('button', {
+      name: /0:30 · Bloodlust · Buff · 0:40 measured uptime · DPS/
+    });
     expect(marker).toHaveClass('buff', 'power-window');
+    expect(marker).not.toHaveClass('below');
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show healing received' }));
+    expect(marker).not.toHaveClass('below');
+    await fireEvent.mouseEnter(marker);
+    expect(screen.getByRole('tooltip').querySelector('.event-details')).toHaveTextContent('Bloodlust');
+    await fireEvent.mouseLeave(marker);
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show received buffs' }));
+    expect(screen.getByRole('button', { name: /0:30 · Bloodlust · Buff/ })).toHaveClass('below');
+    await fireEvent.mouseEnter(screen.getByRole('button', { name: /0:30 · Bloodlust · Buff/ }));
+    expect(screen.getByRole('tooltip').querySelector('.event-details')).toHaveTextContent('Bloodlust');
     await fireEvent.click(bloodlust);
     expect(screen.queryByRole('button', { name: /0:30 · Bloodlust/ })).not.toBeInTheDocument();
     expect(fetchTimeline).toHaveBeenCalledTimes(1);
@@ -429,7 +618,9 @@ describe('ranking cooldown comparison', () => {
     expect(fetchTimeline.mock.calls.every((call) => call[1] === 'anniversary')).toBe(true);
     expect(screen.getAllByRole('button', { name: /0:10 · Avenging Wrath/ })).toHaveLength(6);
     await fireEvent.click(screen.getByRole('button', { name: 'Avenging Wrath' }));
-    expect(screen.queryByRole('button', { name: /0:10 · Avenging Wrath/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /0:10 · Avenging Wrath/ })
+    ).not.toBeInTheDocument();
     const height = document.querySelector('.track')?.getAttribute('style');
     expect(screen.getByLabelText('Zoom')).toHaveValue('100');
     await fireEvent.change(screen.getByLabelText('Zoom'), { target: { value: '200' } });

@@ -100,7 +100,7 @@ public sealed class RankingsDataService(
             }
             catch (Exception ex) when (ex is WarcraftLogsReportPrivateException or WarcraftLogsReportNotFoundException)
             {
-                _logger.LogWarning(ex, "Cached ranking timeline report unavailable report={ReportCode}", report.ReportId);
+                _logger.LogWarning("Cached ranking timeline report unavailable");
                 return false;
             }
         }
@@ -117,14 +117,7 @@ public sealed class RankingsDataService(
         bool includeReportDetails = true,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug(
-            "Querying WarcraftLogs API for spec ranking: {SpecSlug}/{BossSlug} zone={ZoneId} encounter={EncounterId} class={ClassName} spec={SpecName}",
-            queryContext.SpecSlug,
-            queryContext.BossSlug,
-            queryContext.ZoneId,
-            queryContext.EncounterId,
-            queryContext.ClassName,
-            queryContext.SpecName);
+        _logger.LogDebug("Querying WarcraftLogs API for spec ranking");
 
         try
         {
@@ -162,11 +155,7 @@ public sealed class RankingsDataService(
             if (IsInvalidDifficultyOrSizeError(queryResult.CharacterRankings.Error) && activeOptions.Size.HasValue)
             {
                 var sizeFallbackOptions = activeOptions with { Size = null };
-                _logger.LogInformation(
-                    "WarcraftLogs rejected size={Size} for {SpecSlug}/{BossSlug}; retrying without size filter",
-                    activeOptions.Size,
-                    queryContext.SpecSlug,
-                    queryContext.BossSlug);
+                _logger.LogInformation("WarcraftLogs rejected size; retrying without size filter");
 
                 var retryWithoutSize = await QueryCharacterRankingsAsync(
                     queryContext,
@@ -191,11 +180,7 @@ public sealed class RankingsDataService(
                 queryResult.CharacterRankings.Rankings.Count == 0)
             {
                 var sizeFallbackOptions = activeOptions with { Size = null };
-                _logger.LogInformation(
-                    "WarcraftLogs returned empty rankings with size={Size} for {SpecSlug}/{BossSlug}; retrying without size filter",
-                    activeOptions.Size,
-                    queryContext.SpecSlug,
-                    queryContext.BossSlug);
+                _logger.LogInformation("WarcraftLogs returned empty rankings; retrying without size filter");
 
                 var retryWithoutSize = await QueryCharacterRankingsAsync(
                     queryContext,
@@ -215,11 +200,7 @@ public sealed class RankingsDataService(
 
             if (IsInvalidDifficultyOrSizeError(queryResult.CharacterRankings?.Error) && activeDifficulty.HasValue)
             {
-                _logger.LogInformation(
-                    "WarcraftLogs rejected difficulty={Difficulty} for {SpecSlug}/{BossSlug}; retrying without explicit difficulty",
-                    activeDifficulty,
-                    queryContext.SpecSlug,
-                    queryContext.BossSlug);
+                _logger.LogInformation("WarcraftLogs rejected difficulty; retrying without explicit difficulty");
 
                 var retryWithoutDifficulty = await QueryCharacterRankingsAsync(
                     queryContext,
@@ -244,11 +225,7 @@ public sealed class RankingsDataService(
 
             if (!string.IsNullOrWhiteSpace(characterRankings.Error))
             {
-                _logger.LogWarning(
-                    "WarcraftLogs characterRankings returned error for {SpecSlug}/{BossSlug}: {Error}",
-                    queryContext.SpecSlug,
-                    queryContext.BossSlug,
-                    characterRankings.Error);
+                _logger.LogWarning("WarcraftLogs characterRankings returned an error");
                 return ranking;
             }
 
@@ -279,12 +256,15 @@ public sealed class RankingsDataService(
                     continue;
                 }
 
+                _logger.LogDebug("Retrieved ranked report report={ReportCode} title={ReportTitle} fight={FightId} player={PlayerName}",
+                    reportData.Code, reportData.Title, reportData.FightId, rankingElem.Name);
                 var primaryPlayer = new RankingPlayer
                 {
                     PlayerId = 0,
                     Name = rankingElem.Name ?? string.Empty,
                     GuildName = string.IsNullOrWhiteSpace(rankingElem.Guild?.Name) ? null : rankingElem.Guild.Name,
-                    FactionId = rankingElem.Guild?.Faction,
+                    FactionId = NormalizeRankingFaction(rankingElem.FactionAlias)
+                        ?? NormalizeRankingFaction(rankingElem.Guild?.Faction?.ToString()),
                     ServerRegion = ResolveServerRegion(rankingElem.ServerRegion, rankingElem.RegionName, rankingElem.RegionAlias)
                         ?? NormalizeServerRegion(activeOptions.ServerRegion),
                     ServerSlug = ResolveServerSlug(rankingElem.ServerSlug, rankingElem.ServerName, rankingElem.RealmName, rankingElem.ServerAlias)
@@ -343,9 +323,7 @@ public sealed class RankingsDataService(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex,
-                "Error fetching spec ranking from WarcraftLogs API for {SpecSlug}/{BossSlug} edition={Edition} difficulty={Difficulty} metric={Metric}",
-                queryContext.SpecSlug, queryContext.BossSlug, edition, difficultyValue, metric);
+            _logger.LogError("Error fetching spec ranking from WarcraftLogs API exceptionType={ExceptionType}", ex.GetType().FullName);
             throw;
         }
     }
@@ -366,8 +344,7 @@ public sealed class RankingsDataService(
                 queryContext.ZoneId, queryContext.BossSlug, edition, bypassWclCache, cancellationToken);
             if (resolvedId is null)
             {
-                _logger.LogWarning("Encounter {BossSlug} was not returned for zone {ZoneId}",
-                    queryContext.BossSlug, queryContext.ZoneId);
+                _logger.LogWarning("Requested encounter was not returned");
                 return (null, null);
             }
             encounterId = resolvedId.Value;
@@ -403,12 +380,12 @@ public sealed class RankingsDataService(
         var encounter = specRankingsResponse.WorldData?.Encounter;
         if (encounter is null)
         {
-            _logger.LogWarning(
-                "WarcraftLogs returned no encounter for {SpecSlug}/{BossSlug} encounter={EncounterId} edition={Edition}",
-                queryContext.SpecSlug, queryContext.BossSlug, encounterId, edition);
+            _logger.LogWarning("WarcraftLogs returned no encounter");
             return (null, null);
         }
 
+        _logger.LogInformation("Retrieved ranking encounter encounter={EncounterId} name={EncounterName}",
+            encounter.Id, encounter.Name);
         return (WclCharacterRankingsParser.Parse(encounter.CharacterRankings), encounter);
     }
 
@@ -512,7 +489,7 @@ public sealed class RankingsDataService(
                 {
                     foreach (var alias in ex.InaccessibleReportAliases)
                     {
-                        _logger.LogWarning("Ranking enrichment report unavailable report={ReportCode}", aliasToReport[alias].Key);
+                        _logger.LogWarning("Ranking enrichment report unavailable");
                         foreach (var report in aliasToReport[alias]) removedReports.Add(report);
                     }
                     response = partialData;
@@ -539,7 +516,7 @@ public sealed class RankingsDataService(
                             singleError.IsReportAccessFailure ||
                             singleError is WarcraftLogsReportPrivateException or WarcraftLogsReportNotFoundException)
                         {
-                            _logger.LogWarning(singleError, "Ranking enrichment report unavailable report={ReportCode}", entry.Value.Key);
+                            _logger.LogWarning("Ranking enrichment report unavailable");
                             foreach (var report in entry.Value) removedReports.Add(report);
                         }
                     }));
@@ -552,9 +529,8 @@ public sealed class RankingsDataService(
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
-                    "Failed to enrich report percentiles for {SpecSlug}/{BossSlug} edition={Edition} metric={Metric} batchOffset={BatchOffset} batchCount={BatchCount}",
-                    queryContext.SpecSlug, queryContext.BossSlug, edition, metric, offset, chunk.Length);
+                _logger.LogError("Failed to enrich report percentiles exceptionType={ExceptionType} batchOffset={BatchOffset} batchCount={BatchCount}",
+                    ex.GetType().FullName, offset, chunk.Length);
                 throw;
             }
 
@@ -562,8 +538,8 @@ public sealed class RankingsDataService(
                 !response.TryGetProperty("reportData", out var reportData) || reportData.ValueKind != JsonValueKind.Object)
             {
                 _logger.LogWarning(
-                    "WarcraftLogs percentile enrichment returned no reportData for {SpecSlug}/{BossSlug} edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}",
-                    queryContext.SpecSlug, queryContext.BossSlug, edition, offset, chunk.Length);
+                    "WarcraftLogs percentile enrichment returned no reportData batchOffset={BatchOffset} batchCount={BatchCount}",
+                    offset, chunk.Length);
                 return;
             }
 
@@ -799,6 +775,7 @@ public sealed class RankingsDataService(
                 PlayerId = 0,
                 Name = name,
                 GuildName = string.IsNullOrWhiteSpace(character.GuildName) ? null : character.GuildName,
+                FactionId = NormalizeRankingFaction(character.FactionAlias),
                 ServerRegion = ResolveServerRegion(character.ServerRegion, character.RegionName, character.RegionAlias)
                     ?? primaryPlayer.ServerRegion
                     ?? NormalizeServerRegion(requestOptions.ServerRegion),
@@ -924,17 +901,16 @@ public sealed class RankingsDataService(
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
-                    "Failed to enrich ranking factions from WarcraftLogs characterData edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}",
-                    edition, offset, chunk.Length);
+                _logger.LogError("Failed to enrich ranking factions exceptionType={ExceptionType} batchOffset={BatchOffset} batchCount={BatchCount}",
+                    ex.GetType().FullName, offset, chunk.Length);
                 throw;
             }
 
             if (!response.TryGetProperty("characterData", out var characterData) || characterData.ValueKind != JsonValueKind.Object)
             {
                 _logger.LogWarning(
-                    "WarcraftLogs faction enrichment returned no characterData edition={Edition} batchOffset={BatchOffset} batchCount={BatchCount}",
-                    edition, offset, chunk.Length);
+                    "WarcraftLogs faction enrichment returned no characterData batchOffset={BatchOffset} batchCount={BatchCount}",
+                    offset, chunk.Length);
                 return;
             }
 
@@ -1100,6 +1076,13 @@ public sealed class RankingsDataService(
             .Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace("\"", "\\\"", StringComparison.Ordinal);
     }
+
+    private static int? NormalizeRankingFaction(string? faction) => faction?.Trim().ToLowerInvariant() switch
+    {
+        "0" or "alliance" => 1,
+        "1" or "horde" => 2,
+        _ => null
+    };
 
     private static int? ReadFactionId(JsonElement element)
     {

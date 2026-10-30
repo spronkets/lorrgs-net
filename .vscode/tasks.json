@@ -18,27 +18,17 @@
       "problemMatcher": ["$msCompile"]
     },
     {
-      "label": "API: free port 5247",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-Command",
-        "$p = Get-NetTCPConnection -LocalPort 5247 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($p) { $p | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }; exit 0"
-      ]
-    },
-    {
-      "label": "API: prepare launch",
-      "dependsOrder": "sequence",
-      "dependsOn": ["API: free port 5247", "API: build"]
-    },
-    {
       "label": "API: run",
-      "type": "shell",
-      "command": "dotnet",
-      "args": ["run", "--project", "Lorrgs.Api/Lorrgs.Api.csproj"],
+      "type": "process",
+      "command": "${workspaceFolder}\\Lorrgs.Api\\bin\\Debug\\net10.0\\Lorrgs.Api.exe",
+      "options": {
+        "cwd": "${workspaceFolder}\\Lorrgs.Api",
+        "env": {
+          "ASPNETCORE_ENVIRONMENT": "Development",
+          "ASPNETCORE_URLS": "http://localhost:5247"
+        }
+      },
+      "dependsOn": ["API: build"],
       "isBackground": true,
       "presentation": {
         "reveal": "always",
@@ -54,7 +44,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": "Building...",
-          "endsPattern": "Application started"
+          "endsPattern": "Now listening on:"
         }
       }
     },
@@ -105,18 +95,6 @@
       }
     },
     {
-      "label": "Web: free port 5173",
-      "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-Command",
-        "$p = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($p) { $p | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }; exit 0"
-      ]
-    },
-    {
       "label": "Web: dev server",
       "type": "shell",
       "command": "npm",
@@ -146,14 +124,14 @@
     {
       "label": "Web: start dev",
       "dependsOrder": "sequence",
-      "dependsOn": ["Web: free port 5173", "Web: dev server"],
+      "dependsOn": ["Web: dev server"],
       "runOptions": {
         "reevaluateOnRerun": true
       }
     },
     {
       "label": "Dev: run full stack",
-      "dependsOrder": "parallel",
+      "dependsOrder": "sequence",
       "dependsOn": ["API: run", "Web: start dev"]
     },
     {

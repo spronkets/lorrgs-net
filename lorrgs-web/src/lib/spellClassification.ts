@@ -1,8 +1,32 @@
 import type { SpellPreset } from './models/SpellPreset';
 import type { ClassSpellPreset } from './models/ClassSpellPreset';
 import type { TimelineSpell } from './models/TimelineSpell';
+import type { TimelineEvent } from './models/TimelineEvent';
 import { getClassSpellRoles } from './wowAssets';
-import { isPowerWindow, spellIconUrl } from './timelineUtils';
+import { healingSpellNames, isPowerWindow, isResourceHit, spellIconUrl } from './timelineUtils';
+
+export function withResourceLanes(events: TimelineEvent[], spells: TimelineSpell[],
+  allEvents = events, showReceivedBuffs = false, playerName?: string): TimelineEvent[] {
+  const castIds = new Set(allEvents.filter((event) => event.kind === 'cast').map((event) => event.spellId));
+  const consumable = /\b(healing potion|rejuvenation potion|healthstone|healing stone|ironshield|stoneshield|armor potion|healing injector|mana potion|mana injector|mana gem|dark rune|demonic rune)\b/i;
+  const defensiveIds = new Set(spells.filter((spell) => isSurvivalSpell(spell) && !consumable.test(spell.name))
+    .map((spell) => spell.id));
+  const consumableIds = new Set(spells.filter((spell) => consumable.test(spell.name))
+    .map((spell) => spell.id));
+  return events.filter((event) => !(event.kind === 'cast' && consumableIds.has(event.spellId) &&
+    events.some((hit) => (isResourceHit(hit) && hit.kind !== 'mana-spent' || hit.kind === 'buff') &&
+      hit.spellId === event.spellId && hit.timestamp >= event.timestamp && hit.timestamp - event.timestamp <= 250)))
+    .map((event) => {
+      const selfApplied = event.sourceName
+        ? event.sourceName === playerName
+        : consumableIds.has(event.spellId) || castIds.has(event.spellId);
+      return { ...event,
+        displayBelow: isResourceHit(event)
+          ? event.kind === 'damage' || event.isManaDrain === true || !selfApplied
+          : showReceivedBuffs && event.kind === 'buff' && !selfApplied && !defensiveIds.has(event.spellId)
+      };
+    });
+}
 
 export const spellPresets = ['Everything', 'Damage', 'Tank', 'Healing', 'Consumables'] as const;
 
@@ -156,8 +180,7 @@ const presetNames: Record<Exclude<SpellPreset, 'Everything'>, RegExp> = {
   Damage:
     /^(crusader strike|judg(e)?ment|consecration|exorcism|hammer of wrath|seal of (blood|command|righteousness|vengeance)|holy wrath|divine storm|templar's verdict|wake of ashes|execution sentence)$/i,
   Tank: /^(holy shield|shield of the righteous|righteous defense|righteous fury|ardent defender|guardian of ancient kings|shield block|shield wall|last stand)$/i,
-  Healing:
-    /^(holy light|flash of light|holy shock|lay on hands|light of dawn|word of glory|renew|rejuvenation|regrowth|healing touch|chain heal|healing wave|lesser healing wave|prayer of healing|binding heal|flash heal|greater heal)$/i,
+  Healing: healingSpellNames,
   Consumables:
     /\b(potion|elixir|flask|healthstone|healing stone|mana gem|drums|food|well fed)\b|^(haste|insane strength|super mana|destruction|ironshield)$/i
 };
@@ -168,5 +191,20 @@ export function matchesSpellPreset(spell: TimelineSpell, preset: SpellPreset): b
     presetIds[preset].has(spell.id) ||
     presetNames[preset].test(spell.name) ||
     (preset === 'Damage' && isPowerWindow(spell))
+  );
+}
+
+export function isSurvivalSpell(spell: TimelineSpell): boolean {
+  return (
+    presetIds.Tank.has(spell.id) ||
+    /^(shield wall|shield block|last stand|holy shield|shield of the righteous|ardent defender|guardian of ancient kings)(?: \(rank \d+\))?$/i.test(
+      spell.name
+    ) ||
+    /^(divine protection|divine shield|ice block|barkskin|survival instincts|dispersion|evasion|cloak of shadows|feint|deterrence|aspect of the turtle|astral shift|shamanistic rage|unending resolve|dark pact|shield of vengeance|anti-magic shell|icebound fortitude|pain suppression|guardian spirit|ironbark|blessing of sacrifice|hand of sacrifice|blessing of protection|hand of protection|power word: shield|power word: barrier|divine guardian|divine sacrifice|rallying cry|anti-magic zone|darkness|zephyr)(?: \(rank \d+\))?$/i.test(
+      spell.name
+    ) ||
+    /\b(healing potion|rejuvenation potion|healthstone|healing stone|ironshield|stoneshield|armor potion|healing injector)\b/i.test(
+      spell.name
+    )
   );
 }

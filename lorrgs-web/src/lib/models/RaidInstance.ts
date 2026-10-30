@@ -8,5 +8,5 @@ export type RaidInstance = {
   edition: string;
   phase: number;
   bosses?: RaidBossOption[];
-  public: boolean;
+  isAvailable: boolean;
 };

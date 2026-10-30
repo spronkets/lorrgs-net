@@ -4,6 +4,8 @@
 # This endpoint has no route parameters, query parameters or request body.
 # It does not require edition: one response contains all configured editions.
 # Response: 200 with editions and instances grouped by edition slug.
+# All configured editions are included. Each edition has an ActivePhase setting.
+# Raids remain visible; isAvailable is true when phase <= the edition's activePhase.
 # Boss entries include id, name, slug and mapped; unmapped bosses retain their names.
 
 ### Complete configured raid catalog

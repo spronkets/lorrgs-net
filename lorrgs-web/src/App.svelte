@@ -337,6 +337,7 @@
     min-height: 100vh;
     color: var(--main-text);
     background: var(--app-bg);
+    background-attachment: fixed;
   }
 
   .app.theme-dark {

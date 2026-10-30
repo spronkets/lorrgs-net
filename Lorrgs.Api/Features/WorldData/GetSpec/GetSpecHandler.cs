@@ -1,5 +1,4 @@
 using Lorrgs.Api.Shared.Responses;
-using Microsoft.AspNetCore.Mvc;
 using Lorrgs.Api.Features.WorldData.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -12,13 +11,14 @@ public static class GetSpecHandler
         [AsParameters] GetSpecRequest request, CancellationToken ct)
     {
         var logger = loggerFactory.CreateLogger("GetSpec");
-        logger.LogInformation("Fetching spec: {SpecSlug}", request.SpecSlug);
         var spec = data.GetSpec(request.SpecSlug);
         if (spec == null)
         {
+            logger.LogWarning("Spec not found");
             return TypedResults.NotFound(new ApiErrorResponse($"Spec not found: {request.SpecSlug}"));
         }
 
+        logger.LogInformation("Found spec: {SpecId} {SpecName}", spec.Id, spec.FullName);
         return TypedResults.Ok(spec);
     }
 }

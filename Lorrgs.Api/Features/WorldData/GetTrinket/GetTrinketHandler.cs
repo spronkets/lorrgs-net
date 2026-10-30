@@ -1,5 +1,4 @@
 using Lorrgs.Api.Shared.Responses;
-using Microsoft.AspNetCore.Mvc;
 using Lorrgs.Api.Features.WorldData.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -12,13 +11,14 @@ public static class GetTrinketHandler
         [AsParameters] GetTrinketRequest request, CancellationToken ct)
     {
         var logger = loggerFactory.CreateLogger("GetTrinket");
-        logger.LogInformation("Fetching trinket: {TrinketId}", request.TrinketId);
         var trinket = data.GetTrinket(request.TrinketId);
         if (trinket == null)
         {
+            logger.LogWarning("Trinket not found");
             return TypedResults.NotFound(new ApiErrorResponse($"Trinket not found: {request.TrinketId}"));
         }
 
+        logger.LogInformation("Found trinket: {TrinketId} {TrinketName}", trinket.Id, trinket.Name);
         return TypedResults.Ok(trinket);
     }
 }

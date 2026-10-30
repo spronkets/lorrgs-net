@@ -21,7 +21,7 @@ public sealed class GetDetailsHandler(ICompRankingService service, ILogger<GetDe
         { return TypedResults.Problem(statusCode: 429, title: "Warcraft Logs rate limit reached. Please retry shortly."); }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Composition detail loading failed report={ReportCode} fight={FightId}", request.Code, request.FightId);
+            logger.LogError("Composition detail loading failed exceptionType={ExceptionType}", ex.GetType().FullName);
             return TypedResults.Problem(statusCode: 502, title: "Unable to load this kill's details from Warcraft Logs.");
         }
     }

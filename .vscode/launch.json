@@ -2,44 +2,80 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run API (.NET)",
-      "type": "coreclr",
-      "request": "launch",
-      "preLaunchTask": "API: prepare launch",
-      "program": "${workspaceFolder}/Lorrgs.Api/bin/Debug/net10.0/Lorrgs.Api.dll",
-      "args": [],
-      "cwd": "${workspaceFolder}/Lorrgs.Api",
-      "console": "integratedTerminal",
-      "stopAtEntry": false,
-      "serverReadyAction": {
-        "action": "openExternally",
-        "pattern": "Now listening on:\\s+(https?://\\S+)",
-        "uriFormat": "%s/swagger"
-      },
-      "env": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
-    },
-    {
-      "name": "Run Web App (Svelte)",
-      "type": "pwa-chrome",
-      "request": "launch",
-      "url": "http://localhost:5173",
-      "webRoot": "${workspaceFolder}/lorrgs-web",
-      "preLaunchTask": "Web: start dev"
-    },
-    {
       "name": "Attach to API (.NET)",
       "type": "coreclr",
       "request": "attach",
-      "processId": "${command:pickProcess}",
-      "justMyCode": true
+      "processName": "Lorrgs.Api.exe",
+      "justMyCode": true,
+      "presentation": { "order": 3 }
+    },
+    {
+      "name": "Run Web App (Svelte)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/lorrgs-web",
+      "preLaunchTask": "Web: start dev",
+      "presentation": { "order": 4 }
+    },
+    {
+      "name": "Attach to Web App (Svelte)",
+      "type": "chrome",
+      "request": "attach",
+      "port": 9222,
+      "urlFilter": "http://localhost:5173/*",
+      "webRoot": "${workspaceFolder}/lorrgs-web",
+      "presentation": { "order": 5 }
+    },
+    {
+      "name": "Run Docker Compose Up",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "docker compose up --build",
+      "cwd": "${workspaceFolder}",
+      "presentation": { "order": 6 }
+    },
+    {
+      "name": "Run Docker Compose Down",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "docker compose down",
+      "cwd": "${workspaceFolder}",
+      "presentation": { "order": 7 }
+    },
+    {
+      "name": "Open Swagger",
+      "type": "chrome",
+      "request": "launch",
+      "userDataDir": "${env:TEMP}\\lorrgs-net-swagger-debug",
+      "url": "http://localhost:5247/swagger/index.html",
+      "presentation": {
+        "hidden": true
+      }
+    },
+    {
+      "name": "Debug running Web App",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/lorrgs-web",
+      "presentation": { "hidden": true }
     }
   ],
   "compounds": [
     {
       "name": "Run All",
-      "configurations": ["Run API (.NET)", "Run Web App (Svelte)"]
+      "preLaunchTask": "Dev: run full stack",
+      "configurations": ["Attach to API (.NET)", "Debug running Web App", "Open Swagger"],
+      "stopAll": true,
+      "presentation": { "order": 1 }
+    },
+    {
+      "name": "Run API (.NET)",
+      "preLaunchTask": "API: run",
+      "configurations": ["Attach to API (.NET)", "Open Swagger"],
+      "stopAll": true,
+      "presentation": { "order": 2 }
     }
   ]
 }

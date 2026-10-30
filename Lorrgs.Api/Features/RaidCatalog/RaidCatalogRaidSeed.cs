@@ -11,7 +11,5 @@ public sealed class RaidCatalogRaidSeed
 
     public int Phase { get; set; }
 
-    public bool Public { get; set; } = true;
-
     public string[] Bosses { get; set; } = [];
 }

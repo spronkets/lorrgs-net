@@ -1,13 +1,17 @@
 query TimelineMetadata($code: String!, $fightIds: [Int!]) {
   reportData {
     report(code: $code) {
+      code
+      title
       fights(fightIDs: $fightIds) {
         id
+        encounterID
+        name
         startTime
         endTime
       }
       masterData {
-        actors(type: "Player") { id name }
+        actors { id name type gameID }
         abilities { gameID name icon }
       }
     }

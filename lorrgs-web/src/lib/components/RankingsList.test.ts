@@ -109,7 +109,8 @@ describe('ranking analytics', () => {
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Region EU' }));
     expect(rowCount()).toBe(12);
-    expect(container.querySelector('.player-row .rank')).toHaveTextContent('2.');
+    expect(container.querySelector('.player-row .rank')).toHaveTextContent(/^2$/);
+    expect(container.querySelector('.player-row .rank')).toHaveAttribute('aria-label', 'Position 2');
     await fireEvent.click(screen.getByText('Filters (1 active)'));
     await fireEvent.change(screen.getByLabelText('Sort by'), { target: { value: 'date' } });
     expect(rowCount()).toBe(12);

@@ -7,6 +7,7 @@ export type RankingReport = {
   guildName?: string | null;
   serverName?: string | null;
   serverRegion?: string | null;
+  factionId?: number | null;
   reportId: string;
   title: string;
   percentile: number | null;

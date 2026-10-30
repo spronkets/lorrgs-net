@@ -18,6 +18,9 @@ public sealed record WclRankingCharacterNode(
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }
 
     [JsonIgnore]
+    public string? FactionAlias => WclRankingJsonHelpers.TryGetExtensionString(ExtensionData, "faction");
+
+    [JsonIgnore]
     public string? RegionAlias =>
         WclRankingJsonHelpers.TryGetExtensionString(ExtensionData, "region")
         ?? WclRankingJsonHelpers.TryGetNestedExtensionString(ExtensionData, "server", "region");

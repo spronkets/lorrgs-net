@@ -1,4 +1,5 @@
 using Lorrgs.Tests.TestSupport;
+using Lorrgs.Api.Middleware;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +18,7 @@ public sealed class ApiEndpointFixture : IAsyncLifetime, IAsyncDisposable
     public async Task InitializeAsync()
     {
         var builder = WebApplication.CreateBuilder();
+        builder.Logging.AddApplicationLogging();
         builder.WebHost.UseTestServer();
         builder.Services.AddApiFeatures();
         builder.Services.AddSingleton(upstreamFixture.CreateClient(Upstream));
@@ -25,6 +27,7 @@ public sealed class ApiEndpointFixture : IAsyncLifetime, IAsyncDisposable
         builder.Services.AddSwaggerGen(options =>
             options.SwaggerDoc("v1", new OpenApiInfo { Title = "Test API", Version = "v1" }));
         App = builder.Build();
+        App.UseMiddleware<RequestLoggingMiddleware>();
         App.MapApi();
         App.UseSwagger();
         App.UseSwaggerUI();

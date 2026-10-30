@@ -41,7 +41,13 @@
     return () => loader.dispose();
   });
   const expanded = new SvelteSet<string>();
-  let selectedRole = $state('');
+  let selectedRoles = $state<Record<string, string>>({});
+  const roleNames: Record<string, string> = {
+    tank: 'Tanks',
+    heal: 'Healers',
+    mdps: 'Melee DPS',
+    rdps: 'Ranged DPS'
+  };
   function key(report: RankingReport) {
     return compKey(report);
   }
@@ -125,68 +131,135 @@
     {#each rankings.reports as summary, index (key(summary))}
       {@const report = loader.loaded.get(key(summary)) ?? summary}
       {@const fight = report.fights?.[0]}
+      {@const guildName = report.guildName || summary.guildName}
+      {@const serverName = report.serverName || summary.serverName}
+      {@const region = (report.serverRegion || summary.serverRegion)?.toUpperCase()}
+      {@const factionId = report.factionId ?? summary.factionId}
+      {@const faction = factionId === 1 ? 'Alliance' : factionId === 2 ? 'Horde' : null}
+      {@const selectedRole = selectedRoles[key(summary)] ?? ''}
+      {@const roles =
+        fight?.composition?.roles ?? fight?.roleCounts ?? summary.fights?.[0]?.roleCounts ?? {}}
+      {@const playerCount =
+        report.players?.length || Object.values(roles).reduce((sum, count) => sum + count, 0)}
       {#if durationMatches(summary) && compositionMatches(report)}
-        <article>
+        <article data-position={(rankings.page - 1) * 50 + index + 1}>
           <div class="heading">
-            <h3>
-              #{(rankings.page - 1) * 50 + index + 1}
-              {report.title}
-              {#if fight?.execution?.rankPercent != null}
-                ({getTopPercentLabel(fight.execution.rankPercent)})
-              {/if}
-            </h3>
-            <a
-              href={getRankingReportLink({ ...report, players: [] }, edition)}
-              target="_blank"
-              rel="noopener noreferrer">Warcraft Logs ↗</a
-            >
-          </div>
-          {#if report.guildName || summary.guildName || report.serverName || summary.serverName}
-            <p class="raid-identity">
-              {[
-                report.guildName ?? summary.guildName,
-                [
-                  report.serverName ?? summary.serverName,
-                  (report.serverRegion ?? summary.serverRegion)?.toUpperCase()
-                ]
-                  .filter(Boolean)
-                  .join(' ')
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
-          {/if}
-          <div class="stats">
-            {#each [{ label: 'Speed', ranking: fight?.speed }] as metric (metric.label)}
-              <span
-                title={metric.ranking?.totalParses != null
-                  ? `${metric.label} ranking out of ${metric.ranking.totalParses.toLocaleString()} ranked kills`
-                  : undefined}
-              >
-                <small>{metric.label}</small>
-                <strong>
-                  {metric.ranking?.rank != null ? `#${metric.ranking.rank}` : 'Unavailable'}
-                  {#if metric.ranking?.rankPercent != null}
-                    ({getTopPercentLabel(metric.ranking.rankPercent)})
+            <div class="title-block">
+              <h3>
+                {#if faction}
+                  <img
+                    class="faction-icon"
+                    src={`/images/wow/shared/factions/${faction.toLowerCase()}.png`}
+                    alt={faction}
+                    title={faction}
+                  />
+                {/if}
+                <a
+                  class:alliance={faction === 'Alliance'}
+                  class:horde={faction === 'Horde'}
+                  href={getRankingReportLink({ ...report, players: [] }, edition)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <span
+                    class="guild-name"
+                    class:alliance={faction === 'Alliance'}
+                    class:horde={faction === 'Horde'}>{guildName || 'Unknown guild'}</span
+                  >
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"
+                    />
+                  </svg>
+                </a>
+                {#if loader.loaded.has(key(summary))}
+                  <span class="report-name">({report.title})</span>
+                {/if}
+              </h3>
+              <div class="raid-details">
+                <span class="raid-identity">
+                  <span>{region || '—'}</span>
+                  {#if serverName}<span>{serverName}</span>{/if}
+                </span>
+              </div>
+            </div>
+            <div class="stats">
+              <div class="date-line">
+                <span
+                  class="efficiency-summary"
+                  title={fight?.execution?.totalParses != null
+                    ? `Efficiency ranking out of ${fight.execution.totalParses.toLocaleString()} ranked kills`
+                    : 'Efficiency ranking unavailable'}
+                >
+                  Efficiency
+                  {#if fight?.execution?.rank != null}
+                    <span class="result-value"
+                      >#{fight.execution.rank}{fight.execution.rankPercent != null
+                        ? ` (${getTopPercentLabel(fight.execution.rankPercent)})`
+                        : ''}</span
+                    >
+                  {:else}
+                    unavailable
                   {/if}
-                </strong>
-              </span>
-            {/each}
-            <span><small>Kill time</small><strong>{timelineTime(report.duration)}</strong></span>
-            <span><small>Deaths</small><strong>{fight?.deaths ?? 0}</strong></span>
-            <span
-              ><small>Damage taken</small><strong
-                >{(fight?.damageTaken ?? 0).toLocaleString()}</strong
-              ></span
-            >
-            <span
-              ><small>Logged</small><time datetime={report.startTime}
-                >{new Date(report.startTime).toLocaleDateString()}</time
-              ></span
-            >
+                </span>
+                <span
+                  >Kill time <span class="result-value">{timelineTime(report.duration)}</span></span
+                >
+                <span
+                  class="speed-summary"
+                  title={fight?.speed?.totalParses != null
+                    ? `Speed ranking out of ${fight.speed.totalParses.toLocaleString()} ranked kills`
+                    : 'Speed ranking unavailable'}
+                >
+                  {#if fight?.speed?.rank != null}
+                    Speed <span class="result-value"
+                      >#{fight.speed.rank}{#if fight.speed.rankPercent != null}
+                        {` (${getTopPercentLabel(fight.speed.rankPercent)})`}{/if}</span
+                    >
+                  {:else}
+                    Speed unavailable
+                  {/if}
+                </span>
+                <time datetime={report.startTime}
+                  >{new Date(report.startTime).toLocaleDateString()}</time
+                >
+              </div>
+              <span
+                >{(fight?.damageTaken ?? 0).toLocaleString()} damage taken{#if (fight?.deaths ?? 0) > 0}
+                  ({fight?.deaths} deaths){/if}</span
+              >
+            </div>
+          </div>
+          <div class="composition-heading">
+            <h4>Raid composition</h4>
+            <div class="roster-filters" role="group" aria-label="Roster roles">
+              <button
+                type="button"
+                aria-pressed={!selectedRole}
+                onclick={() => (selectedRoles[key(summary)] = '')}>All: {playerCount}</button
+              >
+              {#each Object.entries(roles) as [code, count] (code)}
+                <button
+                  type="button"
+                  aria-pressed={selectedRole === code}
+                  onclick={() => (selectedRoles[key(summary)] = code)}
+                  >{worldData.roles?.find((role) => role.code === code)?.name ??
+                    roleNames[code] ??
+                    code}: {count}</button
+                >
+              {/each}
+            </div>
           </div>
           {#if !loader.loaded.has(key(summary))}
-            <p>Composition pending · roster not inspected</p>
+            <p>Class/spec composition pending · roster not inspected</p>
             {#if loader.errors.has(key(summary))}<p role="alert">
                 {loader.errors.get(key(summary))}
               </p>{/if}
@@ -200,21 +273,20 @@
               {loader.loadingKeys.has(key(summary))
                 ? 'Loading details…'
                 : loader.errors.has(key(summary))
-                  ? 'Retry kill details'
-                  : 'Load kill details'}
+                  ? 'Retry loading report'
+                  : 'Load report'}
             </button>
           {:else}
-            <h4>Raid composition</h4>
-            <div class="composition" aria-label="Composition">
-              {#each Object.entries(fight?.composition?.roles ?? {}) as [code, count] (code)}
-                <span
-                  >{worldData.roles?.find((role) => role.code === code)?.name ?? code}: {count}</span
-                >
-              {/each}
-            </div>
             <div class="composition specs">
               {#each Object.entries(fight?.composition?.specs ?? {}) as [slug, count] (slug)}
-                <span style={`border-color: ${color(slug)}`}
+                <span
+                  class:dimmed={!!selectedRole &&
+                    worldData.roles?.find(
+                      (role) =>
+                        role.id ===
+                        worldData.specs?.find((spec) => spec.fullNameSlug === slug)?.roleId
+                    )?.code !== selectedRole}
+                  style={`border-color: ${color(slug)}`}
                   >{#if specIcon(slug)}<img
                       src={specIcon(slug)}
                       alt=""
@@ -232,20 +304,6 @@
               <summary>Roster & cooldown timelines ({report.players?.length ?? 0} players)</summary>
               {#if expanded.has(key(report))}
                 <div class="roster-content">
-                  <div class="roster-filters" role="group" aria-label="Roster roles">
-                    <button
-                      type="button"
-                      aria-pressed={!selectedRole}
-                      onclick={() => (selectedRole = '')}>All players</button
-                    >
-                    {#each worldData.roles ?? [] as role (role.code)}
-                      <button
-                        type="button"
-                        aria-pressed={selectedRole === role.code}
-                        onclick={() => (selectedRole = role.code)}>{role.name}</button
-                      >
-                    {/each}
-                  </div>
                   {#key `${edition}:${key(report)}:${rankings.updated}`}
                     <RankingsTimeline
                       reports={rosterReports(report, selectedRole)}
@@ -278,8 +336,19 @@
     min-width: 0;
   }
   h4 {
-    margin: 1rem 0 0.5rem;
+    margin: 0;
     font-size: 0.85rem;
+  }
+  .composition-heading {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-top: 1rem;
+  }
+  .specs .dimmed {
+    filter: grayscale(1);
+    opacity: 0.35;
   }
   .heading,
   .stats,
@@ -290,35 +359,118 @@
     align-items: center;
   }
   .heading {
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 0.3rem 1rem;
+  }
+  .title-block {
+    display: contents;
+  }
+  .title-block h3 {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .title-block .raid-details {
+    grid-column: 1;
+    grid-row: 2;
   }
   h3 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
     font-size: 1rem;
+    line-height: 1.5;
     margin: 0;
+  }
+  .report-name,
+  .raid-details {
+    color: #9cabb8;
+    font-weight: 400;
+  }
+  h3 a {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  h3 a svg {
+    display: block;
+    align-self: center;
+    flex-shrink: 0;
+  }
+  .raid-details,
+  .raid-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .raid-details {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  .raid-identity {
+    min-width: 0;
+    white-space: nowrap;
+    font-size: inherit;
+    font-weight: 400;
+    color: #9cabb8;
+  }
+  .guild-name {
+    font-weight: 700;
+  }
+  .guild-name.alliance,
+  h3 a.alliance {
+    color: #69aaff;
+  }
+  .guild-name.horde,
+  h3 a.horde {
+    color: #ff6969;
+  }
+  .faction-icon {
+    width: 14px;
+    height: 14px;
+    object-fit: contain;
+    flex-shrink: 0;
   }
   a {
     color: inherit;
   }
   .stats {
+    display: contents;
     font-size: 0.85rem;
+    line-height: 1.5;
+    font-weight: 400;
+    color: #9cabb8;
     gap: 0.8rem 1.5rem;
-    margin: 0.8rem 0;
-    padding: 0.8rem 0;
-    border-block: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .stats time {
+    font-weight: 400;
+  }
+  .result-value {
+    color: #dceeff;
   }
   .stats > span {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+  .date-line {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
     display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  .stats small {
-    opacity: 0.75;
-    font-size: 0.75rem;
-  }
-  .stats strong,
-  .stats time {
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
+    align-items: center;
+    gap: 1rem;
+    font-size: 1rem;
   }
   details {
     margin-top: 1rem;
@@ -375,7 +527,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
-    margin-bottom: 0.6rem;
   }
   .roster-filters button {
     color: inherit;

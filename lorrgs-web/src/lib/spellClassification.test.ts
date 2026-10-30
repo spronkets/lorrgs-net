@@ -1,12 +1,67 @@
 import { describe, expect, it } from 'vitest';
 import { getClassRoleIconUrl } from './wowAssets';
+import type { TimelineEvent } from './models/TimelineEvent';
 import {
   matchesSpellPreset,
   classSpellPresets,
-  matchesClassSpellPreset
+  matchesClassSpellPreset,
+  withResourceLanes
 } from './spellClassification';
 
 describe('spell classification', () => {
+  it('keeps outgoing buffs and consumables above when casts are hidden without duplicates', () => {
+    const spells = [
+      { id: 1, name: 'Avenging Wrath', icon: null },
+      { id: 2, name: 'Ironshield Potion', icon: null },
+      { id: 3, name: 'Bloodlust', icon: null }
+    ];
+    const allEvents: TimelineEvent[] = [
+      { spellId: 1, timestamp: 0, duration: null, kind: 'cast' },
+      { spellId: 1, timestamp: 0, duration: 20000, kind: 'buff' },
+      { spellId: 2, timestamp: 1000, duration: null, kind: 'cast' },
+      { spellId: 2, timestamp: 1000, duration: 120000, kind: 'buff' },
+      { spellId: 3, timestamp: 2000, duration: 40000, kind: 'buff' }
+    ];
+    const combined = withResourceLanes(allEvents, spells, allEvents, true);
+    expect(combined).toHaveLength(4);
+    expect(combined.filter((event) => event.spellId === 2)).toHaveLength(1);
+    expect(combined.find((event) => event.spellId === 3)?.displayBelow).toBe(true);
+    const hiddenCasts = withResourceLanes(allEvents.filter((event) => event.kind === 'buff'), spells, allEvents);
+    expect(hiddenCasts.find((event) => event.spellId === 1)?.displayBelow).toBe(false);
+    expect(hiddenCasts.find((event) => event.spellId === 2)?.displayBelow).toBe(false);
+    expect(hiddenCasts.find((event) => event.spellId === 3)?.displayBelow).toBe(false);
+  });
+  it('keeps self healing and mana abilities above but the same spell from another player below', () => {
+    const events: TimelineEvent[] = [
+      { spellId: 1, timestamp: 0, duration: null, kind: 'cast' },
+      { spellId: 1, timestamp: 0, duration: null, kind: 'heal', sourceName: 'Alice' },
+      { spellId: 1, timestamp: 1000, duration: null, kind: 'heal', sourceName: 'Bob' },
+      { spellId: 2, timestamp: 1000, duration: null, kind: 'mana-returned', sourceName: 'Alice' },
+      { spellId: 2, timestamp: 2000, duration: null, kind: 'mana-returned', sourceName: 'Bob' },
+      { spellId: 1, timestamp: 3000, duration: null, kind: 'damage', sourceName: 'Alice' }
+    ];
+    expect(withResourceLanes(events, [], events, true, 'Alice').map((event) => event.displayBelow))
+      .toEqual([false, false, true, false, true, true]);
+  });
+  it('keeps defensive casts and buffs above regardless of incoming-heal visibility', () => {
+    const spells = [
+      { id: 1, name: 'Shield Wall', icon: null },
+      { id: 2, name: 'Pain Suppression', icon: null },
+      { id: 3, name: 'Bloodlust', icon: null }
+    ];
+    const events: TimelineEvent[] = [
+      { spellId: 1, timestamp: 0, duration: null, kind: 'cast' },
+      { spellId: 1, timestamp: 0, duration: 10000, kind: 'buff' },
+      { spellId: 2, timestamp: 0, duration: 10000, kind: 'buff' },
+      { spellId: 3, timestamp: 0, duration: 10000, kind: 'buff' }
+    ];
+    for (const enabled of [false, true]) {
+      const lanes = withResourceLanes(events, spells, events, enabled);
+      expect(lanes).toHaveLength(4);
+      expect(lanes.filter((event) => event.spellId !== 3).every((event) => !event.displayBelow)).toBe(true);
+      expect(lanes.find((event) => event.spellId === 3)?.displayBelow).toBe(enabled);
+    }
+  });
   it('uses cross-class raid cooldowns without changing spec-ranking presets', () => {
     const presets = classSpellPresets(0, 'anniversary', true);
     expect(presets.map((preset) => preset.label)).toEqual([

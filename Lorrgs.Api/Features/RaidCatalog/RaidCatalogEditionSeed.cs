@@ -8,7 +8,7 @@ public sealed class RaidCatalogEditionSeed
 
     public int Order { get; set; }
 
-    public bool Public { get; set; } = true;
+    public int ActivePhase { get; set; }
 
     public List<RaidCatalogRaidSeed> Raids { get; set; } = [];
 }

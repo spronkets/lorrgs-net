@@ -39,6 +39,10 @@ public class RotationAnalysisService(
 
         var selectedFight = ResolveFight(report, request.FightId);
         var selectedActor = ResolveActor(report, request.SourceId, request.PlayerName);
+        _logger.LogInformation("Retrieved rotation report report={ReportCode} title={ReportTitle} fight={FightId} name={FightName} source={SourceId} player={PlayerName}",
+            report.element.TryGetProperty("code", out var code) ? code.GetString() : null,
+            report.element.TryGetProperty("title", out var title) ? title.GetString() : null,
+            selectedFight.id, selectedFight.name, selectedActor.id, selectedActor.name);
 
         var fightStart = selectedFight.startTime;
         var fightEnd = selectedFight.endTime;

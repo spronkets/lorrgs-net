@@ -33,7 +33,7 @@ const raidCatalog = {
         name: 'Black Temple',
         edition: 'anniversary',
         phase: 3,
-        public: true,
+        isAvailable: true,
         bosses: [{ id: 50609, name: 'Illidan Stormrage', slug: 'illidan-stormrage', mapped: true }]
       }
     ]
@@ -48,6 +48,29 @@ afterEach(() => {
 function renderPage() {
   return render(HomePage, { worldData, raidCatalog });
 }
+
+it('does not request rankings for an unavailable raid restored from the URL', async () => {
+  window.history.replaceState(
+    {},
+    '',
+    '/?edition=Anniversary&raid=blacktemple&boss=illidan-stormrage&spec=retribution-paladin'
+  );
+  render(HomePage, {
+    worldData,
+    raidCatalog: {
+      ...raidCatalog,
+      instances: {
+        anniversary: raidCatalog.instances.anniversary.map((raid) => ({
+          ...raid,
+          isAvailable: false
+        }))
+      }
+    }
+  });
+  expect(await screen.findByRole('option', { name: 'Black Temple' })).toBeDisabled();
+  expect(screen.getByRole('combobox', { name: 'Raid' })).toHaveValue('');
+  expect(getSpecRankings).not.toHaveBeenCalled();
+});
 
 it('combines the spec icons and encounter heading inside the selection panel', async () => {
   window.history.replaceState(
@@ -141,7 +164,7 @@ it('reports missing encounter mappings and distinguishes an empty ranking respon
           name: 'Black Temple',
           edition: 'anniversary',
           phase: 3,
-          public: true,
+          isAvailable: true,
           bosses: [
             { id: 50609, name: 'Illidan Stormrage', slug: 'illidan-stormrage', mapped: true }
           ]

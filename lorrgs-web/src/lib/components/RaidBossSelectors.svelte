@@ -3,7 +3,7 @@
   export let raidPhaseGroups: Array<{
     key: string;
     label: string;
-    raids: Array<{ slug: string; name: string; raidSize?: string | null }>;
+    raids: Array<{ slug: string; name: string; raidSize?: string | null; isAvailable?: boolean }>;
   }> = [];
   export let bosses: Array<{ slug: string; name: string; mapped?: boolean; iconName?: string }> =
     [];
@@ -45,7 +45,7 @@
         {#each raidPhaseGroups as group (group.key)}
           <optgroup label={group.label}>
             {#each group.raids as raid (raid.slug)}
-              <option value={raid.slug}
+              <option value={raid.slug} disabled={raid.isAvailable === false}
                 >{raid.name}{raid.raidSize ? ` (${raid.raidSize} players)` : ''}</option
               >
             {/each}

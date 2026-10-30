@@ -17,7 +17,7 @@ const raidCatalog: RaidCatalog = {
         name: 'Black Temple',
         edition: 'anniversary',
         phase: 3,
-        public: true,
+        isAvailable: true,
         bosses: [{ id: 50609, name: 'Illidan', slug: 'illidan', mapped: true }]
       }
     ],
@@ -28,7 +28,7 @@ const raidCatalog: RaidCatalog = {
         name: 'Molten Core',
         edition: 'era',
         phase: 1,
-        public: true,
+        isAvailable: true,
         bosses: [{ id: 1001, name: 'Ragnaros', slug: 'ragnaros', mapped: true }]
       }
     ]

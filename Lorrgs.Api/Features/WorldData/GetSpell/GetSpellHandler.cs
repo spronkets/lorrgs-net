@@ -1,5 +1,4 @@
 using Lorrgs.Api.Shared.Responses;
-using Microsoft.AspNetCore.Mvc;
 using Lorrgs.Api.Features.WorldData.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -12,13 +11,14 @@ public static class GetSpellHandler
         [AsParameters] GetSpellRequest request, CancellationToken ct)
     {
         var logger = loggerFactory.CreateLogger("GetSpell");
-        logger.LogInformation("Fetching spell: {SpellId}", request.SpellId);
         var spell = data.GetSpell(request.SpellId);
         if (spell == null)
         {
+            logger.LogWarning("Spell not found");
             return TypedResults.NotFound(new ApiErrorResponse($"Spell not found: {request.SpellId}"));
         }
 
+        logger.LogInformation("Found spell: {SpellId} {SpellName}", spell.Id, spell.Name);
         return TypedResults.Ok(spell);
     }
 }

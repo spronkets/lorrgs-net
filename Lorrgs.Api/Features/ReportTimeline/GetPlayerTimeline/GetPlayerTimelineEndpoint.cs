@@ -1,5 +1,3 @@
-using Lorrgs.WarcraftLogs.Models;
-
 namespace Lorrgs.Api.Features.ReportTimeline.GetPlayerTimeline;
 
 public static class GetPlayerTimelineEndpoint

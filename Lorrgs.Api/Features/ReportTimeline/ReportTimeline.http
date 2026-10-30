@@ -13,6 +13,78 @@
 # enables specialization-specific corrections. Boss timeline needs no player selection.
 # Responses: 200, 400, 403, 404, 429, 502; errors use Problem Details.
 # These endpoints have no refresh parameter; explicit loading uses existing WCL cache behavior.
+# Incomplete report responses (empty fight metadata, null master data, invalid timing)
+# are not cached. Existing invalid cache entries are discarded on read.
+# Empty event pages remain cacheable; they do not imply an invalid report.
+# Player events include received healing: kind "heal" for direct heals and "hot" for ticks.
+# The UI hides both by default; Show healing received enables direct heals and HoT ticks together.
+# Received damage uses kind "damage" and its independent Show damage taken toggle.
+# Show damage taken also includes recorded mana drains (mana-spent with isManaDrain: true).
+# Cast costs are not drains. Drain icons use the incoming lane and amber loss amounts.
+# Mana costs/drains use "mana-spent"; effective resource gains use "mana-returned".
+# Amount excludes wasted gains. Missing resource costs/passive regeneration are not inferred.
+# Show mana received toggles effective gains and is off by default.
+# Recorded cast costs appear in muted amber beside the zoom ability name as -250.
+# Mana spent does not have a separate UI toggle or timeline icon.
+# Zoom mana event amounts use blue +amount for gains and muted amber -amount for losses.
+# Timeline and zoom lines/icon borders share semantic colors: healing casts/received green,
+# mana gains blue, mana losses amber, damage received and recorded damaging casts red.
+# Resource events share the player's main timeline:
+# outgoing casts and self-use resource abilities above; incoming icons below.
+# Show received buffs independently toggles lower-lane received buff icons.
+# This option does not filter the zoom detail list of active buffs.
+# Defensive abilities and health/mana consumables stay above, retaining green/blue colors.
+# matching consumable cast/effect icons are not duplicated.
+# maxHealth/maxMana are the largest
+# recorded capacities for the selected actor during the fight, or null if unavailable.
+# Cast timestamp remains completion time. Matched begincast/cast events additionally
+# expose castStart and measured duration in milliseconds; unmatched casts have neither.
+# Recorded cast/channel intervals keep their time ranges in zoom without Casting/Channeling prefixes.
+# Channel durations and interrupted/uncompleted casts are not inferred.
+# Completed casts may include castResults, grouped by target and damage/healing.
+# Zoom lists each target result on a separate line: +amount to Target for healing.
+# Recorded outcomes remain visible while hovering the cast interval, not just completion.
+# Healing amounts are effective healing; zero results and fully overhealed targets are omitted.
+# Zoom also hides values that round to zero at two decimal places.
+# Non-periodic effects from the same actor and spell within 250ms after completion qualify.
+# Delayed direct damage may match the latest completed same-spell cast up to 3 seconds later,
+# requiring the same recorded target, no AoE flag, and no prior damage result for that target.
+# Ambiguous simultaneous same-spell casts have no attached results.
+# Missing effects, longer delays, periodic ticks and different-spell procs are not attributed.
+# Timeline master data includes all actor types so NPC/pet targets use recorded names.
+# Anniversary NPC 23863 is named Zul'jin rather than the upstream Daakara label.
+# Buff uptime requires recorded application and removal events. An unmatched
+# application is not extended to fight end; any recorded cast remains visible.
+# Report-wide loading retains post-fight buff removals for matching; verified
+# intervals extending beyond the selected fight are clipped to its end.
+# Incoming healing, damage and mana events include sourceName when the source
+# actor is identified in report master data.
+# Event queries request includeResources: true for recorded maxHealth/maxMana.
+# Percentage-only health snapshots (maxHitPoints = 100) are not absolute HP;
+# maxHealth remains null when the report only supplies those snapshots.
+# Heals/HoT ticks and damage expose healthBeforePercent/healthAfterPercent when recorded.
+# Zoom health details use signed amount (health after %, signed percentage change, source).
+# With absolute HP, before is calculated from post-heal HP minus effective healing.
+# With percentage-only HP, before is the previous recorded snapshot, explicitly
+# identified by healthBeforeIsPreviousSnapshot (not an exact pre-heal measurement).
+# Missing snapshots remain unknown; healing amounts are never subtracted from percentages.
+# If absolute maxHealth is missing, estimatedMaxHealth uses effective healing /
+# recorded percentage gain. Only gains of at least 10 percentage points qualify
+# to limit rounding noise; the median estimate is displayed as Estimated max health.
+# Unobserved intervening health changes invalidate the previous snapshot for estimation.
+# healthCapacities is a fight-relative series for cursor-specific maximum health.
+# Zoom never uses the fight-wide maxHealth/estimatedMaxHealth summary.
+# Aura applications/removals/refreshes/stack changes and death invalidate prior capacity
+# and pre-heal snapshots conservatively, until new recorded HP or a qualifying heal.
+# Each local estimate uses the heal in that interval, not the fight-wide median.
+# Percentage-only pre-heal snapshots must be within one second of the heal.
+# Known haste/mana/crit-only auras (Bloodlust, Heroism, Moonkin Aura,
+# Water Shield, Nature's Swiftness, Elemental Mastery) and armor-only
+# Ancestral Fortitude do not invalidate health.
+# Unclassified aura changes still invalidate capacity conservatively.
+# When hovering just before a hit, zoom may use the next qualifying local estimate
+# within one second, only if no intervening capacity boundary occurs.
+# Changing this query creates new raw cache keys; old non-resource pages are not reused.
 
 ### Replace the sample report code, fight and name with a visible ranking row.
 GET {{baseUrl}}/api/warcraftlogs/reports/{{reportCode}}/timeline?fightId={{fightId}}&playerName={{playerName}}&edition=anniversary

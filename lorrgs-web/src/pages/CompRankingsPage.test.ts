@@ -41,7 +41,7 @@ const raidCatalog: RaidCatalog = {
         name: 'Black Temple',
         edition: 'anniversary',
         phase: 3,
-        public: true,
+        isAvailable: true,
         bosses: [{ id: 50609, name: 'Illidan', slug: 'illidan', mapped: true }]
       }
     ]
@@ -73,7 +73,7 @@ const result: CompRankingData = {
           damageTaken: 10000,
           composition: {
             specs: { 'holy-paladin': 1 },
-            roles: { heal: 1 },
+            roles: { heal: 1, mdps: 0 },
             classes: { paladin: 1 }
           },
           phases: [{ id: 2, timestamp: 30000 }]
@@ -131,6 +131,29 @@ beforeEach(() => {
 afterEach(() => {
   window.history.replaceState({}, '', '/');
   vi.resetAllMocks();
+});
+
+it('does not request compositions for an unavailable raid restored from the URL', async () => {
+  window.history.replaceState(
+    {},
+    '',
+    '/?page=comp&edition=Anniversary&raid=blacktemple&boss=illidan&compPage=1'
+  );
+  render(CompRankingsPage, {
+    worldData,
+    selectedVersion: 'Anniversary',
+    raidCatalog: {
+      ...raidCatalog,
+      instances: {
+        anniversary: raidCatalog.instances.anniversary.map((raid) => ({
+          ...raid,
+          isAvailable: false
+        }))
+      }
+    }
+  });
+  expect(await screen.findByRole('option', { name: 'Black Temple' })).toBeDisabled();
+  expect(API.getCompRankings).not.toHaveBeenCalled();
 });
 
 it('explains missing mappings instead of claiming a selected encounter is unselected', async () => {
@@ -191,7 +214,7 @@ it('hydrates repeated filters and kill times, then requests the correct edition 
   expect(container.querySelector('.icon-select img')).toBeNull();
 });
 
-it('serializes zero-count comparisons and refreshes without pagination controls', async () => {
+it('serializes zero-count comparisons without pagination or upstream refresh controls', async () => {
   renderPage();
   await screen.findByText('Roster & cooldown timelines (1 players)');
   await fireEvent.input(screen.getByLabelText('Healer count'), { target: { value: '0' } });
@@ -202,12 +225,7 @@ it('serializes zero-count comparisons and refreshes without pagination controls'
   await screen.findByText('No inspected kills match these filters on this page.');
   expect(screen.queryByRole('button', { name: 'Next page' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Previous page' })).not.toBeInTheDocument();
-  await fireEvent.click(screen.getByRole('button', { name: 'Refresh from Warcraft Logs' }));
-  await waitFor(() => expect(API.getCompRankings).toHaveBeenCalledTimes(3));
-  expect(vi.mocked(API.getCompRankings).mock.calls.at(-1)?.[4]).toMatchObject({
-    refresh: true,
-    page: 1
-  });
+  expect(screen.queryByRole('button', { name: 'Refresh from Warcraft Logs' })).not.toBeInTheDocument();
 });
 
 it('edits direct spec counts and clears restrictions without treating blank as zero', async () => {
@@ -297,7 +315,7 @@ it('opens real shared player and boss timelines with the Everything preset', asy
   const { container } = renderPage();
   await screen.findByText('Roster & cooldown timelines (1 players)');
   expect(API.getReportTimeline).not.toHaveBeenCalled();
-  expect(screen.getByRole('link', { name: /Warcraft Logs/ })).toHaveAttribute(
+  expect(container.querySelector('article h3 a')).toHaveAttribute(
     'href',
     'https://fresh.warcraftlogs.com/reports/ReportA#fight=1'
   );
@@ -317,9 +335,9 @@ it('opens real shared player and boss timelines with the Everything preset', asy
     'anniversary',
     expect.any(AbortSignal)
   );
-  await fireEvent.click(screen.getByRole('button', { name: 'Melee DPS' }));
+  await fireEvent.click(screen.getByRole('button', { name: 'Melee DPS: 0' }));
   await waitFor(() => expect(container.querySelector('.player-row')).toBeNull());
-  await fireEvent.click(screen.getByRole('button', { name: 'All players' }));
+  await fireEvent.click(screen.getByRole('button', { name: 'All: 1' }));
   await waitFor(() => expect(container.querySelector('.player-row')).toHaveTextContent('Healer'));
   expect(container).not.toHaveTextContent('bossIconName=');
 });

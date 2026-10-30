@@ -8,6 +8,85 @@ public sealed class WarcraftLogsClientCacheTests : IDisposable
     public void Dispose() => fixture.Dispose();
 
     [Fact]
+    public async Task IncompleteReportMetadataIsReturnedButNotCachedAndNextRequestRecovers()
+    {
+        using var handler = new QueueHandler(
+            """{"data":{"reportData":{"report":{"fights":[],"masterData":{"actors":null,"abilities":null}}}}}""",
+            """{"data":{"reportData":{"report":{"fights":[{"id":23}],"masterData":{"actors":[{"id":7}],"abilities":[]}}}}}""");
+        var client = fixture.CreateClient(handler);
+
+        var incomplete = await client.QueryGraphQLAsync("query Metadata");
+        Assert.Empty(incomplete.GetProperty("reportData").GetProperty("report").GetProperty("fights").EnumerateArray());
+        Assert.Empty(Directory.GetFiles(fixture.CacheDirectory, "*.json"));
+        Assert.Null(await client.TryQueryGraphQLFromCacheAsync("query Metadata"));
+
+        await client.QueryGraphQLAsync("query Metadata");
+        await client.QueryGraphQLAsync("query Metadata");
+
+        Assert.Equal(2, handler.GraphQlRequests);
+        Assert.Single(Directory.GetFiles(fixture.CacheDirectory, "*.json"));
+    }
+
+    [Theory]
+    [InlineData("""{"reportData":{"report":null}}""")]
+    [InlineData("""{"reportData":{"report":{"fights":[]}}}""")]
+    [InlineData("""{"reportData":{"r0":{"fights":[{"id":1}]},"r1":{"fights":[]}}}""")]
+    [InlineData("""{"reportData":{"report":{"masterData":{"actors":null,"abilities":[]}}}}""")]
+    [InlineData("""{"reportData":{"report":{"masterData":{"actors":[],"abilities":null}}}}""")]
+    [InlineData("""{"reportData":{"report":{"fights":[{"id":1,"startTime":100,"endTime":100}]}}}""")]
+    [InlineData("""{"reportData":{"report":{"events":{"data":null}}}}""")]
+    [InlineData("""null""")]
+    public async Task InvalidReportResponsesAreNotPersisted(string data)
+    {
+        using var handler = new QueueHandler($$"""{"data":{{data}}}""");
+        await fixture.CreateClient(handler).QueryGraphQLAsync("query Invalid");
+
+        Assert.Empty(Directory.GetFiles(fixture.CacheDirectory, "*.json"));
+    }
+
+    [Theory]
+    [InlineData(true, """{"reportData":{"report":{"fights":[]}}}""")]
+    [InlineData(false, """{"reportData":{"report":{"fights":[]}}}""")]
+    [InlineData(true, """{"reportData":""")]
+    [InlineData(false, """{"reportData":""")]
+    public async Task PreviouslyCachedInvalidReportIsDiscarded(bool cacheOnlyFirst, string invalidData)
+    {
+        const string valid = """{"data":{"reportData":{"report":{"fights":[{"id":1}]}}}}""";
+        using var handler = new QueueHandler(valid, valid);
+        var client = fixture.CreateClient(handler);
+        await client.QueryGraphQLAsync("query Existing");
+        var path = Assert.Single(Directory.GetFiles(fixture.CacheDirectory, "*.json"));
+        await File.WriteAllTextAsync(path, invalidData);
+
+        if (cacheOnlyFirst)
+        {
+            Assert.Null(await client.TryQueryGraphQLFromCacheAsync("query Existing"));
+            Assert.False(File.Exists(path));
+            Assert.Equal(1, handler.GraphQlRequests);
+        }
+        await client.QueryGraphQLAsync("query Existing");
+
+        Assert.Equal(2, handler.GraphQlRequests);
+        Assert.NotNull(await client.TryQueryGraphQLFromCacheAsync("query Existing"));
+    }
+
+    [Theory]
+    [InlineData("""{"reportData":{"report":{"events":{"data":[],"nextPageTimestamp":null}}}}""")]
+    [InlineData("""{"worldData":{"encounter":{"characterRankings":{"rankings":[]}}}}""")]
+    [InlineData("""{"reportData":{"report":{"rankings":{"data":[]}}}}""")]
+    public async Task ValidEmptyEventPagesAndRankingsRemainCacheable(string data)
+    {
+        using var handler = new QueueHandler($$"""{"data":{{data}}}""");
+        var client = fixture.CreateClient(handler);
+
+        await client.QueryGraphQLAsync("query Empty");
+        await client.QueryGraphQLAsync("query Empty");
+
+        Assert.Equal(1, handler.GraphQlRequests);
+        Assert.Single(Directory.GetFiles(fixture.CacheDirectory, "*.json"));
+    }
+
+    [Fact]
     public async Task SuccessfulResponsesPersistAcrossClientsWithoutNetworkOrTokenRequests()
     {
         using var writerHandler = new QueueHandler("""{"data":{"value":42},"errors":[]}""");

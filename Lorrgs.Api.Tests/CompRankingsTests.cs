@@ -4,7 +4,6 @@ using Lorrgs.Api.Features.CompRankings.GetCompRanking;
 using Lorrgs.Api.Features.CompRankings.GetDetails;
 using Lorrgs.Api.Features.WorldData;
 using Lorrgs.Tests.TestSupport;
-using Lorrgs.WarcraftLogs;
 using Lorrgs.WarcraftLogs.Models;
 using Lorrgs.WarcraftLogs.Services;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -96,6 +95,10 @@ public sealed class CompRankingsTests : IDisposable
         {
             Assert.Empty(report.Players);
             Assert.Null(report.Fights[0].Composition);
+            Assert.Equal(2, report.Fights[0].RoleCounts!["tank"]);
+            Assert.Equal(4, report.Fights[0].RoleCounts!["heal"]);
+            Assert.Equal(9, report.Fights[0].RoleCounts!["mdps"]);
+            Assert.Equal(10, report.Fights[0].RoleCounts!["rdps"]);
             Assert.Null(report.BossTimeline);
         });
         Assert.Equal(1, handler.GraphQlRequests);
@@ -200,6 +203,21 @@ public sealed class CompRankingsTests : IDisposable
         Assert.Equal(expected, Assert.Single(report.Fights).Name);
     }
 
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(1, 2)]
+    [InlineData(9, null)]
+    public async Task SummariesIncludeNormalizedGuildFactionWithoutExtraCalls(int faction, int? expected)
+    {
+        var payload = System.Text.Json.Nodes.JsonNode.Parse(Rankings(1))!;
+        payload["data"]!["worldData"]!["encounter"]!["fightRankings"]!["rankings"]![0]!["guild"] =
+            JsonSerializer.SerializeToNode(new { name = "Raid Guild", faction });
+        using var handler = new QueueHandler(payload.ToJsonString());
+        var result = await Service(handler).LoadAsync(Search(), default);
+        Assert.Equal(expected, Assert.Single(result!.Reports).FactionId);
+        Assert.Equal(1, handler.GraphQlRequests);
+    }
+
     [Fact]
     public async Task DetailsIncludeParseRegionAndUnambiguousCharacterGuild()
     {
@@ -209,7 +227,7 @@ public sealed class CompRankingsTests : IDisposable
             {"data":[{"fightID":99,"speed":{"rank":999}},{"fightID":7,
             "speed":{"rank":3,"best":2,"totalParses":1175,"rankPercent":99},
             "execution":{"rank":2,"best":1,"totalParses":1175,"rankPercent":99.5},
-            "guild":{"name":"Raid Guild","server":{"name":"Thunderstrike","region":"EU"}},
+            "guild":{"name":"Raid Guild","faction":1,"server":{"name":"Thunderstrike","region":"EU"}},
             "roles":{"healers":{"characters":[
               {"id":123,"name":"Healer","class":"Paladin","rankPercent":94,
                "server":{"name":"Spineshatter","region":"EU"}}
@@ -226,6 +244,7 @@ public sealed class CompRankingsTests : IDisposable
         var fight = Assert.Single(report.Fights);
         Assert.Equal(new RaidFightRanking(3, 2, 1175, 99), fight.Speed);
         Assert.Equal("Raid Guild", report.GuildName);
+        Assert.Equal(2, report.FactionId);
         Assert.Equal("Thunderstrike", report.ServerName);
         Assert.Equal("EU", report.ServerRegion);
         Assert.Equal(new RaidFightRanking(2, 1, 1175, 99.5), fight.Execution);
@@ -288,6 +307,22 @@ public sealed class CompRankingsTests : IDisposable
         cts.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             Handlers(handler).Details.Handle(new GetDetailsRequest("ReportA", 1, "anniversary"), cts.Token));
+    }
+
+    [Theory]
+    [InlineData("Report\rforged")]
+    [InlineData("Report\nforged")]
+    [InlineData("Report\r\nforged")]
+    [InlineData("Report\u0085forged")]
+    [InlineData("Report\u2028forged")]
+    [InlineData("Report\u2029forged")]
+    public async Task DetailRejectsLogForgingCodesWithoutCallingUpstream(string code)
+    {
+        using var handler = new QueueHandler();
+        var response = await Handlers(handler).Details.Handle(new GetDetailsRequest(code, 1, "anniversary"));
+        Assert.Equal(400, HttpResultAssertions.Read(response).StatusCode);
+        Assert.Equal(0, handler.GraphQlRequests);
+        Assert.Equal(0, handler.TokenRequests);
     }
 
     [Theory]
@@ -375,6 +410,10 @@ public sealed class CompRankingsTests : IDisposable
                             duration = 200000 + id,
                             deaths = 0,
                             damageTaken = id * 100,
+                            tanks = 2,
+                            healers = 4,
+                            melee = 9,
+                            ranged = 10,
                             startTime = 1793030400000L
                         }).ToArray()
                     }

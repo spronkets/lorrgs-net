@@ -14,8 +14,7 @@ public sealed class GetSpecRankingHandler(
     public async Task<Results<Ok<SpecRankingData>, BadRequest<ApiErrorResponse>, NotFound<ApiErrorResponse>, JsonHttpResult<ApiErrorResponse>>> Handle(
         GetSpecRankingRequest request, CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Fetching spec ranking: {SpecSlug}/{BossSlug} ({Difficulty}/{Metric})",
-            request.SpecSlug, request.BossSlug, request.Difficulty, request.Metric);
+        logger.LogInformation("Fetching spec ranking");
 
         if (!data.TryResolveSpecRankingQuery(request.SpecSlug, request.BossSlug, request.Edition, request.ZoneId, request.EncounterId, request.ClassName, request.SpecName, out var queryContext, out var queryError))
         {
@@ -73,16 +72,12 @@ public sealed class GetSpecRankingHandler(
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
-            logger.LogWarning(ex,
-                "WarcraftLogs rate limit hit while fetching spec ranking {SpecSlug}/{BossSlug} edition={Edition} difficulty={Difficulty} metric={Metric}",
-                request.SpecSlug, request.BossSlug, request.Edition, request.Difficulty, request.Metric);
+            logger.LogWarning("WarcraftLogs rate limit hit while fetching spec ranking");
             return TypedResults.Json(new ApiErrorResponse("Warcraft Logs rate limit reached. Please retry shortly."), statusCode: StatusCodes.Status429TooManyRequests);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex,
-                "Error fetching spec ranking {SpecSlug}/{BossSlug} edition={Edition} difficulty={Difficulty} metric={Metric}",
-                request.SpecSlug, request.BossSlug, request.Edition, request.Difficulty, request.Metric);
+            logger.LogError("Error fetching spec ranking exceptionType={ExceptionType}", ex.GetType().FullName);
             return TypedResults.Json(new ApiErrorResponse("Failed to fetch ranking data"), statusCode: 500);
         }
     }

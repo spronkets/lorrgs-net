@@ -9,5 +9,5 @@ public class RaidInstance
     public string Edition { get; set; } = "";
     public int Phase { get; set; }
     public List<RaidBossOption> Bosses { get; set; } = [];
-    public bool Public { get; set; }
+    public bool IsAvailable { get; set; }
 }

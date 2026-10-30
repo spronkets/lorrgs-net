@@ -1,5 +1,3 @@
-using Lorrgs.Api.Shared.Responses;
-
 namespace Lorrgs.Api.Features.Rankings.MarkSpecRankingDirty;
 
 public static class MarkSpecRankingDirtyEndpoint

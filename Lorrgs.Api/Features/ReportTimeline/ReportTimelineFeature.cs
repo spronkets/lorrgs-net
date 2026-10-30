@@ -1,6 +1,5 @@
 using Lorrgs.Api.Features.ReportTimeline.GetBossTimeline;
 using Lorrgs.Api.Features.ReportTimeline.GetPlayerTimeline;
-using Lorrgs.WarcraftLogs.Models;
 
 namespace Lorrgs.Api.Features.ReportTimeline;
 

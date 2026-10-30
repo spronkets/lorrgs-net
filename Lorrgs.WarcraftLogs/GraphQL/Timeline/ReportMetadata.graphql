@@ -1,6 +1,8 @@
 query ReportTimelineMetadata($code: String!) {
   reportData {
     report(code: $code) {
+      code
+      title
       fights {
         id
         encounterID
@@ -11,7 +13,7 @@ query ReportTimelineMetadata($code: String!) {
         phaseTransitions { id startTime }
       }
       masterData {
-        actors(type: "Player") { id name }
+        actors { id name type gameID }
         abilities { gameID name icon }
       }
     }

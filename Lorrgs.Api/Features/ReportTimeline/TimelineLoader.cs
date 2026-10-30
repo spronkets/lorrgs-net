@@ -11,8 +11,7 @@ public sealed class TimelineLoader(IReportTimelineService service, ILogger<Timel
     {
         if (!IsValid(reportCode, fightId, sourceId, playerName, edition, boss))
         {
-            logger.LogWarning("Invalid timeline request report={ReportCode} fight={FightId} edition={Edition}",
-                reportCode, fightId, edition);
+            logger.LogWarning("Invalid timeline request");
             return TypedResults.Problem(statusCode: 400, detail: "Provide a valid report, fight, player and edition.");
         }
         try
@@ -23,29 +22,29 @@ public sealed class TimelineLoader(IReportTimelineService service, ILogger<Timel
             return TypedResults.Ok(await service.LoadAsync(reportCode, fightId, sourceId, playerName, edition,
                 cancellationToken, specId));
         }
-        catch (WarcraftLogsReportPrivateException ex)
+        catch (WarcraftLogsReportPrivateException)
         {
-            logger.LogWarning(ex, "Timeline report is private report={ReportCode} fight={FightId}", reportCode, fightId);
+            logger.LogWarning("Timeline report is private");
             return TypedResults.Problem(statusCode: 403, detail: "This Warcraft Logs report is private. Make it public to load its timeline.");
         }
-        catch (WarcraftLogsReportNotFoundException ex)
+        catch (WarcraftLogsReportNotFoundException)
         {
-            logger.LogWarning(ex, "Timeline report missing report={ReportCode} fight={FightId}", reportCode, fightId);
+            logger.LogWarning("Timeline report missing");
             return TypedResults.Problem(statusCode: 404, detail: "This Warcraft Logs report was not found; it may have been deleted or its code may be invalid.");
         }
         catch (KeyNotFoundException ex)
         {
-            logger.LogWarning(ex, "Timeline report or player missing report={ReportCode} fight={FightId}", reportCode, fightId);
+            logger.LogWarning("Timeline report or player missing");
             return TypedResults.Problem(statusCode: 404, detail: ex.Message);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
-            logger.LogWarning(ex, "Timeline rate limited report={ReportCode} fight={FightId}", reportCode, fightId);
+            logger.LogWarning("Timeline rate limited");
             return TypedResults.Problem(statusCode: 429, detail: "Warcraft Logs rate limit reached. Retry after the cooldown.");
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)
         {
-            logger.LogError(ex, "Timeline loading failed report={ReportCode} fight={FightId} edition={Edition}", reportCode, fightId, edition);
+            logger.LogError("Timeline loading failed exceptionType={ExceptionType}", ex.GetType().FullName);
             return TypedResults.Problem(statusCode: 502, detail: "Unable to load this timeline from Warcraft Logs.");
         }
     }

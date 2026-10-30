@@ -1,6 +1,7 @@
 query ReportMetadata($code: String!) {
   reportData {
     report(code: $code) {
+      code
       title
       startTime
       endTime

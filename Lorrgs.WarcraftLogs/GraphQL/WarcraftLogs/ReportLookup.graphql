@@ -1,6 +1,7 @@
 query ReportLookup($code: String!) {
   reportData {
     report(code: $code) {
+      code
       title
       zone {
         id

@@ -8,7 +8,7 @@ public sealed class QueueCompRankingUpdateHandler(ILogger<QueueCompRankingUpdate
         QueueCompRankingUpdateRequest request, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        logger.LogInformation("Queuing comp ranking update: {BossSlug}", request.BossSlug);
+        logger.LogInformation("Queuing comp ranking update");
 
         // TODO: Implement task queue with Azure Service Bus
         return TypedResults.Ok(new QueueCompRankingUpdateResponse(

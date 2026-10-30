@@ -132,7 +132,7 @@ describe('App version mapping', () => {
             name: 'Black Temple',
             edition: 'anniversary',
             phase: 3,
-            public: true,
+            isAvailable: true,
             bosses: [{ id: 50609, name: 'Illidan', slug: 'illidan', mapped: true }]
           }
         ]
@@ -202,7 +202,7 @@ describe('App version mapping', () => {
             name: 'Hyjal Summit',
             edition: 'anniversary',
             phase: 3,
-            public: true,
+            isAvailable: true,
             bosses: [{ id: 0, name: 'Archimonde', slug: '', mapped: false }]
           }
         ]

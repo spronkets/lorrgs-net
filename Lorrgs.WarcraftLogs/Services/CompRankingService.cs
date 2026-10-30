@@ -21,8 +21,7 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
                 search.BossSlug, search.Edition, search.Refresh, cancellationToken);
             if (encounterId is null)
             {
-                logger.LogWarning("Encounter {BossSlug} was not returned for zone {ZoneId}",
-                    search.BossSlug, search.ZoneId);
+                logger.LogWarning("Requested encounter was not returned");
                 return null;
             }
             search = search with { EncounterId = encounterId.Value };
@@ -32,6 +31,8 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
             search.Edition, search.Refresh, cancellationToken);
         var encounter = data.GetProperty("worldData").GetProperty("encounter");
         if (encounter.ValueKind == JsonValueKind.Null) return null;
+        logger.LogInformation("Retrieved composition encounter encounter={EncounterId} name={EncounterName}",
+            Number(encounter, "id"), Text(encounter, "name"));
         var rankingData = encounter.GetProperty("fightRankings");
         var entries = rankingData.GetProperty("rankings");
         var result = new CompRankingData
@@ -69,6 +70,15 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
                 Duration = duration, StartTime = fight.StartTime, Fights = [fight]
             };
             ApplyRaidIdentity(report, entry);
+            var roleCounts = new Dictionary<string, int>();
+            foreach (var (field, role) in new[] { ("tanks", "tank"), ("healers", "heal"), ("melee", "mdps"), ("ranged", "rdps") })
+            {
+                if (!entry.TryGetProperty(field, out var count)) continue;
+                if (count.ValueKind != JsonValueKind.Number || !count.TryGetInt32(out var value) || value < 0)
+                    throw new InvalidDataException("Warcraft Logs returned invalid raid role counts.");
+                roleCounts[role] = value;
+            }
+            if (roleCounts.Count > 0) fight.RoleCounts = roleCounts;
             result.Reports.Add(report);
         }
         return result;
@@ -86,7 +96,7 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
         catch (WarcraftLogsGraphQlException ex) when (ex.Errors.Count > 0 && ex.Errors.All(error =>
             error.Message?.Contains("report has been archived", StringComparison.OrdinalIgnoreCase) == true))
         {
-            logger.LogWarning(ex, "Composition report archived report={ReportCode}", code);
+            logger.LogWarning("Composition report archived");
             throw new WarcraftLogsReportPrivateException("This Warcraft Logs report is archived.");
         }
         var metadata = data.GetProperty("reportData").GetProperty("report");
@@ -96,6 +106,9 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
             .FirstOrDefault(fight => Number(fight, "id") == fightId);
         if (fightData.ValueKind != JsonValueKind.Object)
             throw new WarcraftLogsReportNotFoundException("Warcraft Logs fight not found.");
+        logger.LogInformation("Retrieved composition report report={ReportCode} title={ReportTitle} fight={FightId} encounter={EncounterId} name={EncounterName}",
+            Text(metadata, "code"), Text(metadata, "title"), Number(fightData, "id"),
+            Number(fightData, "encounterID"), Text(fightData, "name"));
         var players = ParseRoster(metadata.GetProperty("table"));
         var characterIds = ApplyParsePercentiles(players, metadata, fightId);
         if (players.Count == 0)
@@ -140,6 +153,13 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
         if (entry.TryGetProperty("guild", out var guild) && guild.ValueKind == JsonValueKind.Object)
         {
             report.GuildName ??= Text(guild, "name");
+            if (guild.TryGetProperty("faction", out var faction))
+                report.FactionId ??= faction.ToString().Trim().ToLowerInvariant() switch
+                {
+                    "0" or "alliance" => 1,
+                    "1" or "horde" => 2,
+                    _ => null
+                };
             if (guild.TryGetProperty("server", out var server) && server.ValueKind == JsonValueKind.Object)
             {
                 report.ServerName ??= Text(server, "name");

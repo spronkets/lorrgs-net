@@ -1,6 +1,7 @@
 query CompRoster($code: String!, $fightIds: [Int!]!) {
   reportData {
     report(code: $code) {
+      code
       title
       startTime
       table(dataType: Summary, fightIDs: $fightIds)

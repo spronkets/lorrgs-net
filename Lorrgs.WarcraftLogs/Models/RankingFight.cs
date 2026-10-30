@@ -12,6 +12,8 @@ public class RankingFight
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public CompRankingComposition? Composition { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, int>? RoleCounts { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? Deaths { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? DamageTaken { get; set; }

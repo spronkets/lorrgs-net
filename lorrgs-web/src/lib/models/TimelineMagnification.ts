@@ -1,4 +1,5 @@
 import type { ReportTimeline } from './ReportTimeline';
+import type { TimelineEvent } from './TimelineEvent';
 
 export type TimelineMagnification = {
   timeline: ReportTimeline;
@@ -7,4 +8,13 @@ export type TimelineMagnification = {
   zoom: number;
   x: number;
   y: number;
+  trackTop?: number;
+  events?: TimelineEvent[];
+  hoveredEvent?: TimelineEvent;
+  mergedResources?: boolean;
+  showIcons?: boolean;
+  previewPixelsPerMillisecond?: number;
+  timestamp?: number;
+  resourceMode?: 'health' | 'mana';
+  phases?: { id: number; timestamp: number }[];
 };

@@ -1,5 +1,4 @@
 using Lorrgs.Api.Shared.Responses;
-using Microsoft.AspNetCore.Mvc;
 using Lorrgs.Api.Features.WorldData.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -12,13 +11,14 @@ public static class GetSeasonHandler
         [AsParameters] GetSeasonRequest request, CancellationToken ct)
     {
         var logger = loggerFactory.CreateLogger("GetSeason");
-        logger.LogInformation("Fetching season: {SeasonSlug}", request.SeasonSlug);
         var season = data.GetSeason(request.SeasonSlug);
         if (season == null)
         {
+            logger.LogWarning("Season not found");
             return TypedResults.NotFound(new ApiErrorResponse($"Season not found: {request.SeasonSlug}"));
         }
 
+        logger.LogInformation("Found season: {SeasonId} {SeasonName}", season.Id, season.Name);
         return TypedResults.Ok(season);
     }
 }

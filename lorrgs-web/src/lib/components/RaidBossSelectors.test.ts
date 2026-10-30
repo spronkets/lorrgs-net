@@ -14,6 +14,23 @@ const props = {
 };
 
 describe('RaidBossSelectors', () => {
+  it('disables unreleased raids while leaving available raids selectable', () => {
+    render(RaidBossSelectors, {
+      raidPhaseGroups: [
+        {
+          key: 'anniversary',
+          label: 'Anniversary',
+          raids: [
+            { slug: 'blacktemple', name: 'Black Temple', isAvailable: true },
+            { slug: 'sunwellplateau', name: 'Sunwell Plateau', isAvailable: false }
+          ]
+        }
+      ]
+    });
+    expect(screen.getByRole('option', { name: 'Sunwell Plateau' })).toBeDisabled();
+    expect(screen.getByRole('option', { name: 'Black Temple' })).toBeEnabled();
+  });
+
   it('shows metadata icons without changing accessible selection controls', async () => {
     const { container, rerender } = render(RaidBossSelectors, {
       ...props,

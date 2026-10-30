@@ -10,6 +10,8 @@ public class RankingReport
     public string? GuildName { get; set; }
     public string? ServerName { get; set; }
     public string? ServerRegion { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? FactionId { get; set; }
     public required string ReportId { get; set; }
     public required string Title { get; set; }
     public double? Percentile { get; set; }

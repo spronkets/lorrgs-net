@@ -54,12 +54,12 @@ public sealed class AnalyzeRotationHandler(ILogger<AnalyzeRotationHandler> logge
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
-            logger.LogWarning(ex, "WarcraftLogs rate limit hit during rotation analysis for report {ReportCode}", request.ReportCode);
+            logger.LogWarning("WarcraftLogs rate limit hit during rotation analysis");
             return TypedResults.Json(new ApiErrorResponse("Warcraft Logs rate limit reached. Please retry shortly."), statusCode: StatusCodes.Status429TooManyRequests);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Rotation analysis failed for report {ReportCode}", request.ReportCode);
+            logger.LogError("Rotation analysis failed exceptionType={ExceptionType}", ex.GetType().FullName);
             return TypedResults.Json(new ApiErrorDetailResponse("Rotation analysis failed", ex.Message), statusCode: 500);
         }
     }

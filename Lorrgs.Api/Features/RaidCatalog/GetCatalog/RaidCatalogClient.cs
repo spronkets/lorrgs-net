@@ -35,7 +35,7 @@ public class RaidCatalogClient(
                 Slug = edition.Slug,
                 Name = edition.Name,
                 Order = edition.Order,
-                Public = edition.Public
+                ActivePhase = edition.ActivePhase
             })
             .OrderBy(edition => edition.Order)
             .ToList();
@@ -65,7 +65,7 @@ public class RaidCatalogClient(
                     Edition = editionSlug,
                     Phase = raid.Phase,
                     Bosses = MapBosses(bossNames),
-                    Public = raid.Public
+                    IsAvailable = raid.Phase <= edition.ActivePhase
                 });
             }
 

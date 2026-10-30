@@ -53,7 +53,9 @@
       versions.find((version) => getRaidsForEdition(raidCatalog, version).length > 0) ||
       versions[0];
   }
-  $: selectedRaidOption = raids.find((raid) => raid.slug === selectedRaid);
+  $: selectedRaidOption = raids.find(
+    (raid) => raid.slug === selectedRaid && raid.isAvailable !== false
+  );
   $: bosses = getRaidBossOptions(selectedRaidOption);
   $: bossOptions = bosses.map((boss) => {
     const metadata = worldData.bosses?.find((entry) => entry.nameSlug === boss.slug);
@@ -64,7 +66,10 @@
   });
   $: selectedBossIconName = bossOptions.find((boss) => boss.slug === selectedBoss)?.iconName;
 
-  $: if (selectedRaid && !raids.some((raid) => raid.slug === selectedRaid)) {
+  $: if (
+    selectedRaid &&
+    !raids.some((raid) => raid.slug === selectedRaid && raid.isAvailable !== false)
+  ) {
     selectedRaid = '';
   }
 

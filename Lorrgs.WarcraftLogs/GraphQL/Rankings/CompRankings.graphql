@@ -1,6 +1,7 @@
 query CompRankings($encounterId: Int!, $difficulty: Int!, $page: Int!) {
   worldData {
     encounter(id: $encounterId) {
+      id
       name
       fightRankings(metric: execution, difficulty: $difficulty, page: $page)
     }

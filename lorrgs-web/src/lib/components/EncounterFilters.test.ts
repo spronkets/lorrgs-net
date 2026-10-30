@@ -13,7 +13,7 @@ const catalog: RaidCatalog = {
         name: 'Black Temple',
         edition: 'anniversary',
         phase: 3,
-        public: true,
+        isAvailable: true,
         bosses: [
           { slug: 'illidan', name: 'Illidan Stormrage', mapped: true },
           { slug: 'najentus', name: 'High Warlord Najentus', mapped: true }
@@ -27,7 +27,7 @@ const catalog: RaidCatalog = {
         name: "Nerub'ar Palace",
         edition: 'retail',
         phase: 1,
-        public: true,
+        isAvailable: true,
         bosses: [{ slug: 'ulgrax', name: 'Ulgrax the Devourer', mapped: true }]
       }
     ]

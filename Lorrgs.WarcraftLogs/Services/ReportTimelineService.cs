@@ -34,9 +34,9 @@ public sealed class ReportTimelineService(
                     {
                         ApplyFightMetadata(report, GetReport(cached.Value).GetProperty("fights"));
                     }
-                    catch (WarcraftLogsReportNotFoundException ex)
+                    catch (WarcraftLogsReportNotFoundException)
                     {
-                        logger.LogWarning(ex, "Cached phase metadata report unavailable report={ReportCode}", report.ReportId);
+                        logger.LogWarning("Cached phase metadata report unavailable");
                         RemoveReport(reports, report);
                     }
                 }
@@ -105,12 +105,12 @@ public sealed class ReportTimelineService(
         {
             if (chunk.Length == 1)
             {
-                logger.LogWarning(ex, "Phase metadata report unavailable report={ReportCode}", chunk[0].Key);
+                logger.LogWarning("Phase metadata report unavailable");
                 RemoveInaccessibleReports(reports, chunk, new HashSet<string> { "r0" });
             }
             else
             {
-                logger.LogWarning(ex, "Retrying failed phase batch individually to identify unavailable reports");
+                logger.LogWarning("Retrying failed phase batch individually to identify unavailable reports");
                 await PopulatePhaseChunksAsync(reports, chunk.Select(group => new[] { group }),
                     edition, cancellationToken);
             }
@@ -122,7 +122,7 @@ public sealed class ReportTimelineService(
             var alias = $"r{index}";
             if (!reportData.TryGetProperty(alias, out var report) || report.ValueKind != JsonValueKind.Object)
             {
-                logger.LogWarning("Phase metadata report unavailable report={ReportCode}", chunk[index].Key);
+                logger.LogWarning("Phase metadata report unavailable");
                 RemoveInaccessibleReports(reports, chunk, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { alias });
                 continue;
             }
@@ -158,7 +158,7 @@ public sealed class ReportTimelineService(
     {
         if (reports is not IList<RankingReport> { IsReadOnly: false } mutableReports)
             throw new InvalidOperationException("Ranking report collection must support removal of inaccessible reports.");
-        logger.LogWarning("Removing inaccessible ranking report={ReportCode}", report.ReportId);
+        logger.LogWarning("Removing inaccessible ranking report");
         mutableReports.Remove(report);
     }
 
@@ -199,6 +199,7 @@ public sealed class ReportTimelineService(
         var fights = metadata.GetProperty("fights").EnumerateArray().Where(f => Number(f, "id") == fightId).ToArray();
         if (fights.Length != 1) throw new KeyNotFoundException("The requested fight was not found.");
         var fight = fights[0];
+        using var verifiedScope = BeginVerifiedReportScope(metadata, fight);
         var start = Number(fight, "startTime");
         var end = Number(fight, "endTime");
         if (end <= start) throw new InvalidOperationException("Warcraft Logs returned an invalid fight duration.");
@@ -223,7 +224,7 @@ public sealed class ReportTimelineService(
         if (string.Equals(edition, "retail", StringComparison.OrdinalIgnoreCase))
             phases = TimelineCorrections.CorrectPhases(encounterId, phases, events, end - start, pages.Value.Complete);
         if (!pages.Value.Complete)
-            logger.LogWarning("Boss timeline page limit reached report={ReportCode} fight={FightId}", reportCode, fightId);
+            logger.LogWarning("Boss timeline page limit reached");
         return new BossTimeline(reportCode, fightId, Text(fight, "name") ?? "Boss",
             end - start, pages.Value.Complete, ObservedSpells(metadata.GetProperty("masterData"), events), events, phases);
     }
@@ -249,6 +250,7 @@ public sealed class ReportTimelineService(
         var metadata = GetReport(data);
         var fights = metadata.GetProperty("fights").EnumerateArray().ToArray();
         var timing = fights.Single(item => Number(item, "id") == fight.FightId);
+        using var verifiedScope = BeginVerifiedReportScope(metadata, timing);
         var start = Number(timing, "startTime");
         var end = Number(timing, "endTime");
         if (end <= start)
@@ -269,9 +271,16 @@ public sealed class ReportTimelineService(
         {
             cancellationToken.ThrowIfCancellationRequested();
             var events = TimelineCorrections.CorrectEvents(
-                NormalizeEvents(rawEvents, player.PlayerId, start, end, complete), player.SpecId, edition, complete);
+                NormalizeEvents(rawEvents, player.PlayerId, start, end, complete, ActorNames(master, edition)), player.SpecId, edition, complete);
+            var maxHealth = ResourceMaximum(rawEvents, player.PlayerId, false, start, end);
             player.Timeline = new ReportTimeline(report.ReportId, fight.FightId, player.PlayerId, player.Name,
-                end - start, complete, TimelineCorrections.CorrectSpells(ObservedSpells(master, events), events), events);
+                end - start, complete, TimelineCorrections.CorrectSpells(ObservedSpells(master, events), events), events)
+            {
+                MaxHealth = maxHealth,
+                EstimatedMaxHealth = maxHealth is null ? EstimateMaxHealth(events) : null,
+                HealthCapacities = HealthCapacities(rawEvents, events, player.PlayerId, start, end),
+                MaxMana = ResourceMaximum(rawEvents, player.PlayerId, true, start, end)
+            };
         }
         report.BossTimeline = BuildBossTimeline(report.ReportId, metadata, timing, rawEvents, edition);
         var persistedMetadata = await client.TryQueryGraphQLFromCacheAsync(ReportMetadataQuery,
@@ -293,12 +302,13 @@ public sealed class ReportTimelineService(
             var end = Number(fight, "endTime");
             foreach (var actor in actors)
             {
+                if (Text(actor, "type") is { } actorType && actorType != "Player") continue;
                 var name = Text(actor, "name");
                 if (string.IsNullOrEmpty(name)) continue;
                 var escaped = name.Replace("\\", "\\\\", StringComparison.Ordinal)
                     .Replace("'", "\\'", StringComparison.Ordinal);
-                var filter = $"(source.name='{escaped}' AND type='cast') OR " +
-                    $"(target.name='{escaped}' AND type IN ('applybuff','refreshbuff','removebuff','death'))";
+                var filter = $"(source.name='{escaped}' AND type IN ('begincast','cast','heal','damage')) OR " +
+                    $"(target.name='{escaped}' AND type IN ('applybuff','refreshbuff','removebuff','applybuffstack','removebuffstack','applydebuff','refreshdebuff','removedebuff','applydebuffstack','removedebuffstack','death','heal','damage','resourcechange','drain','interrupt'))";
                 var cursor = start;
                 for (var page = 0; page < 3; page++)
                 {
@@ -330,14 +340,15 @@ public sealed class ReportTimelineService(
         var reportEnd = fights.Max(item => Number(item, "endTime"));
         var start = Number(fight, "startTime");
         var end = Number(fight, "endTime");
-        const string filter = "type IN ('cast','applybuff','refreshbuff','removebuff','death')";
+        const string filter = "type IN ('begincast','cast','applybuff','refreshbuff','removebuff','applybuffstack','removebuffstack','applydebuff','refreshdebuff','removedebuff','applydebuffstack','removedebuffstack','death','heal','damage','resourcechange','drain','interrupt')";
         return ReadEventsAsync(EventsQuery, cursor => new
         {
             code = reportCode,
             fightIds = fights.Select(item => checked((int)Number(item, "id"))).Order().ToArray(),
             startTime = cursor, endTime = reportEnd, filter
         }, reportStart, reportEnd, edition, cacheOnly, cancellationToken, refresh, int.MaxValue,
-            item => Number(item, "timestamp") >= start && Number(item, "timestamp") <= end);
+            item => (Number(item, "timestamp") >= start && Number(item, "timestamp") <= end) ||
+                (Text(item, "type") is "applybuff" or "removebuff" && Number(item, "timestamp") > end));
     }
 
     private static BossTimeline BuildBossTimeline(string reportCode, JsonElement metadata,
@@ -383,8 +394,22 @@ public sealed class ReportTimelineService(
         var metadata = GetReport(metadataData.Value);
         var fights = metadata.GetProperty("fights").EnumerateArray()
             .Where(f => Number(f, "id") == fightId).ToArray();
+        if (fights.Length == 0 && !cacheOnly)
+        {
+            logger.LogWarning("Timeline fight missing from cached metadata; refreshing report metadata");
+            metadata = GetReport(await client.QueryGraphQLAsync(MetadataQuery,
+                new { code = reportCode, fightIds = new[] { fightId } }, edition,
+                bypassCache: true, cancellationToken: cancellationToken));
+            fights = metadata.GetProperty("fights").EnumerateArray()
+                .Where(f => Number(f, "id") == fightId).ToArray();
+        }
         if (fights.Length != 1)
+        {
+            logger.LogWarning("Timeline fight metadata unavailable cacheOnly={CacheOnly}", cacheOnly);
+            if (cacheOnly) return null;
             throw new KeyNotFoundException("The requested fight was not found.");
+        }
+        using var verifiedScope = BeginVerifiedReportScope(metadata, fights[0]);
         var start = Number(fights[0], "startTime");
         var end = Number(fights[0], "endTime");
         if (end <= start)
@@ -407,15 +432,13 @@ public sealed class ReportTimelineService(
                     lookupMaster.TryGetProperty("abilities", out var lookupAbilities) &&
                     lookupAbilities.ValueKind == JsonValueKind.Array)
                 {
-                    logger.LogInformation("Reusing complete report master data for timeline report={ReportCode} fight={FightId} cacheOnly={CacheOnly}",
-                        reportCode, fightId, cacheOnly);
+                    logger.LogInformation("Reusing complete report master data for timeline cacheOnly={CacheOnly}", cacheOnly);
                     master = lookupMaster;
                 }
                 if (master.ValueKind != JsonValueKind.Object ||
                     !master.TryGetProperty("abilities", out var spellData) || spellData.ValueKind != JsonValueKind.Array)
                 {
-                    logger.LogWarning("Timeline spell metadata unavailable report={ReportCode} fight={FightId} cacheOnly={CacheOnly}",
-                        reportCode, fightId, cacheOnly);
+                    logger.LogWarning("Timeline spell metadata unavailable cacheOnly={CacheOnly}", cacheOnly);
                     if (cacheOnly) return null;
                     throw new InvalidOperationException("Spell metadata is unavailable for this report.");
                 }
@@ -424,8 +447,7 @@ public sealed class ReportTimelineService(
         if (master.ValueKind != JsonValueKind.Object ||
             !master.TryGetProperty("actors", out var actorData) || actorData.ValueKind != JsonValueKind.Array)
         {
-            logger.LogWarning("Timeline actor metadata unavailable report={ReportCode} fight={FightId} cacheOnly={CacheOnly}",
-                reportCode, fightId, cacheOnly);
+            logger.LogWarning("Timeline actor metadata unavailable cacheOnly={CacheOnly}", cacheOnly);
             if (cacheOnly) return null;
             throw new KeyNotFoundException("Player metadata is unavailable for this report.");
         }
@@ -439,17 +461,17 @@ public sealed class ReportTimelineService(
         if (matches.Length != 1 || (!string.IsNullOrWhiteSpace(playerName) &&
             !string.Equals(Text(matches[0], "name"), playerName.Trim(), StringComparison.OrdinalIgnoreCase)))
         {
-            logger.LogWarning("Timeline player could not be resolved report={ReportCode} fight={FightId} source={SourceId} player={PlayerName} cacheOnly={CacheOnly}",
-                reportCode, fightId, sourceId, playerName, cacheOnly);
+            logger.LogWarning("Timeline player could not be resolved cacheOnly={CacheOnly}", cacheOnly);
             if (cacheOnly) return null;
             throw new KeyNotFoundException("The player could not be uniquely identified in this report.");
         }
         var actorId = checked((int)Number(matches[0], "id"));
         var actorName = Text(matches[0], "name")!;
+        logger.LogInformation("Resolved timeline player source={SourceId} player={PlayerName}", actorId, actorName);
         var filterName = actorName.Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace("'", "\\'", StringComparison.Ordinal);
-        var filter = $"(source.name='{filterName}' AND type='cast') OR " +
-            $"(target.name='{filterName}' AND type IN ('applybuff','refreshbuff','removebuff','death'))";
+        var filter = $"(source.name='{filterName}' AND type IN ('begincast','cast','heal','damage')) OR " +
+            $"(target.name='{filterName}' AND type IN ('applybuff','refreshbuff','removebuff','applybuffstack','removebuffstack','applydebuff','refreshdebuff','removedebuff','applydebuffstack','removedebuffstack','death','heal','damage','resourcechange','drain','interrupt'))";
         var sharedPages = hasSharedFight
             ? await ReadReportEventsAsync(reportCode, metadata, fights[0], edition, true, false, cancellationToken)
             : null;
@@ -465,16 +487,36 @@ public sealed class ReportTimelineService(
         var (rawEvents, complete) = pages.Value;
         if (cacheOnly && !complete) return null;
         if (!complete)
-            logger.LogWarning("Timeline page limit reached report={ReportCode} fight={FightId} source={SourceId}; returning explicitly incomplete events",
-                reportCode, fightId, actorId);
+            logger.LogWarning("Timeline page limit reached source={SourceId}; returning explicitly incomplete events", actorId);
 
         var events = TimelineCorrections.CorrectEvents(
-            NormalizeEvents(rawEvents, actorId, start, end, complete), specId, edition, complete);
+            NormalizeEvents(rawEvents, actorId, start, end, complete, ActorNames(master, edition)), specId, edition, complete);
         if (events.Count == 0)
-            logger.LogWarning("WarcraftLogs returned no matching timeline events report={ReportCode} fight={FightId} source={SourceId} rawEventCount={RawEventCount}",
-                reportCode, fightId, actorId, rawEvents.Count);
+            logger.LogWarning("WarcraftLogs returned no matching timeline events source={SourceId} rawEventCount={RawEventCount}",
+                actorId, rawEvents.Count);
+        var maxHealth = ResourceMaximum(rawEvents, actorId, false, start, end);
         return new ReportTimeline(reportCode, fightId, actorId, Text(matches[0], "name")!,
-            end - start, complete, TimelineCorrections.CorrectSpells(ObservedSpells(master, events), events), events);
+            end - start, complete, TimelineCorrections.CorrectSpells(ObservedSpells(master, events), events), events)
+        {
+            MaxHealth = maxHealth,
+            EstimatedMaxHealth = maxHealth is null ? EstimateMaxHealth(events) : null,
+            HealthCapacities = HealthCapacities(rawEvents, events, actorId, start, end),
+            MaxMana = ResourceMaximum(rawEvents, actorId, true, start, end)
+        };
+    }
+
+    private IDisposable? BeginVerifiedReportScope(JsonElement metadata, JsonElement fight)
+    {
+        var scope = logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["ReportCode"] = Text(metadata, "code"),
+            ["ReportTitle"] = Text(metadata, "title"),
+            ["FightId"] = Number(fight, "id"),
+            ["EncounterId"] = Number(fight, "encounterID"),
+            ["EncounterName"] = Text(fight, "name")
+        });
+        logger.LogInformation("Retrieved timeline report and fight");
+        return scope;
     }
 
     private async Task<(List<JsonElement> Events, bool Complete)?> ReadEventsAsync(string query,
@@ -541,34 +583,286 @@ public sealed class ReportTimelineService(
         return spells.Values.OrderBy(s => s.Name).ToArray();
     }
 
+    internal static double? ResourceMaximum(IEnumerable<JsonElement> events, int actorId, bool mana,
+        double start = double.MinValue, double end = double.MaxValue)
+    {
+        double? maximum = null;
+        foreach (var item in events)
+        {
+            if (Number(item, "timestamp") < start || Number(item, "timestamp") > end) continue;
+            if (!HasActorResources(item, actorId)) continue;
+            if (!mana)
+            {
+                var health = Number(item, "maxHitPoints");
+                // Some reports expose percentage-only health snapshots with a maximum of 100.
+                if (health > 0 && health != 100) maximum = Math.Max(maximum ?? 0, health);
+            }
+            else if (item.TryGetProperty("classResources", out var resources) && resources.ValueKind == JsonValueKind.Array)
+                foreach (var resource in resources.EnumerateArray())
+                    if (resource.TryGetProperty("type", out var type) && type.TryGetInt32(out var id) && id == 0)
+                    {
+                        var capacity = Number(resource, "max");
+                        if (capacity > 0) maximum = Math.Max(maximum ?? 0, capacity);
+                    }
+        }
+        return maximum;
+    }
+
+    private static bool HasActorResources(JsonElement item, int actorId)
+    {
+        // Explicit snapshot ownership takes precedence over event-type conventions.
+        var actorField = item.TryGetProperty("resourceActor", out _)
+            ? Number(item, "resourceActor") switch { 1 => "sourceID", 2 => "targetID", _ => null }
+            : Text(item, "type") == "cast" ? "sourceID" :
+                Text(item, "type") is "heal" or "damage" ? "targetID" : null;
+        return actorField is not null && Number(item, actorField) == actorId;
+    }
+
+    private static double? HealthPercent(JsonElement item, int actorId)
+    {
+        if (!HasActorResources(item, actorId) ||
+            !item.TryGetProperty("hitPoints", out var health) || !health.TryGetDouble(out var current) ||
+            !item.TryGetProperty("maxHitPoints", out var maximum) || !maximum.TryGetDouble(out var max) ||
+            max <= 0 || current < 0 || current > max)
+            return null;
+        return current / max * 100;
+    }
+
+    internal static double? EstimateMaxHealth(IEnumerable<TimelineEvent> events)
+    {
+        // Large percentage changes limit rounding error; the median resists individual noisy samples.
+        var estimates = events
+            .Where(item => item.Kind is "heal" or "hot" &&
+                item.HealthBeforeIsPreviousSnapshot && item.Amount is > 0 &&
+                item.HealthBeforePercent.HasValue && item.HealthAfterPercent.HasValue &&
+                item.HealthAfterPercent.Value - item.HealthBeforePercent.Value >= 10)
+            .Select(item => item.Amount!.Value * 100 /
+                (item.HealthAfterPercent!.Value - item.HealthBeforePercent!.Value))
+            .Order()
+            .ToArray();
+        if (estimates.Length == 0) return null;
+        var middle = estimates.Length / 2;
+        return Math.Round(estimates.Length % 2 == 0
+            ? (estimates[middle - 1] + estimates[middle]) / 2 : estimates[middle]);
+    }
+
+    // These auras change haste, mana recovery, critical chance, or armor, not health capacity.
+    private static readonly HashSet<int> NonHealthCapacityAuras =
+        [2825, 32182, 24907, 33736, 16188, 16166, 16237];
+
+    private static bool IsHealthCapacityBoundary(JsonElement item, int actorId) =>
+        Number(item, "targetID") == actorId && (Text(item, "type") == "death" ||
+        !NonHealthCapacityAuras.Contains(checked((int)Number(item, "abilityGameID"))) && Text(item, "type") is
+            "applybuff" or "refreshbuff" or "removebuff" or "applybuffstack" or "removebuffstack" or
+            "applydebuff" or "refreshdebuff" or "removedebuff" or "applydebuffstack" or "removedebuffstack");
+
+    internal static IReadOnlyList<TimelineHealthCapacity> HealthCapacities(
+        IEnumerable<JsonElement> rawEvents, IReadOnlyList<TimelineEvent> events, int actorId, double start, double end)
+    {
+        var estimates = events.Where(item => item.Kind is "heal" or "hot")
+            .GroupBy(item => item.Timestamp).ToDictionary(group => group.Key, group => EstimateMaxHealth(group));
+        var result = new List<TimelineHealthCapacity>();
+        double? recorded = null;
+        double? estimated = null;
+        foreach (var group in rawEvents.Where(item => Number(item, "timestamp") >= start &&
+                     Number(item, "timestamp") <= end).GroupBy(item => Number(item, "timestamp")).OrderBy(group => group.Key))
+        {
+            var boundary = group.Any(item => IsHealthCapacityBoundary(item, actorId));
+            if (boundary)
+            {
+                recorded = null;
+                estimated = null;
+            }
+            var snapshot = group.LastOrDefault(item => HasActorResources(item, actorId) &&
+                Number(item, "maxHitPoints") > 0);
+            if (snapshot.ValueKind != JsonValueKind.Undefined)
+            {
+                var maximum = Number(snapshot, "maxHitPoints");
+                recorded = maximum != 100 ? maximum : null;
+                if (recorded.HasValue) estimated = null;
+            }
+            // Same-timestamp aura changes make a heal-based estimate ambiguous.
+            if (!boundary && recorded is null && estimates.GetValueOrDefault(group.Key - start) is { } estimate)
+                estimated = estimate;
+            if (result.Count == 0 || result[^1].MaxHealth != recorded || result[^1].EstimatedMaxHealth != estimated)
+                result.Add(new TimelineHealthCapacity(group.Key - start, recorded, estimated));
+        }
+        return result;
+    }
+
+    private static IReadOnlyDictionary<int, string> ActorNames(JsonElement master, string edition) =>
+        master.GetProperty("actors").EnumerateArray()
+            .Where(actor => Text(actor, "name") is not null)
+            .GroupBy(actor => checked((int)Number(actor, "id")))
+            .ToDictionary(group => group.Key, group =>
+                edition == "anniversary" && Text(group.First(), "type") == "NPC" &&
+                Number(group.First(), "gameID") == 23863
+                    ? "Zul'jin" : Text(group.First(), "name")!);
+
     internal static IReadOnlyList<TimelineEvent> NormalizeEvents(
-        IEnumerable<JsonElement> rawEvents, int actorId, double start, double end, bool complete)
+        IEnumerable<JsonElement> rawEvents, int actorId, double start, double end, bool complete,
+        IReadOnlyDictionary<int, string>? actorNames = null)
     {
         var result = new List<TimelineEvent>();
+        var orderedEvents = rawEvents.OrderBy(e => Number(e, "timestamp")).ToArray();
+        var castResults = MatchedCastResults(orderedEvents, actorId, start, end, actorNames);
         var buffs = new Dictionary<int, double>();
-        foreach (var item in rawEvents.OrderBy(e => Number(e, "timestamp")))
+        double? previousHealthPercent = null;
+        double previousHealthTimestamp = double.NegativeInfinity;
+        (int SpellId, double Timestamp)? pendingCast = null;
+        foreach (var item in orderedEvents)
         {
             var timestamp = Number(item, "timestamp");
-            if (timestamp < start || timestamp > end) continue;
+            if (timestamp < start) continue;
+            if (timestamp > end)
+            {
+                if (Text(item, "type") == "applybuff" && Number(item, "targetID") == actorId)
+                    buffs.Remove(checked((int)Number(item, "abilityGameID")));
+                if (Text(item, "type") == "removebuff" && Number(item, "targetID") == actorId &&
+                    buffs.Remove(checked((int)Number(item, "abilityGameID")), out var appliedBeforeEnd))
+                    result.Add(new TimelineEvent(checked((int)Number(item, "abilityGameID")),
+                        appliedBeforeEnd, end - start - appliedBeforeEnd, "buff"));
+                continue;
+            }
             var relative = timestamp - start;
             var type = Text(item, "type");
             var spellId = checked((int)Number(item, "abilityGameID"));
+            var sourceName = actorNames?.GetValueOrDefault(checked((int)Number(item, "sourceID")));
+            if (IsHealthCapacityBoundary(item, actorId)) previousHealthPercent = null;
+            var healthBefore = timestamp - previousHealthTimestamp <= 1000 ? previousHealthPercent : null;
+            var healthAfter = HealthPercent(item, actorId);
+            if (healthAfter.HasValue)
+            {
+                previousHealthPercent = healthAfter;
+                previousHealthTimestamp = timestamp;
+            }
+            else if (HasActorResources(item, actorId) ||
+                type is "death" or "heal" or "damage" && Number(item, "targetID") == actorId)
+                previousHealthPercent = null;
+            if (type == "begincast" && Number(item, "sourceID") == actorId && spellId > 0)
+                pendingCast = (spellId, relative);
+            if (type is "interrupt" or "death" && Number(item, "targetID") == actorId)
+                pendingCast = null;
             if (type == "cast" && Number(item, "sourceID") == actorId && spellId > 0)
-                result.Add(new TimelineEvent(spellId, relative, null, "cast"));
+            {
+                var castStart = pendingCast is { } pending && pending.SpellId == spellId
+                    ? pending.Timestamp : (double?)null;
+                pendingCast = null;
+                result.Add(new TimelineEvent(spellId, relative,
+                    castStart.HasValue ? relative - castStart.Value : null, "cast", CastStart: castStart,
+                    CastResults: castResults.GetValueOrDefault((spellId, timestamp))));
+                if (item.TryGetProperty("classResources", out var resources) && resources.ValueKind == JsonValueKind.Array)
+                    foreach (var resource in resources.EnumerateArray())
+                        if (resource.TryGetProperty("type", out var resourceType) && resourceType.TryGetInt32(out var id) && id == 0 &&
+                            resource.TryGetProperty("cost", out var cost) && cost.TryGetDouble(out var amount) && amount > 0)
+                            result.Add(new TimelineEvent(spellId, relative, null, "mana-spent", Amount: amount, SourceName: sourceName));
+            }
             if (Number(item, "targetID") != actorId) continue;
             if (type == "death")
                 result.Add(new TimelineEvent(0, relative, null, "death"));
             if (spellId <= 0) continue;
+            if (type is "resourcechange" or "drain" &&
+                item.TryGetProperty("resourceChangeType", out var changeType) && changeType.TryGetInt32(out var manaType) && manaType == 0 &&
+                item.TryGetProperty("resourceChange", out var change) && change.TryGetDouble(out var mana))
+            {
+                var amount = type == "drain" ? mana : mana - Number(item, "waste");
+                if (amount > 0)
+                    result.Add(new TimelineEvent(spellId, relative, null,
+                        type == "drain" ? "mana-spent" : "mana-returned", Amount: amount, SourceName: sourceName,
+                        IsManaDrain: type == "drain"));
+            }
+            if (type == "damage")
+            {
+                var damage = item.TryGetProperty("amount", out var damageAmount) && damageAmount.TryGetDouble(out var amount)
+                    ? amount : (double?)null;
+                var previousSnapshot = healthBefore.HasValue;
+                if (healthAfter.HasValue && Number(item, "maxHitPoints") != 100 && damage is >= 0)
+                {
+                    var before = Number(item, "hitPoints") + damage.Value - Math.Max(0, Number(item, "overkill"));
+                    healthBefore = before >= 0 && before <= Number(item, "maxHitPoints")
+                        ? before / Number(item, "maxHitPoints") * 100 : null;
+                    previousSnapshot = false;
+                }
+                result.Add(new TimelineEvent(spellId, relative, null, "damage",
+                    Amount: damage, SourceName: sourceName,
+                    HealthBeforePercent: healthBefore, HealthAfterPercent: healthAfter,
+                    HealthBeforeIsPreviousSnapshot: previousSnapshot));
+            }
+            if (type == "heal")
+            {
+                var healing = item.TryGetProperty("amount", out var healAmount) && healAmount.TryGetDouble(out var amount)
+                    ? amount : (double?)null;
+                var previousSnapshot = healthBefore.HasValue;
+                // Absolute HP allows an exact pre-heal value; percentages cannot be reduced by a raw healing amount.
+                if (healthAfter.HasValue && Number(item, "maxHitPoints") != 100 && healing is >= 0)
+                {
+                    var before = Number(item, "hitPoints") - healing.Value;
+                    healthBefore = before >= 0 ? before / Number(item, "maxHitPoints") * 100 : null;
+                    previousSnapshot = false;
+                }
+                result.Add(new TimelineEvent(spellId, relative, null,
+                    item.TryGetProperty("tick", out var tick) && tick.ValueKind == JsonValueKind.True
+                        ? "hot" : "heal",
+                    Amount: healing, SourceName: sourceName,
+                    HealthBeforePercent: healthBefore, HealthAfterPercent: healthAfter,
+                    HealthBeforeIsPreviousSnapshot: previousSnapshot));
+            }
             if (type == "applybuff")
                 buffs.TryAdd(spellId, relative);
             else if (type == "removebuff" && buffs.Remove(spellId, out var applied))
                 result.Add(new TimelineEvent(spellId, applied, relative - applied, "buff"));
             // A refresh extends the same measured interval; no guessed prepull application.
         }
-        if (complete)
-            foreach (var (spellId, applied) in buffs)
-                result.Add(new TimelineEvent(spellId, applied, end - start - applied, "buff", true));
         return result.OrderBy(e => e.Timestamp).ThenBy(e => e.SpellId).ToArray();
+    }
+
+    private static Dictionary<(int SpellId, double Timestamp), IReadOnlyList<TimelineCastResult>> MatchedCastResults(
+        JsonElement[] events, int actorId, double start, double end, IReadOnlyDictionary<int, string>? actorNames)
+    {
+        var castEvents = events.Where(item => Text(item, "type") == "cast" && Number(item, "sourceID") == actorId &&
+                Number(item, "timestamp") >= start && Number(item, "timestamp") <= end).ToArray();
+        var casts = castEvents
+            .GroupBy(item => checked((int)Number(item, "abilityGameID")))
+            .ToDictionary(group => group.Key, group => group.Select(item => Number(item, "timestamp")).ToArray());
+        var castTargets = castEvents
+            .GroupBy(item => (checked((int)Number(item, "abilityGameID")), Number(item, "timestamp")))
+            .ToDictionary(group => group.Key, group => checked((int)Number(group.First(), "targetID")));
+        var results = new Dictionary<(int, double), List<TimelineCastResult>>();
+        foreach (var item in events)
+        {
+            var kind = Text(item, "type");
+            var timestamp = Number(item, "timestamp");
+            if (kind is not ("heal" or "damage") || Number(item, "sourceID") != actorId ||
+                timestamp < start || timestamp > end ||
+                item.TryGetProperty("tick", out var tick) && tick.ValueKind == JsonValueKind.True ||
+                !item.TryGetProperty("amount", out var amountValue) || !amountValue.TryGetDouble(out var amount) ||
+                amount <= 0)
+                continue;
+            var spellId = checked((int)Number(item, "abilityGameID"));
+            if (!casts.TryGetValue(spellId, out var timestamps)) continue;
+            var index = Array.BinarySearch(timestamps, timestamp);
+            if (index < 0) index = ~index - 1;
+            if (index < 0 || timestamp - timestamps[index] > 3000 ||
+                index > 0 && timestamps[index - 1] == timestamps[index] ||
+                index + 1 < timestamps.Length && timestamps[index + 1] == timestamps[index])
+                continue;
+            var targetId = checked((int)Number(item, "targetID"));
+            if (targetId <= 0) continue;
+            var targetName = actorNames?.GetValueOrDefault(targetId) ?? $"Actor {targetId}";
+            var key = (spellId, timestamps[index]);
+            var delayed = timestamp - timestamps[index] > 250;
+            // Delayed direct hits need the cast's recorded target; never infer projectile AoE or repeated ticks.
+            if (delayed && (kind != "damage" || castTargets[key] != targetId ||
+                item.TryGetProperty("isAoE", out var aoe) && aoe.ValueKind == JsonValueKind.True))
+                continue;
+            if (!results.TryGetValue(key, out var entries))
+                results[key] = entries = [];
+            var existing = entries.FindIndex(entry => entry.TargetId == targetId && entry.Kind == kind);
+            if (delayed && existing >= 0) continue;
+            if (existing < 0) entries.Add(new TimelineCastResult(targetId, targetName, kind, amount));
+            else entries[existing] = entries[existing] with { Amount = entries[existing].Amount + amount };
+        }
+        return results.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<TimelineCastResult>)pair.Value);
     }
 
     private static JsonElement GetReport(JsonElement data)

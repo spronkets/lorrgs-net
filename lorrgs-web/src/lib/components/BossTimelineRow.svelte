@@ -72,6 +72,7 @@
 </script>
 
 <div class="boss-row" aria-label="Boss reference timeline">
+  <div class="position-placeholder" aria-hidden="true"></div>
   <div class="identity">
     <a
       href={getRankingReportLink(report, edition)}
@@ -154,12 +155,24 @@
       width: calc(100% - 34px);
     }
   }
+  .position-placeholder {
+    width: var(--timeline-position-width, 0px);
+    flex-shrink: 0;
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    box-sizing: border-box;
+  }
   .identity {
-    width: 220px;
+    display: flex;
+    align-items: center;
+    width: var(--timeline-identity-width, 220px);
     flex-shrink: 0;
     padding: 6px 8px;
     position: sticky;
-    left: 0;
+    left: var(--timeline-position-width, 0px);
     background: var(--panel);
     border-right: 1px solid var(--line);
     z-index: 3;
@@ -175,7 +188,9 @@
   }
   .track {
     position: relative;
-    width: calc(100% - 248px);
+    width: calc(
+      100% - var(--timeline-identity-width, 220px) - 28px - var(--timeline-position-width, 0px)
+    );
     flex-shrink: 0;
     height: 68px;
   }

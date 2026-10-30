@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Lorrgs.Api.Features.WorldData.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Lorrgs.Api.Features.WorldData.GetRoles;
@@ -11,8 +10,8 @@ public static class GetRolesHandler
         [FromQuery] string? edition, CancellationToken ct)
     {
         var logger = loggerFactory.CreateLogger("GetRoles");
-        logger.LogInformation("Fetching all roles");
         var roles = data.Roles.OrderBy(r => r.Id).ToList();
+        logger.LogInformation("Found {RoleCount} roles", roles.Count);
 
         return TypedResults.Ok(new GetRolesResponse(roles));
     }

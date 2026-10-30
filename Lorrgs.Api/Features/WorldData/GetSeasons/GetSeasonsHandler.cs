@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Lorrgs.Api.Features.WorldData.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Lorrgs.Api.Features.WorldData.GetSeasons;
@@ -11,8 +10,8 @@ public static class GetSeasonsHandler
         [FromQuery] string? edition, CancellationToken ct)
     {
         var logger = loggerFactory.CreateLogger("GetSeasons");
-        logger.LogInformation("Fetching all seasons");
         var seasons = data.Seasons.OrderBy(s => s.StartDate).ToList();
+        logger.LogInformation("Found {SeasonCount} seasons", seasons.Count);
 
         return TypedResults.Ok(new GetSeasonsResponse(seasons));
     }

@@ -12,6 +12,21 @@ namespace Lorrgs.Api.Tests;
 
 public sealed class ApiEndpointTests(ApiEndpointFixture fixture) : IClassFixture<ApiEndpointFixture>
 {
+    [Theory]
+    [InlineData("/api/warcraftlogs/reports/bad-code/timeline?fightId=1&sourceId=7&edition=retail", HttpStatusCode.BadRequest)]
+    [InlineData("/api/route-that-does-not-exist", HttpStatusCode.NotFound)]
+    [InlineData("/api/WorldData/roles?edition=retail", HttpStatusCode.OK)]
+    public async Task ResponsesExposeServerCorrelationId(string url, HttpStatusCode status)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("X-Correlation-ID", "unverified-client-value");
+        using var response = await fixture.Client.SendAsync(request);
+        Assert.Equal(status, response.StatusCode);
+        var correlationId = Assert.Single(response.Headers.GetValues("X-Correlation-ID"));
+        Assert.False(string.IsNullOrWhiteSpace(correlationId));
+        Assert.NotEqual("unverified-client-value", correlationId);
+    }
+
     [Fact]
     public async Task RootCompositionDocumentsAll34RoutesExactlyOnce()
     {

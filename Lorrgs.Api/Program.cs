@@ -1,11 +1,11 @@
-using System.Diagnostics;
 using Lorrgs.Api;
 using Lorrgs.Api.Features.RaidCatalog;
-using Microsoft.Extensions.Options;
+using Lorrgs.Api.Middleware;
 using Microsoft.OpenApi.Models;
 using WclOptions = Lorrgs.WarcraftLogs.Configuration.WarcraftLogsApiOptions;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddApplicationLogging();
 
 builder.Configuration
     .AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
@@ -37,11 +37,13 @@ builder.Services.AddCors(options =>
     {
         policy.AllowAnyOrigin()
             .AllowAnyHeader()
+            .WithExposedHeaders("X-Correlation-ID")
             .AllowAnyMethod();
     });
 });
 
 var app = builder.Build();
+app.UseMiddleware<RequestLoggingMiddleware>();
 
 app.Use(async (context, next) =>
 {
@@ -72,29 +74,5 @@ if (app.Environment.IsDevelopment())
         options.RoutePrefix = "swagger";
     });
 }
-
-app.Lifetime.ApplicationStarted.Register(() =>
-{
-    if (!app.Environment.IsDevelopment())
-    {
-        return;
-    }
-
-    var baseUrl = app.Urls.FirstOrDefault(url => url.StartsWith("http", StringComparison.OrdinalIgnoreCase));
-    var swaggerUrl = baseUrl is null ? "http://localhost:5168/swagger" : $"{baseUrl.TrimEnd('/')}/swagger";
-
-    try
-    {
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = swaggerUrl,
-            UseShellExecute = true
-        });
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Unable to open Swagger UI automatically: {ex.Message}");
-    }
-});
 
 app.Run();

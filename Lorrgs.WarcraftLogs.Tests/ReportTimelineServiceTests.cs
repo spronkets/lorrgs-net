@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Lorrgs.Tests.TestSupport;
-using Lorrgs.WarcraftLogs;
 using Lorrgs.WarcraftLogs.Configuration;
 using Lorrgs.WarcraftLogs.Models;
 using Lorrgs.WarcraftLogs.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace Lorrgs.WarcraftLogs.Tests;
 
@@ -12,6 +12,94 @@ public sealed class ReportTimelineServiceTests : IDisposable
 {
     private readonly TestClientFixture fixture = new();
     public void Dispose() => fixture.Dispose();
+
+    [Theory]
+    [InlineData("\r")]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    [InlineData("\u0085")]
+    [InlineData("\u2028")]
+    [InlineData("\u2029")]
+    public async Task EmptyTimelineLogsSourceMetadataInsteadOfRequestValues(string separator)
+    {
+        var reportCode = $"report{separator}forged";
+        using var handler = new QueueHandler(TimelineMetadata(), EventPage("[]"));
+        var logger = new RecordingLogger();
+        var service = new ReportTimelineService(fixture.CreateClient(handler), logger);
+
+        var result = await service.LoadAsync(reportCode, 1, 7, null, "retail", CancellationToken.None);
+
+        Assert.Equal(reportCode, result.ReportCode);
+        Assert.Contains(logger.Messages, message => message.StartsWith("WarcraftLogs returned no matching timeline events", StringComparison.Ordinal));
+        Assert.All(logger.Messages, message => Assert.DoesNotContain(reportCode, message));
+        var scope = Assert.Single(logger.Scopes);
+        Assert.Equal("verified-report", scope["ReportCode"]);
+        Assert.Equal("Verified report", scope["ReportTitle"]);
+        Assert.Equal(1d, scope["FightId"]);
+        Assert.All(handler.Requests, request =>
+            Assert.Equal(reportCode, request.GetProperty("variables").GetProperty("code").GetString()));
+    }
+
+    [Fact]
+    public async Task MissingSourceReportCodeIsNotReplacedByRequestCodeInLogs()
+    {
+        var metadata = System.Text.Json.Nodes.JsonNode.Parse(TimelineMetadata())!;
+        metadata["data"]!["reportData"]!["report"]!.AsObject().Remove("code");
+        using var handler = new QueueHandler(metadata.ToJsonString(), EventPage("[]"));
+        var logger = new RecordingLogger();
+        var service = new ReportTimelineService(fixture.CreateClient(handler), logger);
+
+        var result = await service.LoadAsync("request-only-code", 1, 7, null, "retail", CancellationToken.None);
+
+        Assert.Equal("request-only-code", result.ReportCode);
+        Assert.Null(Assert.Single(logger.Scopes)["ReportCode"]);
+        Assert.All(logger.Messages, message => Assert.DoesNotContain("request-only-code", message));
+    }
+
+    [Fact]
+    public async Task UnresolvedPlayerLogsFoundReportContextWithoutLoggingRequestedPlayer()
+    {
+        const string requestedPlayer = "unverified\r\nsecret-player";
+        using var handler = new QueueHandler(TimelineMetadata());
+        var logger = new RecordingLogger();
+        var service = new ReportTimelineService(fixture.CreateClient(handler), logger);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            service.LoadAsync("request-code", 1, null, requestedPlayer, "retail", CancellationToken.None));
+
+        Assert.Contains(logger.Messages, message => message.StartsWith("Timeline player could not be resolved", StringComparison.Ordinal));
+        Assert.All(logger.Messages, message =>
+        {
+            Assert.DoesNotContain(requestedPlayer, message);
+            Assert.DoesNotContain("request-code", message);
+        });
+        var scope = Assert.Single(logger.Scopes);
+        Assert.Equal("verified-report", scope["ReportCode"]);
+        Assert.DoesNotContain(scope.Values, value => Equals(value, requestedPlayer) || Equals(value, "request-code"));
+        Assert.Equal(1, handler.GraphQlRequests);
+    }
+
+    [Fact]
+    public async Task PageLimitWarningUsesSourceMetadataAndPreservesIncompleteTimeline()
+    {
+        const string reportCode = "report\r\n\u0085\u2028\u2029forged";
+        using var handler = new QueueHandler(TimelineMetadata(),
+            EventPage("[]", 4000), EventPage("[]", 6000), EventPage("[]", 8000));
+        var logger = new RecordingLogger();
+        var service = new ReportTimelineService(fixture.CreateClient(handler), logger);
+
+        var result = await service.LoadAsync(reportCode, 1, 7, null, "retail", CancellationToken.None);
+
+        Assert.False(result.IsComplete);
+        Assert.Equal(reportCode, result.ReportCode);
+        var warning = Assert.Single(logger.Messages, message =>
+            message.StartsWith("Timeline page limit reached", StringComparison.Ordinal));
+        Assert.DoesNotContain(reportCode, warning);
+        Assert.Equal("verified-report", Assert.Single(logger.Scopes)["ReportCode"]);
+        Assert.Equal(4, handler.GraphQlRequests);
+        Assert.All(handler.Requests, request =>
+            Assert.Equal(reportCode, request.GetProperty("variables").GetProperty("code").GetString()));
+    }
 
     [Theory]
     [InlineData(false)]
@@ -65,6 +153,542 @@ public sealed class ReportTimelineServiceTests : IDisposable
         }
     }
 
+    [Fact]
+    public void NormalizeHealsIncludesRecordedPercentageTransitionsWithoutMixingActors()
+    {
+        var events = ParseEvents("""
+            [{"type":"damage","timestamp":1000,"sourceID":8,"targetID":7,"abilityGameID":1,
+              "resourceActor":2,"hitPoints":40,"maxHitPoints":100},
+             {"type":"cast","timestamp":1100,"sourceID":8,"abilityGameID":2,
+              "resourceActor":1,"hitPoints":90,"maxHitPoints":100},
+             {"type":"heal","timestamp":1200,"sourceID":8,"targetID":7,"abilityGameID":3,
+              "amount":3000,"resourceActor":2,"hitPoints":70,"maxHitPoints":100},
+             {"type":"heal","timestamp":1300,"sourceID":8,"targetID":7,"abilityGameID":3,
+              "amount":1000,"tick":true,"resourceActor":2,"hitPoints":80,"maxHitPoints":100}]
+            """);
+        var heals = ReportTimelineService.NormalizeEvents(events, 7, 1000, 2000, true)
+            .Where(item => item.Kind is "heal" or "hot").ToArray();
+        Assert.Equal(40, heals[0].HealthBeforePercent);
+        Assert.Equal(70, heals[0].HealthAfterPercent);
+        Assert.True(heals[0].HealthBeforeIsPreviousSnapshot);
+        Assert.Equal(70, heals[1].HealthBeforePercent);
+        Assert.Equal(80, heals[1].HealthAfterPercent);
+        Assert.True(heals[1].HealthBeforeIsPreviousSnapshot);
+        Assert.Equal(10000, ReportTimelineService.EstimateMaxHealth(heals));
+    }
+
+    [Fact]
+    public void EstimateMaxHealthUsesMedianAndRejectsSmallOrUnknownPercentageGains()
+    {
+        TimelineEvent Heal(double amount, double? before, double? after, bool previous = true) =>
+            new(1, 1000, null, "heal", Amount: amount, HealthBeforePercent: before,
+                HealthAfterPercent: after, HealthBeforeIsPreviousSnapshot: previous);
+        var events = new[]
+        {
+            Heal(3000, 40, 70), Heal(2000, 50, 70), Heal(9000, 40, 70),
+            Heal(5000, 90, 95), Heal(3000, null, 70), Heal(3000, 40, null),
+            Heal(3000, 80, 70), Heal(0, 40, 70), Heal(6000, 40, 70, false)
+        };
+        Assert.Equal(10000, ReportTimelineService.EstimateMaxHealth(events));
+        Assert.Equal(15000, ReportTimelineService.EstimateMaxHealth([Heal(3000, 40, 70), Heal(6000, 40, 70)]));
+        Assert.Null(ReportTimelineService.EstimateMaxHealth([Heal(1000, 50, 59.9)]));
+        Assert.Equal(10000, ReportTimelineService.EstimateMaxHealth([Heal(1000, 50, 60)]));
+    }
+
+    [Fact]
+    public async Task LoadFetchesAndCachesEstimatedHealthSeparatelyFromRecordedMaximum()
+    {
+        using var handler = new QueueHandler(TimelineMetadata(), EventPage("""
+            [{"type":"damage","timestamp":1000,"sourceID":8,"targetID":7,"abilityGameID":1,
+              "resourceActor":2,"hitPoints":40,"maxHitPoints":100},
+             {"type":"heal","timestamp":1200,"sourceID":8,"targetID":7,"abilityGameID":3,
+              "amount":3000,"resourceActor":2,"hitPoints":70,"maxHitPoints":100}]
+            """));
+        var service = CreateService(handler);
+        var fresh = await service.LoadAsync("estimatedHealth", 1, 7, "Player", "anniversary", default);
+        var cached = await service.TryLoadCachedAsync("estimatedHealth", 1, 7, "Player", "anniversary", default);
+        Assert.Null(fresh.MaxHealth);
+        Assert.Equal(10000, fresh.EstimatedMaxHealth);
+        Assert.NotNull(cached);
+        Assert.Equal(fresh.EstimatedMaxHealth, cached.EstimatedMaxHealth);
+        Assert.Equal(new TimelineHealthCapacity(200, null, 10000), fresh.HealthCapacities[^1]);
+        Assert.Equal(fresh.HealthCapacities, cached.HealthCapacities);
+        Assert.Equal(fresh.Events, cached.Events);
+        Assert.Equal(2, handler.GraphQlRequests);
+    }
+
+    [Fact]
+    public void NormalizeHealsCalculatesExactBeforeFromAbsoluteEffectiveHealing()
+    {
+        var events = ParseEvents("""
+            [{"type":"heal","timestamp":1000,"sourceID":8,"targetID":7,"abilityGameID":3,
+              "amount":3000,"overheal":2000,"resourceActor":2,"hitPoints":10000,"maxHitPoints":10000}]
+            """);
+        var heal = Assert.Single(ReportTimelineService.NormalizeEvents(events, 7, 1000, 2000, true));
+        Assert.Equal(70, heal.HealthBeforePercent);
+        Assert.Equal(100, heal.HealthAfterPercent);
+        Assert.False(heal.HealthBeforeIsPreviousSnapshot);
+    }
+
+    [Fact]
+    public void NormalizeHealsPreservesUnknownHealthAndRejectsOtherActorSnapshots()
+    {
+        var events = ParseEvents("""
+            [{"type":"heal","timestamp":1000,"sourceID":8,"targetID":7,"abilityGameID":3,
+              "amount":3000,"resourceActor":2,"hitPoints":70,"maxHitPoints":100},
+             {"type":"heal","timestamp":1100,"sourceID":8,"targetID":7,"abilityGameID":3,
+              "amount":1000,"resourceActor":1,"hitPoints":100,"maxHitPoints":100},
+             {"type":"damage","timestamp":1200,"sourceID":8,"targetID":7,"abilityGameID":1},
+             {"type":"heal","timestamp":1300,"sourceID":8,"targetID":7,"abilityGameID":3,"amount":500}]
+            """);
+        var heals = ReportTimelineService.NormalizeEvents(events, 7, 1000, 2000, true)
+            .Where(item => item.Kind == "heal").ToArray();
+        Assert.Null(heals[0].HealthBeforePercent);
+        Assert.Equal(70, heals[0].HealthAfterPercent);
+        Assert.Null(heals[1].HealthAfterPercent);
+        Assert.Null(heals[2].HealthBeforePercent);
+        Assert.Null(heals[2].HealthAfterPercent);
+    }
+
+    [Fact]
+    public void NormalizeDamageIncludesHealthBeforeAndAfter()
+    {
+        var events = ParseEvents("""
+            [{"type":"cast","timestamp":1000,"sourceID":7,"abilityGameID":1,
+              "hitPoints":70,"maxHitPoints":100},
+             {"type":"damage","timestamp":1100,"sourceID":8,"targetID":7,"abilityGameID":2,
+              "amount":1500,"resourceActor":2,"hitPoints":55,"maxHitPoints":100},
+             {"type":"damage","timestamp":1200,"sourceID":8,"targetID":7,"abilityGameID":2,
+              "amount":1500,"overkill":-1,"resourceActor":2,"hitPoints":4000,"maxHitPoints":10000}]
+            """);
+        var damage = ReportTimelineService.NormalizeEvents(events, 7, 1000, 2000, true)
+            .Where(item => item.Kind == "damage").ToArray();
+        Assert.Equal(70, damage[0].HealthBeforePercent);
+        Assert.Equal(55, damage[0].HealthAfterPercent!.Value, 8);
+        Assert.True(damage[0].HealthBeforeIsPreviousSnapshot);
+        Assert.Equal(55, damage[1].HealthBeforePercent!.Value, 8);
+        Assert.Equal(40, damage[1].HealthAfterPercent);
+        Assert.False(damage[1].HealthBeforeIsPreviousSnapshot);
+    }
+
+    [Fact]
+    public void NormalizeCastsGroupsImmediateResultsByTargetAndKindAndExcludesUnrelatedEffects()
+    {
+        var events = ParseEvents("""
+            [{"type":"cast","timestamp":1000,"sourceID":7,"abilityGameID":1},
+             {"type":"damage","timestamp":1000,"sourceID":7,"targetID":8,"abilityGameID":1,"amount":500},
+             {"type":"damage","timestamp":1100,"sourceID":7,"targetID":8,"abilityGameID":1,"amount":250},
+             {"type":"damage","timestamp":1250,"sourceID":7,"targetID":9,"abilityGameID":1,"amount":300},
+             {"type":"heal","timestamp":1100,"sourceID":7,"targetID":8,"abilityGameID":1,"amount":100},
+             {"type":"damage","timestamp":1251,"sourceID":7,"targetID":9,"abilityGameID":1,"amount":9999},
+             {"type":"damage","timestamp":1200,"sourceID":7,"targetID":8,"abilityGameID":1,"amount":9999,"tick":true},
+             {"type":"damage","timestamp":1200,"sourceID":6,"targetID":8,"abilityGameID":1,"amount":9999},
+             {"type":"damage","timestamp":1200,"sourceID":7,"targetID":8,"abilityGameID":2,"amount":9999},
+             {"type":"damage","timestamp":999,"sourceID":7,"targetID":8,"abilityGameID":1,"amount":9999},
+             {"type":"cast","timestamp":2000,"sourceID":7,"abilityGameID":1},
+             {"type":"damage","timestamp":2050,"sourceID":7,"targetID":8,"abilityGameID":1,"amount":600}]
+            """);
+        var casts = ReportTimelineService.NormalizeEvents(events, 7, 1000, 3000, true,
+                new Dictionary<int, string> { [8] = "Target", [9] = "Other" })
+            .Where(item => item.Kind == "cast").ToArray();
+        Assert.Equal(new[]
+        {
+            new TimelineCastResult(8, "Target", "damage", 750),
+            new TimelineCastResult(8, "Target", "heal", 100),
+            new TimelineCastResult(9, "Other", "damage", 300)
+        }, casts[0].CastResults);
+        Assert.Equal(new TimelineCastResult(8, "Target", "damage", 600), Assert.Single(casts[1].CastResults!));
+    }
+
+    [Fact]
+    public void ChainHealIncludesEffectiveBouncesButNotFullyOverhealedTargets()
+    {
+        var events = ParseEvents("""
+            [{"type":"begincast","timestamp":1000,"sourceID":7,"abilityGameID":10623},
+             {"type":"cast","timestamp":3385,"sourceID":7,"targetID":8,"abilityGameID":10623},
+             {"type":"heal","timestamp":3386,"sourceID":7,"targetID":8,"abilityGameID":10623,"amount":2859,"overheal":419},
+             {"type":"heal","timestamp":3386,"sourceID":7,"targetID":9,"abilityGameID":10623,"amount":334,"overheal":498},
+             {"type":"heal","timestamp":3386,"sourceID":7,"targetID":10,"abilityGameID":10623,"amount":0,"overheal":1644}]
+            """);
+        var cast = Assert.Single(ReportTimelineService.NormalizeEvents(events, 7, 0, 10000, true));
+        Assert.Equal(new[]
+        {
+            new TimelineCastResult(8, "Actor 8", "heal", 2859),
+            new TimelineCastResult(9, "Actor 9", "heal", 334)
+        }, cast.CastResults);
+    }
+
+    [Fact]
+    public void TimelineMetadataQueriesIncludeNpcAndPetNames()
+    {
+        foreach (var resource in new[] { "Timeline.Metadata.graphql", "Timeline.ReportMetadata.graphql", "Timeline.MasterData.graphql" })
+        {
+            var query = GraphQlResourceLoader.Load(resource);
+            Assert.Contains("actors { id name type gameID }", query);
+            Assert.DoesNotContain("actors(type:", query);
+        }
+    }
+
+        [Theory]
+        [InlineData(251, true)]
+        [InlineData(682, true)]
+        [InlineData(3000, true)]
+        [InlineData(3001, false)]
+        public void NormalizeCastsMatchesDelayedProjectileDamageToRecordedTarget(int delay, bool expected)
+        {
+            var events = ParseEvents($$"""
+                [{"type":"begincast","timestamp":1000,"sourceID":7,"abilityGameID":27209},
+                 {"type":"cast","timestamp":3385,"sourceID":7,"targetID":98,"abilityGameID":27209},
+                 {"type":"damage","timestamp":{{3385 + delay}},"sourceID":7,"targetID":98,"abilityGameID":27209,"amount":3091,"isAoE":false}]
+                """);
+            var cast = Assert.Single(ReportTimelineService.NormalizeEvents(events, 7, 0, 10000, true,
+                new Dictionary<int, string> { [98] = "Zul'jin" }));
+            Assert.Equal(1000d, cast.CastStart);
+            if (expected)
+                Assert.Equal(new TimelineCastResult(98, "Zul'jin", "damage", 3091), Assert.Single(cast.CastResults!));
+            else
+                Assert.Null(cast.CastResults);
+        }
+
+        [Fact]
+        public void NormalizeCastsExcludesUnrelatedDelayedHitsAndKeepsSuccessiveProjectilesDistinct()
+        {
+            var events = ParseEvents("""
+                [{"type":"cast","timestamp":1000,"sourceID":7,"targetID":98,"abilityGameID":27209},
+                 {"type":"damage","timestamp":1500,"sourceID":7,"targetID":99,"abilityGameID":27209,"amount":999},
+                 {"type":"damage","timestamp":1500,"sourceID":8,"targetID":98,"abilityGameID":27209,"amount":999},
+                 {"type":"damage","timestamp":1500,"sourceID":7,"targetID":98,"abilityGameID":27210,"amount":999},
+                 {"type":"damage","timestamp":1500,"sourceID":7,"targetID":98,"abilityGameID":27209,"amount":999,"tick":true},
+                 {"type":"damage","timestamp":1500,"sourceID":7,"targetID":98,"abilityGameID":27209,"amount":999,"isAoE":true},
+                 {"type":"damage","timestamp":1682,"sourceID":7,"targetID":98,"abilityGameID":27209,"amount":3091},
+                 {"type":"damage","timestamp":1800,"sourceID":7,"targetID":98,"abilityGameID":27209,"amount":999},
+                 {"type":"cast","timestamp":2838,"sourceID":7,"targetID":98,"abilityGameID":27209},
+                 {"type":"damage","timestamp":3528,"sourceID":7,"targetID":98,"abilityGameID":27209,"amount":6395}]
+                """);
+            var casts = ReportTimelineService.NormalizeEvents(events, 7, 0, 10000, true);
+            Assert.Equal(2, casts.Count);
+            Assert.Equal(3091, Assert.Single(casts[0].CastResults!).Amount);
+            Assert.Equal(6395, Assert.Single(casts[1].CastResults!).Amount);
+        }
+    [Fact]
+    public async Task LoadFetchesAndCachesImmediateCastResults()
+    {
+        using var handler = new QueueHandler(
+            TimelineMetadata("""[{"id":7,"name":"Player","type":"Player"},{"id":98,"name":"Zul'jin","type":"NPC"}]"""),
+            EventPage("""
+                [{"type":"cast","timestamp":2000,"sourceID":7,"abilityGameID":1},
+                 {"type":"damage","timestamp":2010,"sourceID":7,"targetID":98,"abilityGameID":1,"amount":1250}]
+                """));
+        var service = CreateService(handler);
+        var fresh = await service.LoadAsync("castResults", 1, 7, "Player", "anniversary", default);
+        var cached = await service.TryLoadCachedAsync("castResults", 1, 7, "Player", "anniversary", default);
+        var expected = new TimelineCastResult(98, "Zul'jin", "damage", 1250);
+        Assert.Equal(expected, Assert.Single(Assert.Single(fresh.Events).CastResults!));
+        Assert.NotNull(cached);
+        Assert.Equal(expected, Assert.Single(Assert.Single(cached.Events).CastResults!));
+        Assert.Equal(2, handler.GraphQlRequests);
+    }
+
+    [Theory]
+    [InlineData("anniversary", 23863, "Zul'jin")]
+    [InlineData("anniversary", 23864, "Daakara")]
+    [InlineData("retail", 23863, "Daakara")]
+    public async Task TimelineActorNamesCorrectOnlyAnniversaryZuljin(string edition, int npcId, string expectedName)
+    {
+        using var handler = new QueueHandler(
+            TimelineMetadata($$"""[{"id":7,"name":"Player","type":"Player"},{"id":98,"name":"Daakara","type":"NPC","gameID":{{npcId}}}]"""),
+            EventPage("""
+                [{"type":"cast","timestamp":2000,"sourceID":7,"abilityGameID":1},
+                 {"type":"damage","timestamp":2010,"sourceID":7,"targetID":98,"abilityGameID":1,"amount":1250}]
+                """));
+        var service = CreateService(handler);
+        var fresh = await service.LoadAsync("zuljinActor", 1, 7, "Player", edition, default);
+        Assert.Equal(expectedName, Assert.Single(Assert.Single(fresh.Events).CastResults!).TargetName);
+        var cached = await service.TryLoadCachedAsync("zuljinActor", 1, 7, "Player", edition, default);
+        Assert.NotNull(cached);
+        Assert.Equal(expectedName, Assert.Single(Assert.Single(cached.Events).CastResults!).TargetName);
+    }
+
+    [Fact]
+    public void NormalizeCastsDoesNotAttachResultsToAmbiguousSimultaneousCasts()
+    {
+        var events = ParseEvents("""
+            [{"type":"cast","timestamp":1000,"sourceID":7,"abilityGameID":1},
+             {"type":"cast","timestamp":1000,"sourceID":7,"abilityGameID":1},
+             {"type":"damage","timestamp":1000,"sourceID":7,"targetID":8,"abilityGameID":1,"amount":500}]
+            """);
+        var casts = ReportTimelineService.NormalizeEvents(events, 7, 1000, 2000, true);
+        Assert.Equal(2, casts.Count);
+        Assert.All(casts, item => Assert.Null(item.CastResults));
+    }
+
+    [Fact]
+    public void HealthCapacitiesTrackTemporaryRecordedMaximumsWithoutUsingFightPeak()
+    {
+        var raw = ParseEvents("""
+            [{"type":"cast","timestamp":1000,"sourceID":7,"abilityGameID":1,"maxHitPoints":10000,"hitPoints":8000},
+             {"type":"applybuff","timestamp":2000,"targetID":7,"abilityGameID":2},
+             {"type":"cast","timestamp":2100,"sourceID":7,"abilityGameID":1,"maxHitPoints":13000,"hitPoints":10000},
+             {"type":"removebuff","timestamp":3000,"targetID":7,"abilityGameID":2},
+             {"type":"cast","timestamp":3100,"sourceID":7,"abilityGameID":1,"maxHitPoints":10000,"hitPoints":8000},
+             {"type":"cast","timestamp":4001,"sourceID":7,"abilityGameID":1,"maxHitPoints":99999,"hitPoints":8000}]
+            """);
+        var events = ReportTimelineService.NormalizeEvents(raw, 7, 1000, 4000, true);
+        Assert.Equal(new[]
+        {
+            new TimelineHealthCapacity(0, 10000, null),
+            new TimelineHealthCapacity(1000, null, null),
+            new TimelineHealthCapacity(1100, 13000, null),
+            new TimelineHealthCapacity(2000, null, null),
+            new TimelineHealthCapacity(2100, 10000, null)
+        }, ReportTimelineService.HealthCapacities(raw, events, 7, 1000, 4000));
+    }
+
+    [Fact]
+    public void HealthCapacitiesUseLocalEstimatesAndRejectHealsAcrossAuraBoundaries()
+    {
+        var raw = ParseEvents("""
+            [{"type":"cast","timestamp":1000,"sourceID":7,"abilityGameID":1,"maxHitPoints":100,"hitPoints":40},
+             {"type":"heal","timestamp":1100,"sourceID":8,"targetID":7,"abilityGameID":3,"amount":3000,
+              "maxHitPoints":100,"hitPoints":70},
+             {"type":"applybuff","timestamp":2000,"targetID":7,"abilityGameID":2},
+             {"type":"heal","timestamp":2100,"sourceID":8,"targetID":7,"abilityGameID":3,"amount":6000,
+              "maxHitPoints":100,"hitPoints":90},
+             {"type":"damage","timestamp":2200,"sourceID":8,"targetID":7,"abilityGameID":4,
+              "maxHitPoints":100,"hitPoints":40},
+             {"type":"heal","timestamp":2300,"sourceID":8,"targetID":7,"abilityGameID":3,"amount":6000,
+              "maxHitPoints":100,"hitPoints":70},
+             {"type":"removebuff","timestamp":3000,"targetID":7,"abilityGameID":2}]
+            """);
+        var events = ReportTimelineService.NormalizeEvents(raw, 7, 1000, 4000, true);
+        Assert.Null(events.Single(item => item.Kind == "heal" && item.Timestamp == 1100).HealthBeforePercent);
+        Assert.Equal(new[]
+        {
+            new TimelineHealthCapacity(0, null, null),
+            new TimelineHealthCapacity(100, null, 10000),
+            new TimelineHealthCapacity(1000, null, null),
+            new TimelineHealthCapacity(1300, null, 20000),
+            new TimelineHealthCapacity(2000, null, null)
+        }, ReportTimelineService.HealthCapacities(raw, events, 7, 1000, 4000));
+    }
+
+    [Fact]
+    public void PercentageHealsDoNotEstimateFromStaleSnapshots()
+    {
+        var raw = ParseEvents("""
+            [{"type":"cast","timestamp":1000,"sourceID":7,"abilityGameID":1,"hitPoints":40,"maxHitPoints":100},
+             {"type":"heal","timestamp":2001,"sourceID":8,"targetID":7,"abilityGameID":2,"amount":3000,
+              "hitPoints":70,"maxHitPoints":100}]
+            """);
+        var events = ReportTimelineService.NormalizeEvents(raw, 7, 1000, 4000, true);
+        Assert.Null(events.Single(item => item.Kind == "heal").HealthBeforePercent);
+        Assert.Null(ReportTimelineService.EstimateMaxHealth(events));
+        Assert.All(ReportTimelineService.HealthCapacities(raw, events, 7, 1000, 4000),
+            item => Assert.Null(item.EstimatedMaxHealth));
+    }
+
+    [Fact]
+    public void NonHealthAurasDoNotInvalidateLocalPercentageEstimates()
+    {
+        var raw = ParseEvents("""
+            [{"type":"resourcechange","timestamp":1000,"sourceID":8,"targetID":7,"resourceActor":2,
+              "hitPoints":65,"maxHitPoints":100},
+             {"type":"applybuff","timestamp":1927,"targetID":7,"abilityGameID":24907},
+             {"type":"heal","timestamp":1956,"sourceID":7,"targetID":7,"resourceActor":1,
+              "abilityGameID":25420,"amount":3240,"hitPoints":100,"maxHitPoints":100},
+             {"type":"refreshbuff","timestamp":2000,"targetID":7,"abilityGameID":33736},
+             {"type":"applybuff","timestamp":2001,"targetID":7,"abilityGameID":16237}]
+            """);
+        var events = ReportTimelineService.NormalizeEvents(raw, 7, 1000, 3000, true);
+        var heal = Assert.Single(events);
+        Assert.Equal(65, heal.HealthBeforePercent);
+        Assert.Equal(100, heal.HealthAfterPercent);
+        Assert.Equal(new[]
+        {
+            new TimelineHealthCapacity(0, null, null),
+            new TimelineHealthCapacity(956, null, 9257)
+        }, ReportTimelineService.HealthCapacities(raw, events, 7, 1000, 3000));
+    }
+
+    [Fact]
+    public void EventQueryRequestsResourceSnapshots()
+    {
+        Assert.Contains("includeResources: true", GraphQlResourceLoader.Load("Timeline.Events.graphql"));
+    }
+
+    [Fact]
+    public async Task LoadFetchesAndCachesRecordedResourceMaximums()
+    {
+        using var handler = new QueueHandler(TimelineMetadata(), EventPage("""
+            [{"type":"cast","timestamp":2000,"sourceID":7,"resourceActor":1,"abilityGameID":1,
+              "maxHitPoints":12000,"classResources":[{"type":0,"max":7173}]}]
+            """));
+        var service = CreateService(handler);
+
+        var fresh = await service.LoadAsync("resourceMaximums", 1, 7, "Player", "anniversary", default);
+        var cached = await service.TryLoadCachedAsync("resourceMaximums", 1, 7, "Player", "anniversary", default);
+
+        Assert.Equal(12000, fresh.MaxHealth);
+        Assert.Equal(7173, fresh.MaxMana);
+        Assert.NotNull(cached);
+        Assert.Equal(fresh.MaxHealth, cached.MaxHealth);
+        Assert.Equal(new TimelineHealthCapacity(1000, 12000, null), Assert.Single(fresh.HealthCapacities));
+        Assert.Equal(fresh.HealthCapacities, cached.HealthCapacities);
+        Assert.Equal(fresh.MaxMana, cached.MaxMana);
+        Assert.Equal(2, handler.GraphQlRequests);
+    }
+
+    [Fact]
+    public void ResourceMaximumDoesNotTreatPercentageHealthAsAbsoluteHitPoints()
+    {
+        var events = ParseEvents("""
+            [{"type":"damage","timestamp":2000,"sourceID":8,"targetID":7,"resourceActor":2,
+              "hitPoints":99,"maxHitPoints":100,"classResources":[{"type":0,"max":7173}]}]
+            """);
+        Assert.Null(ReportTimelineService.ResourceMaximum(events, 7, false));
+        Assert.Equal(7173, ReportTimelineService.ResourceMaximum(events, 7, true));
+    }
+
+    [Fact]
+    public void ResourceMaximumHonorsSnapshotOwnerAndSelectedFight()
+    {
+        var events = ParseEvents("""
+            [{"type":"damage","timestamp":1000,"sourceID":7,"targetID":8,"resourceActor":1,
+              "maxHitPoints":12000,"classResources":[{"type":0,"max":5500}]},
+             {"type":"cast","timestamp":2000,"sourceID":8,"targetID":7,"resourceActor":2,
+              "maxHitPoints":13000,"classResources":[{"type":0,"max":6000}]},
+             {"type":"damage","timestamp":2500,"sourceID":8,"targetID":7,"resourceActor":1,
+              "maxHitPoints":999999,"classResources":[{"type":0,"max":999999}]},
+             {"type":"cast","timestamp":3000,"sourceID":7,"resourceActor":3,"maxHitPoints":999999},
+             {"type":"cast","timestamp":999,"sourceID":7,"maxHitPoints":999999},
+             {"type":"cast","timestamp":3001,"sourceID":7,"maxHitPoints":999999}]
+            """);
+        Assert.Equal(13000, ReportTimelineService.ResourceMaximum(events, 7, false, 1000, 3000));
+        Assert.Equal(6000, ReportTimelineService.ResourceMaximum(events, 7, true, 1000, 3000));
+    }
+
+    [Fact]
+    public void ResourceMaximumUsesOnlySelectedActorSnapshotsAndPreservesUnknown()
+    {
+        var events = ParseEvents("""
+            [{"type":"cast","sourceID":7,"targetID":8,"maxHitPoints":10000,
+              "classResources":[{"type":0,"max":5000}]},
+             {"type":"heal","sourceID":8,"targetID":7,"maxHitPoints":12000,
+              "classResources":[{"type":0,"max":5500}]},
+             {"type":"damage","sourceID":7,"targetID":8,"maxHitPoints":999999,
+              "classResources":[{"type":0,"max":999999}]}]
+            """);
+        Assert.Equal(12000, ReportTimelineService.ResourceMaximum(events, 7, false));
+        Assert.Equal(5500, ReportTimelineService.ResourceMaximum(events, 7, true));
+        Assert.Null(ReportTimelineService.ResourceMaximum(events, 9, false));
+        Assert.Null(ReportTimelineService.ResourceMaximum(events, 9, true));
+    }
+
+    [Fact]
+    public void NormalizeEventsAttributesIncomingEventsToTheirSourceActors()
+    {
+        var events = ParseEvents("""
+            [{"type":"heal","timestamp":1000,"sourceID":8,"targetID":7,"abilityGameID":1,"amount":250},
+             {"type":"damage","timestamp":2000,"sourceID":9,"targetID":7,"abilityGameID":2,"amount":500}]
+            """);
+        var result = ReportTimelineService.NormalizeEvents(events, 7, 0, 10000, true,
+            new Dictionary<int, string> { [8] = "Healer", [9] = "Boss" });
+        Assert.Equal("Healer", result[0].SourceName);
+        Assert.Equal("Boss", result[1].SourceName);
+    }
+
+    [Fact]
+    public void NormalizeEventsUsesRecordedPotionExpiryAfterFightWithoutExtendingUnknownBuffs()
+    {
+        var events = ParseEvents("""
+            [{"type":"applybuff","timestamp":1000,"targetID":7,"abilityGameID":28515},
+             {"type":"applybuff","timestamp":2000,"targetID":7,"abilityGameID":99},
+             {"type":"removebuff","timestamp":121014,"targetID":7,"abilityGameID":28515}]
+            """);
+        var result = ReportTimelineService.NormalizeEvents(events, 7, 0, 100000, true);
+        Assert.Equal(new TimelineEvent(28515, 1000, 99000, "buff"), Assert.Single(result));
+    }
+
+    [Fact]
+    public void NormalizeEventsDoesNotExtendUnclosedPotionBuffsButPreservesRecordedUse()
+    {
+        var events = ParseEvents("""
+            [{"type":"cast","timestamp":1000,"sourceID":7,"abilityGameID":28515},
+             {"type":"applybuff","timestamp":1000,"targetID":7,"abilityGameID":28515},
+             {"type":"refreshbuff","timestamp":10000,"targetID":7,"abilityGameID":28515}]
+            """);
+        var result = ReportTimelineService.NormalizeEvents(events, 7, 0, 300000, true);
+        Assert.Equal(new TimelineEvent(28515, 1000, null, "cast"), Assert.Single(result));
+    }
+
+    [Fact]
+    public void NormalizeEventsMeasuresMatchedCastWindowsWithoutGuessingUnmatchedCasts()
+    {
+        var events = ParseEvents("""
+            [{"type":"begincast","sourceID":7,"abilityGameID":1,"timestamp":1000},
+             {"type":"cast","sourceID":7,"abilityGameID":1,"timestamp":3500},
+             {"type":"begincast","sourceID":7,"abilityGameID":2,"timestamp":4000},
+             {"type":"interrupt","targetID":7,"timestamp":4500},
+             {"type":"cast","sourceID":7,"abilityGameID":2,"timestamp":5000},
+             {"type":"cast","sourceID":7,"abilityGameID":3,"timestamp":6000}]
+            """);
+        var casts = ReportTimelineService.NormalizeEvents(events, 7, 0, 10000, true);
+        Assert.Equal(3, casts.Count);
+        Assert.Equal(1000d, casts[0].CastStart);
+        Assert.Equal(2500d, casts[0].Duration);
+        Assert.Equal(3500d, casts[0].Timestamp);
+        Assert.Null(casts[1].CastStart);
+        Assert.Null(casts[1].Duration);
+        Assert.Null(casts[2].Duration);
+    }
+
+    [Fact]
+    public void NormalizeEventsIncludesOnlyReceivedHealingAndDistinguishesTicks()
+    {
+        var events = ParseEvents("""
+            [{"type":"heal","timestamp":2000,"sourceID":8,"targetID":7,"abilityGameID":1},
+             {"type":"heal","timestamp":3000,"sourceID":8,"targetID":7,"abilityGameID":2,"tick":true},
+             {"type":"heal","timestamp":4000,"sourceID":7,"targetID":8,"abilityGameID":3},
+             {"type":"heal","timestamp":12000,"targetID":7,"abilityGameID":4},
+             {"type":"damage","timestamp":5000,"sourceID":8,"targetID":7,"abilityGameID":5},
+             {"type":"damage","timestamp":6000,"sourceID":7,"targetID":8,"abilityGameID":6}]
+            """);
+        var result = ReportTimelineService.NormalizeEvents(events, 7, 1000, 11000, true);
+        Assert.Equal(new[] {
+            new TimelineEvent(1, 1000, null, "heal"),
+            new TimelineEvent(2, 2000, null, "hot"),
+            new TimelineEvent(5, 4000, null, "damage")
+        }, result);
+    }
+
+    [Fact]
+    public void NormalizeEventsTracksRecordedManaCostsReturnsAndDrainsForSelectedActor()
+    {
+        var events = ParseEvents("""
+            [{"type":"cast","timestamp":2000,"sourceID":7,"targetID":8,"abilityGameID":1,
+              "classResources":[{"type":0,"cost":250},{"type":1,"cost":10}]},
+             {"type":"cast","timestamp":2500,"sourceID":8,"abilityGameID":2,
+              "classResources":[{"type":0,"cost":999}]},
+             {"type":"resourcechange","timestamp":3000,"sourceID":8,"targetID":7,"abilityGameID":3,
+              "resourceChangeType":0,"resourceChange":600,"waste":100},
+             {"type":"resourcechange","timestamp":4000,"targetID":7,"abilityGameID":4,
+              "resourceChangeType":1,"resourceChange":50},
+             {"type":"resourcechange","timestamp":5000,"targetID":8,"abilityGameID":5,
+              "resourceChangeType":0,"resourceChange":999},
+             {"type":"resourcechange","timestamp":6000,"targetID":7,"abilityGameID":6,
+              "resourceChangeType":0,"resourceChange":100,"waste":100},
+             {"type":"drain","timestamp":7000,"targetID":7,"abilityGameID":7,
+              "resourceChangeType":0,"resourceChange":125}]
+            """);
+        var result = ReportTimelineService.NormalizeEvents(events, 7, 1000, 11000, true);
+        Assert.Equal(new[] {
+            new TimelineEvent(1, 1000, null, "cast"),
+            new TimelineEvent(1, 1000, null, "mana-spent", Amount: 250),
+            new TimelineEvent(3, 2000, null, "mana-returned", Amount: 500),
+            new TimelineEvent(7, 6000, null, "mana-spent", Amount: 125, IsManaDrain: true)
+        }, result);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -89,11 +713,11 @@ public sealed class ReportTimelineServiceTests : IDisposable
 
         var result = ReportTimelineService.NormalizeEvents(events.Reverse(), 7, 1000, 11000, complete);
 
-        Assert.Equal(complete ? 4 : 3, result.Count);
+        Assert.Equal(3, result.Count);
         Assert.Equal(new TimelineEvent(1, 1000, null, "cast"), result[0]);
         Assert.Equal(new TimelineEvent(2, 2000, 2000, "buff"), result[1]);
         Assert.Equal(new TimelineEvent(0, 5000, null, "death"), result[2]);
-        if (complete) Assert.Equal(new TimelineEvent(4, 7000, 3000, "buff", true), result[3]);
+        Assert.DoesNotContain(result, item => item.SpellId == 4);
     }
 
     [Fact]
@@ -327,6 +951,42 @@ public sealed class ReportTimelineServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task IncompleteMetadataIsNotCachedAndLiveLoadRecovers()
+    {
+        const string emptyMetadata = """
+            {"data":{"reportData":{"report":{"code":"verified-report","fights":[],
+            "masterData":{"actors":null,"abilities":null}}}}}
+            """;
+        using var handler = new QueueHandler(emptyMetadata, TimelineMetadata(), EventPage("[]"));
+        var client = fixture.CreateClient(handler);
+        await client.QueryGraphQLAsync(GraphQlResourceLoader.Load("Timeline.Metadata.graphql"),
+            new { code = "report", fightIds = new[] { 1 } }, "anniversary");
+        var logger = new RecordingLogger();
+        var service = new ReportTimelineService(client, logger);
+
+        Assert.Null(await service.TryLoadCachedAsync("report", 1, 7, "Player", "anniversary", default));
+        Assert.Equal(1, handler.GraphQlRequests);
+
+        var timeline = await service.LoadAsync("report", 1, 7, "Player", "anniversary", default);
+
+        Assert.Equal(1, timeline.FightId);
+        Assert.Equal("Player", timeline.PlayerName);
+        Assert.Equal(3, handler.GraphQlRequests);
+    }
+
+    [Fact]
+    public async Task LiveLoadStillRejectsMissingFightAfterOneMetadataRefresh()
+    {
+        using var handler = new QueueHandler(TimelineMetadata(fightId: 2), TimelineMetadata(fightId: 2));
+        var service = CreateService(handler);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            service.LoadAsync("report", 1, 7, null, "anniversary", default));
+
+        Assert.Equal(2, handler.GraphQlRequests);
+    }
+
+    [Fact]
     public async Task LoadRejectsAmbiguousNamesEvenWhenTheyDifferOnlyInCase()
     {
         using var handler = new QueueHandler(TimelineMetadata(actors:
@@ -426,6 +1086,7 @@ public sealed class ReportTimelineServiceTests : IDisposable
     public async Task PlayerAndBossLoadsRejectMissingFightOrInvalidDuration(int id, int end)
     {
         using var handler = new QueueHandler(TimelineMetadata(fightId: id, end: end),
+            TimelineMetadata(fightId: id, end: end),
             TimelineMetadata(fightId: id, end: end));
         var service = CreateService(handler);
         if (id == 2)
@@ -575,8 +1236,7 @@ public sealed class ReportTimelineServiceTests : IDisposable
 
         Assert.Equal(378270, fresh.Events[0].SpellId);
         Assert.Contains(fresh.Spells, spell => spell.Name == "Deeply Rooted Elements");
-        Assert.Equal(114052, fresh.Events[1].SpellId);
-        Assert.True(fresh.Events[1].IsInferred);
+        Assert.Single(fresh.Events);
         Assert.NotNull(cached);
         Assert.Equal(fresh.Events, cached.Events);
         Assert.Equal(2, handler.GraphQlRequests);
@@ -614,6 +1274,22 @@ public sealed class ReportTimelineServiceTests : IDisposable
     private ReportTimelineService CreateService(QueueHandler handler) =>
         new(fixture.CreateClient(handler), NullLogger<ReportTimelineService>.Instance);
 
+    private sealed class RecordingLogger : ILogger<ReportTimelineService>
+    {
+        public List<string> Messages { get; } = [];
+        public List<Dictionary<string, object?>> Scopes { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        {
+            if (state is IEnumerable<KeyValuePair<string, object?>> values)
+                Scopes.Add(values.ToDictionary());
+            return null;
+        }
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Messages.Add(formatter(state, exception));
+    }
+
     private static RankingReport Report(string code, int fightId) => new()
     {
         ReportId = code,
@@ -637,6 +1313,8 @@ public sealed class ReportTimelineServiceTests : IDisposable
                 {
                     report = new
                     {
+                        code = "verified-report",
+                        title = "Verified report",
                         fights = new[] { new { id = fightId, startTime = 1000, endTime = end } },
                         masterData = master is null
                             ? JsonSerializer.SerializeToElement(new { actors = JsonSerializer.Deserialize<JsonElement>(actors), abilities = Array.Empty<object>() })

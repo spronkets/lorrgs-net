@@ -11,11 +11,11 @@ public static class GetClassesHandler
         [FromQuery] string? edition, CancellationToken ct)
     {
         var logger = loggerFactory.CreateLogger("GetClasses");
-        logger.LogInformation("Fetching all classes");
         // Return as dictionary keyed by name slug
         var classes = data.Classes
             .OrderBy(c => c.Name)
             .ToDictionary(c => c.NameSlug);
+        logger.LogInformation("Found {ClassCount} classes", classes.Count);
 
         return TypedResults.Ok(classes);
     }

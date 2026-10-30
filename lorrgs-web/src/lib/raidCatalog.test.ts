@@ -26,7 +26,7 @@ const sampleCatalog: RaidCatalog = {
           { name: 'Boss One', slug: '', mapped: false },
           { name: 'Boss Two', slug: '', mapped: false }
         ],
-        public: true
+        isAvailable: true
       },
       {
         zoneId: 39,
@@ -35,7 +35,7 @@ const sampleCatalog: RaidCatalog = {
         edition: 'retail',
         phase: 0,
         bosses: [{ name: 'Azuregos', slug: '', mapped: false }],
-        public: true
+        isAvailable: true
       }
     ],
     anniversary: [
@@ -46,7 +46,7 @@ const sampleCatalog: RaidCatalog = {
         edition: 'anniversary',
         phase: 1,
         bosses: [{ name: 'High King Maulgar', slug: '', mapped: false }],
-        public: true
+        isAvailable: true
       }
     ],
     classic: [
@@ -57,7 +57,7 @@ const sampleCatalog: RaidCatalog = {
         edition: 'classic',
         phase: 1,
         bosses: [{ name: 'Lucifron', slug: '', mapped: false }],
-        public: true
+        isAvailable: true
       }
     ]
   }

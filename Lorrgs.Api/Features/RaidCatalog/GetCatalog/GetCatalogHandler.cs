@@ -7,9 +7,9 @@ public sealed class GetCatalogHandler(ILogger<GetCatalogHandler> logger, RaidCat
     public async Task<Ok<RaidCatalog>> Handle(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        logger.LogInformation("Fetching raid catalog");
-
         RaidCatalog catalog = await raidCatalogClient.GetCatalogAsync(cancellationToken);
+        logger.LogInformation("Found raid catalog with {EditionCount} editions and {InstanceCount} instances",
+            catalog.Editions.Count, catalog.Instances.Values.Sum(instances => instances.Count));
         return TypedResults.Ok(catalog);
     }
 }

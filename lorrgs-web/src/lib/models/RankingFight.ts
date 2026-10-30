@@ -6,6 +6,7 @@ export type RankingFight = {
   speed?: RaidFightRanking | null;
   execution?: RaidFightRanking | null;
   composition?: CompRankingComposition;
+  roleCounts?: Record<string, number>;
   deaths?: number;
   damageTaken?: number;
   encounterId?: number;

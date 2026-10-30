@@ -134,7 +134,10 @@ public class WarcraftLogsClient(
 
             cancellationToken.ThrowIfCancellationRequested();
             var data = await ExecuteGraphQlRequestAsync(endpoint, query, variables, cancellationToken);
-            await WriteGraphQlCacheAsync(graphQlCacheKey, data.GetRawText(), cancellationToken);
+            if (IsCacheableGraphQlData(data))
+                await WriteGraphQlCacheAsync(graphQlCacheKey, data.GetRawText(), cancellationToken);
+            else
+                _logger.LogWarning("Skipping incomplete WarcraftLogs GraphQL response cache write");
             return data;
         }
         finally
@@ -198,8 +201,7 @@ public class WarcraftLogsClient(
                 ? partialDataElement.Clone()
                 : (JsonElement?)null;
 
-            foreach (var error in parsedErrors)
-                _logger.LogError("GraphQL error from WarcraftLogs: {Error}", error.Message ?? "Unknown GraphQL error");
+            _logger.LogError("GraphQL errors from WarcraftLogs count={ErrorCount}", parsedErrors.Length);
             throw WarcraftLogsGraphQlException.Create(parsedErrors, partialData);
         }
 
@@ -370,14 +372,65 @@ public class WarcraftLogsClient(
                 return null;
             }
 
-            return await File.ReadAllTextAsync(path, cancellationToken);
+            var json = await File.ReadAllTextAsync(path, cancellationToken);
+            using var document = JsonDocument.Parse(json);
+            if (!IsCacheableGraphQlData(document.RootElement))
+            {
+                _logger.LogWarning("Discarding incomplete WarcraftLogs GraphQL cache entry");
+                File.Delete(path);
+                return null;
+            }
+            return json;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (JsonException)
+        {
+            _logger.LogWarning("Discarding malformed WarcraftLogs GraphQL cache entry");
+            File.Delete(path);
+            return null;
+        }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to read WarcraftLogs GraphQL cache file {Path}", path);
             return null;
         }
+    }
+
+    private static bool IsCacheableGraphQlData(JsonElement data)
+    {
+        if (data.ValueKind != JsonValueKind.Object) return false;
+        if (!data.TryGetProperty("reportData", out var reports)) return true;
+        if (reports.ValueKind != JsonValueKind.Object) return false;
+
+        foreach (var entry in reports.EnumerateObject())
+        {
+            var report = entry.Value;
+            if (report.ValueKind != JsonValueKind.Object) return false;
+            if (report.TryGetProperty("fights", out var fights))
+            {
+                if (fights.ValueKind != JsonValueKind.Array || fights.GetArrayLength() == 0) return false;
+                foreach (var fight in fights.EnumerateArray())
+                {
+                    if (fight.ValueKind != JsonValueKind.Object) return false;
+                    if (fight.TryGetProperty("startTime", out var start) &&
+                        fight.TryGetProperty("endTime", out var end) &&
+                        (start.ValueKind != JsonValueKind.Number || end.ValueKind != JsonValueKind.Number ||
+                         end.GetDouble() <= start.GetDouble())) return false;
+                }
+            }
+            if (report.TryGetProperty("masterData", out var master))
+            {
+                if (master.ValueKind != JsonValueKind.Object) return false;
+                foreach (var field in new[] { "actors", "abilities" })
+                    if (master.TryGetProperty(field, out var values) && values.ValueKind != JsonValueKind.Array)
+                        return false;
+            }
+            if (report.TryGetProperty("events", out var events) &&
+                (events.ValueKind != JsonValueKind.Object ||
+                 !events.TryGetProperty("data", out var rows) || rows.ValueKind != JsonValueKind.Array))
+                return false;
+        }
+        return true;
     }
 
     private async Task WriteGraphQlCacheAsync(string graphQlCacheKey, string payload,

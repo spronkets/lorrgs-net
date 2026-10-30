@@ -366,6 +366,30 @@ public sealed class RankingsHandlerTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData("0", 1)]
+    [InlineData("1", 2)]
+    [InlineData("\"Alliance\"", 1)]
+    [InlineData("\"Horde\"", 2)]
+    public async Task RankingFactionIsNormalizedWithoutGuildOrRealmLookup(string faction, int expected)
+    {
+        var entries = $$"""
+            [{"name":"Player","percentile":99,"faction":{{faction}},"guild":null,
+              "server":{"region":"KR"},
+              "report":{"code":"abc","fightID":7},
+              "allCharacters":[{"name":"Peer","class":"Warrior","spec":"Arms","faction":{{faction}}}]}]
+            """;
+        using var handler = new QueueHandler(RankingsPayload(entries));
+        var response = await Handlers(fixture.CreateClient(handler), new RecordingTimelineService())
+            .Ranking.Handle(new GetSpecRankingRequest("retribution-paladin", "eranog", "anniversary",
+                Metric: "dps", ZoneId: 38, EncounterId: 2898, ClassName: "Paladin", SpecName: "Retribution"));
+
+        var report = Assert.Single(Assert.IsType<SpecRankingData>(
+            HttpResultAssertions.Status(200, response).Value).Reports);
+        Assert.All(report.Players, player => Assert.Equal(expected, player.FactionId));
+        Assert.Single(handler.Requests);
+    }
+
     [Fact]
     public async Task GetSpecRankingMapsVisibleReportsAndBundlesCachedTimelineWithObservedPhases()
     {
@@ -406,7 +430,7 @@ public sealed class RankingsHandlerTests : IDisposable
         Assert.Equal(70, report.Players[0].SpecId);
         Assert.Equal(2, report.Players[0].ClassId);
         Assert.Equal("Guild", report.Players[0].GuildName);
-        Assert.Equal(1, report.Players[0].FactionId);
+        Assert.Equal(2, report.Players[0].FactionId);
         Assert.Equal(123.4, report.Players[0].Performance);
         Assert.Equal("arms-warrior", report.Players[1].SpecSlug);
         Assert.Equal(("abc", 7, (int?)null, "Player", "retail", (int?)70), timelines.PlayerRequest);
@@ -572,7 +596,7 @@ public sealed class RankingsHandlerTests : IDisposable
     {
         const string enrichment = """
             {"data":{"reportData":{
-              "r0":{"rankings":[],"fights":[]},"r1":{"rankings":[],"fights":[]}
+              "r0":{"rankings":[],"fights":[{"id":7}]},"r1":{"rankings":[],"fights":[{"id":8}]}
             }}}
             """;
         using var handler = new QueueHandler(enrichment);
