@@ -1338,12 +1338,12 @@ public sealed class ReportTimelineServiceTests : IDisposable
             Assert.Single(casts[0].CastResults!));
         Assert.Equal(new TimelineCastResult(7, "Player", "damage", 500),
             Assert.Single(casts[1].CastResults!));
-        Assert.Equal(9999, Assert.Single(result.Events.Where(item => item.Kind == "damage")).Amount);
-        Assert.Equal(1000, Assert.Single(result.Events.Where(item => item.Kind == "buff" && item.SpellId == 2)).Duration);
-        Assert.Equal(3000, Assert.Single(result.Events.Where(item => item.Kind == "buff" && item.SpellId == 5)).Duration);
-        Assert.Equal(250, Assert.Single(result.Events.Where(item => item.Kind == "heal")).Amount);
-        Assert.Equal(50, Assert.Single(result.Events.Where(item => item.Kind == "hot")).Amount);
-        Assert.Equal(80, Assert.Single(result.Events.Where(item => item.Kind == "mana-returned")).Amount);
+        Assert.Equal(9999, Assert.Single(result.Events, item => item.Kind == "damage").Amount);
+        Assert.Equal(1000, Assert.Single(result.Events, item => item.Kind == "buff" && item.SpellId == 2).Duration);
+        Assert.Equal(3000, Assert.Single(result.Events, item => item.Kind == "buff" && item.SpellId == 5).Duration);
+        Assert.Equal(250, Assert.Single(result.Events, item => item.Kind == "heal").Amount);
+        Assert.Equal(50, Assert.Single(result.Events, item => item.Kind == "hot").Amount);
+        Assert.Equal(80, Assert.Single(result.Events, item => item.Kind == "mana-returned").Amount);
     }
 
     [Fact]

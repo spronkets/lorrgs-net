@@ -60,7 +60,7 @@ describe('ranking analytics', () => {
     await rerender({ rankings: { ...rankings, reports: [] } });
     expect(container.querySelectorAll('.player-row')).toHaveLength(0);
     await rerender({ rankings });
-    expect(screen.getByRole('link', { name: 'Alice' })).toBeInTheDocument();
+    expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(container.querySelectorAll('.player-row')).toHaveLength(2);
   });
 
@@ -74,19 +74,19 @@ describe('ranking analytics', () => {
     await fireEvent.blur(maximum);
     expect(minimum).toHaveValue('4:00');
     expect(maximum).toHaveValue('5:00');
-    expect(screen.getByRole('link', { name: 'Alice' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Bob' })).toBeInTheDocument();
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.getByText('Bob')).toBeInTheDocument();
 
     await fireEvent.input(screen.getByLabelText('To date'), {
       target: { value: '2026-10-21' }
     });
-    expect(screen.getByRole('link', { name: 'Alice' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Bob' })).not.toBeInTheDocument();
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
     expect(minimum).toHaveValue('');
     expect(maximum).toHaveValue('');
     expect(screen.getByLabelText('To date')).toHaveValue('');
-    expect(screen.getByRole('link', { name: 'Bob' })).toBeInTheDocument();
+    expect(screen.getByText('Bob')).toBeInTheDocument();
   });
 
   it('filters locally without a report-count summary and resets', async () => {
@@ -104,7 +104,7 @@ describe('ranking analytics', () => {
       expect(screen.getByLabelText(label).closest('details')).toBeNull();
     }
     expect(screen.getByRole('button', { name: 'Reset filters' })).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Alice' })).toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: 'Open report in Warcraft Logs' })[0]).toHaveAttribute(
       'href',
       'https://fresh.warcraftlogs.com/reports/ReportA'
     );

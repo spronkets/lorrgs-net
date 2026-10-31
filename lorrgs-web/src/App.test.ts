@@ -78,7 +78,7 @@ describe('App version mapping', () => {
 
   it('uses the retail catalog key and retail icon for the Retail option', () => {
     expect(getEditionSlug('Retail')).toBe('retail');
-    expect(getVersionIconUrl('Retail')).toBe('/images/wow/editions/midnight.png');
+    expect(getVersionIconUrl('Retail')).toBe('/images/wow/editions/retail.png');
   });
 
   it('opens manual reports from navigation and supports direct links and edition changes', async () => {
@@ -95,7 +95,7 @@ describe('App version mapping', () => {
     for (const key of ['report', 'reportBoss', 'pull', 'loadedPull'])
       expect(new URLSearchParams(location.search).has(key)).toBe(false);
     await fireEvent.click(screen.getByRole('button', { name: 'LorrgsNET home' }));
-    await screen.findByRole('heading', { name: 'Compare raid cooldowns' });
+    await screen.findByRole('heading', { name: 'What is this?' });
     await fireEvent.click(screen.getByRole('button', { name: 'Load Report' }));
     await screen.findByRole('heading', { name: 'Load Report' });
     expect(new URLSearchParams(location.search).get('page')).toBe('reports');
@@ -111,7 +111,7 @@ describe('App version mapping', () => {
         vi.fn(() => ({ matches: dark }))
       );
       render(App);
-      await screen.findByRole('heading', { name: 'Compare raid cooldowns' });
+      await screen.findByRole('heading', { name: 'What is this?' });
       await fireEvent.click(
         screen.getByRole('button', { name: dark ? 'Switch to light mode' : 'Switch to dark mode' })
       );
@@ -183,8 +183,8 @@ describe('App version mapping', () => {
     history.replaceState({}, '', '/?edition=Anniversary&raid=blacktemple&boss=illidan');
     render(App);
     const landing = (
-      await screen.findByRole('heading', { name: 'Compare raid cooldowns' })
-    ).closest('section')!;
+      await screen.findByRole('heading', { name: 'What is this?' })
+    ).closest('.landing-page') as HTMLElement;
     expect(API.getCompRankings).not.toHaveBeenCalled();
     await fireEvent.click(within(landing).getByRole('button', { name: 'Comp Rankings' }));
     await screen.findByRole('button', { name: 'Search compositions' });
@@ -209,16 +209,16 @@ describe('App version mapping', () => {
     expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Illidan');
     expect(new URLSearchParams(location.search).get('page')).toBe('spec');
     await fireEvent.click(screen.getByRole('button', { name: 'LorrgsNET home' }));
-    await screen.findByRole('heading', { name: 'Compare raid cooldowns' });
+    await screen.findByRole('heading', { name: 'What is this?' });
     expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Illidan');
     await fireEvent.click(
       within(
-        screen.getByRole('heading', { name: 'Compare raid cooldowns' }).closest('section')!
+        screen.getByRole('heading', { name: 'What is this?' }).closest('.landing-page') as HTMLElement
       ).getByRole('button', { name: 'Spec Rankings' })
     );
     expect(new URLSearchParams(location.search).get('page')).toBe('spec');
     expect(
-      screen.queryByRole('heading', { name: 'Compare raid cooldowns' })
+      screen.queryByRole('heading', { name: 'What is this?' })
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Illidan');
   });
@@ -310,8 +310,8 @@ describe('App version mapping', () => {
     mockWorldData();
     render(App);
     const landing = (
-      await screen.findByRole('heading', { name: 'Compare raid cooldowns' })
-    ).closest('section')!;
+      await screen.findByRole('heading', { name: 'What is this?' })
+    ).closest('.landing-page') as HTMLElement;
     expect(within(landing).getByRole('heading', { name: 'What is this?' })).toBeInTheDocument();
     expect(
       within(landing).getByRole('heading', { name: 'Disclaimer: use timings as a reference' })

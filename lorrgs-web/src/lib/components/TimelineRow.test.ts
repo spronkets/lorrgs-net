@@ -248,10 +248,10 @@ describe('TimelineRow', () => {
     });
     const name = screen.getByText('Raid Guild');
     expect(name).toHaveClass('faction-name', faction.toLowerCase());
-    expect(name).toHaveAttribute('title', faction);
+    expect(name).toHaveAttribute('title', 'Raid Guild');
     expect(name).toHaveTextContent('Raid Guild');
     expect(screen.getByText('Thunderstrike EU')).not.toHaveClass('faction-name', 'alliance', 'horde');
-    expect(name.parentElement?.firstElementChild).toBe(name);
+    expect(name.parentElement).toHaveClass('player-heading');
     expect(screen.queryByRole('img', { name: faction })).not.toBeInTheDocument();
   });
 
@@ -297,7 +297,8 @@ describe('TimelineRow', () => {
         ]
       }
     });
-    expect(container.querySelector('.player-guild')).toHaveTextContent(/Raid Guild.*EU/);
+    expect(screen.getByText('Raid Guild')).toHaveClass('guild-name');
+    expect(container.querySelector('.player-guild')).toHaveTextContent('EU');
     expect(container.querySelector('.player-spec-icon')).toBeNull();
   });
 

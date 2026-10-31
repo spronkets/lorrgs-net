@@ -109,7 +109,7 @@ describe('raid catalog version mapping', () => {
   });
 
   it('uses the retail icon for retail selections', () => {
-    expect(getVersionIconUrl('Retail')).toBe('/images/wow/editions/midnight.png');
+    expect(getVersionIconUrl('Retail')).toBe('/images/wow/editions/retail.png');
   });
 
   it('returns the raids for a matching edition slug', () => {

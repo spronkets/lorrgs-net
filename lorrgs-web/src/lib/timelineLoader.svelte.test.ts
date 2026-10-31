@@ -19,11 +19,13 @@ describe('TimelineLoader', () => {
         throw new Error('API Error: 403 Forbidden - This Warcraft Logs report is archived.');
       return response(report);
     });
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const loader = new TimelineLoader(() => 'era');
     try {
       loader.setReports(rows.map(({ report }) => report));
       loader.start();
       await waitFor(() => expect(loader.loaded.size).toBe(3));
+      expect(consoleWarn).toHaveBeenCalledTimes(2);
       await waitFor(() => expect(loader.batchLoading).toBe(false));
       expect(getReportTimeline).toHaveBeenCalledTimes(5);
       expect(loader.stopped).toBe(false);
@@ -43,11 +45,16 @@ describe('TimelineLoader', () => {
         throw new Error('API Error: 403 Forbidden - This Warcraft Logs report is private.');
       return response(report);
     });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const loader = new TimelineLoader(() => 'era');
     try {
       loader.setReports(rows.map(({ report }) => report));
       loader.start();
       await waitFor(() => expect(loader.batchLoading).toBe(false));
+      expect(consoleError).toHaveBeenCalledWith(
+        'Ranking timeline failed; further automatic batches stopped',
+        expect.objectContaining({ reportCode: 'Report1' })
+      );
       expect(getReportTimeline).toHaveBeenCalledTimes(3);
       expect(loader.stopped).toBe(true);
       expect(loader.loaded.size).toBe(2);

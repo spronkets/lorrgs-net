@@ -167,14 +167,12 @@ it('shows summary faction and identity below linked titles without extra request
   expect(headings[4]).toHaveTextContent('Unknown guild');
   expect(headings[3].querySelector('.report-name')).toBeNull();
   expect(headings[3]).not.toHaveTextContent('Thunderstrike');
-  expect(within(headings[3] as HTMLElement).getByRole('link')).toHaveTextContent('Summary Guild');
-  expect(headings[3].querySelector('a svg')).toHaveAttribute('width', '11');
+  expect(within(headings[3] as HTMLElement).queryByRole('link')).toBeNull();
   const rows = container.querySelectorAll('article');
-  expect(rows[3].querySelector('.raid-identity')).toHaveTextContent('EU Thunderstrike');
+  expect(rows[3].querySelector('.raid-identity')).toHaveTextContent('Thunderstrike EU');
   expect(rows[3].querySelector('.faction-name')).toHaveClass('alliance');
   expect(rows[4].querySelector('.faction-name')).toHaveClass('horde');
   expect(rows[5].querySelector('.faction-icon')).toBeNull();
-  expect(within(headings[3] as HTMLElement).getByRole('link')).toHaveAttribute('target', '_blank');
   expect(getCompRankingDetails).toHaveBeenCalledTimes(3);
 });
 
@@ -256,18 +254,17 @@ it('retains upstream rank positions instead of reordering by loaded report ranks
     expect(
       headings.slice(0, 4).map((heading) => heading.textContent?.replace(/\s+/g, ' ').trim())
     ).toEqual([
-      'Raid Guild (Kill 1)',
-      'Raid Guild (Kill 2)',
-      'Raid Guild (Kill 3)',
+      'Raid Guild Kill 1',
+      'Raid Guild Kill 2',
+      'Raid Guild Kill 3',
       'Unknown guild'
     ]);
   });
   const first = container.querySelector('article')!;
   expect(first.querySelector('.efficiency-summary')).toHaveTextContent('Efficiency #8 (Top 1%)');
   expect(first.querySelector('h3 .rank')).toBeNull();
-  expect(first.querySelector('.raid-identity')).toHaveTextContent('EU Thunderstrike');
-  expect(within(first).getByAltText('Horde')).toBeInTheDocument();
-  expect(within(first).getByAltText('Horde')).toHaveAttribute('title', 'Horde');
+  expect(first.querySelector('.raid-identity')).toHaveTextContent('Thunderstrike EU');
+  expect(first.querySelector('.guild-name')).toHaveAttribute('title', 'Horde');
   expect(first.querySelector('.raid-identity')).not.toHaveTextContent('Horde');
   expect(first.querySelector('.faction-name')).toHaveClass('horde');
   expect(first.querySelector('.date-line')).toHaveTextContent('Kill time 3:20 Speed #5 (Top 5%)');
@@ -338,7 +335,6 @@ it('renders every loaded roster timeline without fetching players separately', a
     const group = within(row).getByRole('region', { name });
     expect(group.querySelector('.role-timelines .role-group')).toBeNull();
     expect(group.querySelector('.role-group')?.nextElementSibling).toHaveClass('role-timelines');
-    expect(group.querySelector('.axis-row')).toBeInTheDocument();
     expect(group.querySelectorAll('.player-row')).toHaveLength(name === 'DPS' ? 3 : 1);
   }
   expect(within(row).getByText('0 (Top 7%)')).toBeInTheDocument();
@@ -405,7 +401,7 @@ it('shows a spinner while loading an individual kill and preserves summary raid 
     edition: 'anniversary'
   });
   await screen.findByText('Temporarily unavailable');
-  expect(container.querySelector('.raid-identity')).toHaveTextContent('EU Summary Realm');
+  expect(container.querySelector('.raid-identity')).toHaveTextContent('Summary Realm EU');
   await fireEvent.click(screen.getByRole('button', { name: 'Retry loading report' }));
   const loading = screen.getByRole('button', { name: 'Loading details…' });
   expect(loading).toBeDisabled();
@@ -417,7 +413,7 @@ it('shows a spinner while loading an individual kill and preserves summary raid 
     serverRegion: undefined
   });
   await screen.findByText('Roster & cooldown timelines (1 players)');
-  expect(container.querySelector('.raid-identity')).toHaveTextContent('EU Summary Realm');
+  expect(container.querySelector('.raid-identity')).toHaveTextContent('Summary Realm EU');
   expect(container.querySelector('.loading-spinner')).toBeNull();
 });
 

@@ -440,6 +440,7 @@
         {#if !compositionMode}<div class="position-label">#</div>{/if}
         <div class="player-label">Player</div>
       </div>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       class="sticky-header-scrollbar"
       bind:this={headerScrollbar}
@@ -582,10 +583,8 @@
     border-radius: 0.4rem;
     background: var(--panel);
   }
-  .role-timelines .position-label,
   .role-timelines :global(.rank),
   .role-timelines :global(.position-placeholder),
-  .composition-mode .role-timelines .identity,
   .composition-mode .role-timelines :global(.player-row .identity),
   .composition-mode .role-timelines :global(.boss-row .identity) {
     box-shadow: inset 1px 0 var(--line);

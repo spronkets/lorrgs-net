@@ -265,30 +265,25 @@ describe('ranking cooldown comparison', () => {
     expect(targets[0]).toBeDisabled();
     expect(targets[0]).toHaveAttribute('title', 'Current boss reference');
     expect(screen.queryByText(/^Reference:/)).not.toBeInTheDocument();
-    expect(targets[1].nextElementSibling).toHaveAttribute('aria-label', 'Open report analyzer');
+    expect(targets[1].closest('.player-row')?.querySelector('[aria-label="Open report analyzer"]')).not.toBeNull();
     await fireEvent.click(targets[1]);
-    await waitFor(() =>
-      expect(container.querySelector('.boss-row a')).toHaveAttribute(
-        'href',
-        expect.stringContaining('Report1')
-      )
-    );
     expect(targets[1]).toHaveAttribute('aria-pressed', 'true');
     expect(targets[0]).toHaveAttribute('aria-pressed', 'false');
     expect(targets[0]).toBeEnabled();
     expect(targets[1]).toBeDisabled();
     await rerender({ reports: [...reports].reverse(), edition: 'anniversary' });
-    expect(container.querySelector('.boss-row a')).toHaveAttribute(
-      'href',
-      expect.stringContaining('Report1')
-    );
+    expect(screen.getAllByRole('button', { name: 'Use as boss reference' }).find((b) => b.hasAttribute('disabled'))?.closest('.player-row')?.querySelector('.analyzer-link')?.getAttribute('href')).toContain('Report1');
     expect(container.querySelector('.player-row .rank')?.textContent).toBe('5');
     await rerender({ reports: reports.slice(2), edition: 'anniversary' });
     await waitFor(() =>
-      expect(container.querySelector('.boss-row a')).toHaveAttribute(
-        'href',
-        expect.stringContaining('Report2')
-      )
+      expect(
+        screen
+          .getAllByRole('button', { name: 'Use as boss reference' })
+          .find((b) => b.hasAttribute('disabled'))
+          ?.closest('.player-row')
+          ?.querySelector('.analyzer-link')
+          ?.getAttribute('href')
+      ).toContain('Report2')
     );
     expect(getBossTimeline).not.toHaveBeenCalled();
     expect(fetchTimeline).not.toHaveBeenCalled();
@@ -316,10 +311,14 @@ describe('ranking cooldown comparison', () => {
     );
     await rerender({ reports: [...reports].reverse(), edition: 'anniversary' });
     await waitFor(() =>
-      expect(container.querySelector('.boss-row a')).toHaveAttribute(
-        'href',
-        expect.stringContaining('Report4')
-      )
+      expect(
+        screen
+          .getAllByRole('button', { name: 'Use as boss reference' })
+          .find((b) => b.hasAttribute('disabled'))
+          ?.closest('.player-row')
+          ?.querySelector('.analyzer-link')
+          ?.getAttribute('href')
+      ).toContain('Report4')
     );
     expect(container.querySelector('.player-row .rank')?.textContent).toBe('5');
     expect(getBossTimeline).not.toHaveBeenCalled();

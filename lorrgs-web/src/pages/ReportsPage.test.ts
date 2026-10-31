@@ -70,8 +70,8 @@ it('shows guild and report identity once in the main report header, not in pull 
   render(ReportsPage, props);
   await addReports();
   await screen.findByText('(Raid ReportA)');
-  expect(screen.getAllByRole('link', { name: 'Aftershock' })).toHaveLength(1);
-  expect(screen.getByRole('link', { name: 'Aftershock' })).toHaveAttribute(
+  expect(screen.getAllByRole('link', { name: 'Aftershock EU' })).toHaveLength(1);
+  expect(screen.getByRole('link', { name: 'Aftershock EU' })).toHaveAttribute(
     'href', 'https://fresh.warcraftlogs.com/reports/ReportA'
   );
   expect(screen.getByText('Thunderstrike')).toBeInTheDocument();

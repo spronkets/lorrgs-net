@@ -40,20 +40,20 @@ it('can omit the report subtitle until composition details are loaded', () => {
     edition: 'anniversary', showReportName: false,
     report: { reportId: 'ReportA', title: 'Raid', guildName: 'Guild' }
   });
-
-  it('places the unparenthesized composition report name before the link icon', () => {
-    render(ReportIdentity, {
-      edition: 'anniversary',
-      reportNameInLink: true,
-      report: { reportId: 'ReportA', title: 'Monday raid', guildName: 'Aftershock' }
-    });
-    const link = screen.getByRole('link', { name: 'Monday raid' });
-    expect(link).toHaveTextContent('Monday raid');
-    expect(link).not.toContainElement(screen.getByText('Aftershock'));
-    expect(link.lastElementChild).toHaveClass('lucide-external-link');
-    expect(screen.queryByText('(Monday raid)')).not.toBeInTheDocument();
-  });
   expect(screen.queryByText('(Raid)')).not.toBeInTheDocument();
+});
+
+it('places the unparenthesized composition report name before the link icon', () => {
+  render(ReportIdentity, {
+    edition: 'anniversary',
+    reportNameInLink: true,
+    report: { reportId: 'ReportA', title: 'Monday raid', guildName: 'Aftershock' }
+  });
+  const link = screen.getByRole('link', { name: 'Monday raid' });
+  expect(link).toHaveTextContent('Monday raid');
+  expect(link).not.toContainElement(screen.getByText('Aftershock'));
+  expect(link.lastElementChild).toHaveClass('lucide-external-link');
+  expect(screen.queryByText('(Monday raid)')).not.toBeInTheDocument();
 });
 
 it.each([1, 2, null])('can place region beside the server without an icon for faction %s', (factionId) => {
