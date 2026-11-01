@@ -46,14 +46,14 @@ describe('BossTimelineRow', () => {
     expect(container.querySelectorAll('.boss-event')).toHaveLength(1);
     await rerender({ ...base, showBuffs: true, showReceivedBuffs: true, showDamageTaken: true,
       showDirectHeals: true, showHots: true, showManaReceived: true, showDeaths: true });
-    expect(container.querySelectorAll('.boss-event')).toHaveLength(7);
+    expect(container.querySelectorAll('.boss-event')).toHaveLength(6);
     expect(container.querySelector('.track')).toHaveStyle({ height: '108px' });
-    expect(container.querySelectorAll('.cast-connectors')).toHaveLength(6);
-    expect(container.querySelectorAll('.cast-connectors.below')).toHaveLength(5);
+    expect(container.querySelectorAll('.cast-connectors')).toHaveLength(5);
+    expect(container.querySelectorAll('.cast-connectors.below')).toHaveLength(4);
     expect(container.querySelector('.cast-connectors.below')).toHaveStyle({ top: '47px' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Show other enemies (1)' }));
+    expect(container.querySelectorAll('.boss-event')).toHaveLength(7);
     expect(container.querySelector('.cast-window')).not.toBeNull();
-    for (const event of container.querySelectorAll('[data-event-index="1"], [data-event-index="2"], [data-event-index="3"], [data-event-index="4"], [data-event-index="5"]'))
-      expect(event).toHaveStyle({ top: '75px' });
     await rerender({ ...base, showCasts: false, showReceivedBuffs: false, showDamageTaken: false,
       showDirectHeals: false, showHots: false, showManaReceived: false });
     expect(container.querySelectorAll('.boss-event')).toHaveLength(0);
@@ -113,6 +113,30 @@ describe('BossTimelineRow', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     unmount();
     expect(vi.mocked(getBossTimeline).mock.calls[1][2]?.aborted).toBe(true);
+  });
+
+  it('shows collapsible add rows grouped by enemy source', async () => {
+    const input = props();
+    const boss = bossResponse(input.report);
+    boss.spells.push({ id: 42, name: 'Throw Glaive', icon: null });
+    boss.events.push({
+      spellId: 42,
+      timestamp: 45000,
+      duration: null,
+      kind: 'cast',
+      sourceName: 'Flame of Azzinoth'
+    });
+    render(BossTimelineRow, {
+      ...input,
+      report: { ...input.report, bossTimeline: boss }
+    });
+    const toggle = await screen.findByRole('button', { name: 'Show other enemies (1)' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByLabelText('Boss add timeline row for Flame of Azzinoth')).toBeNull();
+    await fireEvent.click(toggle);
+    await screen.findByLabelText('Boss add timeline row for Flame of Azzinoth');
+    expect(screen.getByRole('button', { name: '0:45 · Throw Glaive' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hide other enemies (1)' })).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('shows loading and errors, retries explicitly and marks incomplete or empty timelines', async () => {

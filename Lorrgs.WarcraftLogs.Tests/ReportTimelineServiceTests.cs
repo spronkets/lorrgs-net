@@ -339,6 +339,39 @@ public sealed class ReportTimelineServiceTests : IDisposable
     }
 
     [Fact]
+    public void CastResultsFallbackAssumesNextOutgoingDamageForUnmatchedNonMeleeCasts()
+    {
+        var events = ParseEvents("""
+            [{"type":"cast","timestamp":1000,"sourceID":7,"targetID":8,"abilityGameID":41032},
+             {"type":"damage","timestamp":1040,"sourceID":7,"targetID":9,"abilityGameID":1,"amount":111},
+             {"type":"damage","timestamp":1080,"sourceID":7,"targetID":8,"abilityGameID":1,"amount":222}]
+            """);
+        var cast = Assert.Single(ReportTimelineService.NormalizeEvents(events, 7, 0, 10000, true,
+            new Dictionary<int, string> { [8] = "Tank", [9] = "Offtank" }));
+        Assert.Equal("cast", cast.Kind);
+        Assert.Equal(41032, cast.SpellId);
+        Assert.Equal(new TimelineCastResult(8, "Tank", "damage", 222), Assert.Single(cast.CastResults!));
+    }
+
+    [Fact]
+    public void BossNormalizationPreservesCastSourceNameWhenRequested()
+    {
+        var events = ParseEvents("""
+            [{"type":"cast","timestamp":2000,"sourceID":10,"abilityGameID":1}]
+            """);
+        var cast = Assert.Single(ReportTimelineService.NormalizeEvents(
+            events,
+            actorId: 10,
+            start: 1000,
+            end: 3000,
+            complete: true,
+            actorNames: new Dictionary<int, string> { [10] = "Illidan Stormrage" },
+            includeCastSourceNames: true));
+        Assert.Equal("cast", cast.Kind);
+        Assert.Equal("Illidan Stormrage", cast.SourceName);
+    }
+
+    [Fact]
     public void TimelineMetadataQueriesIncludeNpcAndPetNames()
     {
         foreach (var resource in new[] { "Timeline.Metadata.graphql", "Timeline.ReportMetadata.graphql", "Timeline.MasterData.graphql" })
@@ -1270,7 +1303,7 @@ public sealed class ReportTimelineServiceTests : IDisposable
              {"type":"cast","timestamp":2000,"abilityGameID":0},
              {"type":"cast","timestamp":999,"abilityGameID":1},
              {"type":"cast","timestamp":11001,"abilityGameID":1},
-             {"type":"cast","sourceID":10,"timestamp":5000,"abilityGameID":1}]
+             {"type":"cast","sourceID":10,"timestamp":5000,"abilityGameID":2}]
             """));
 
         var result = await CreateService(handler).LoadBossAsync("report", 1, "anniversary", false, CancellationToken.None);
@@ -1278,12 +1311,12 @@ public sealed class ReportTimelineServiceTests : IDisposable
         Assert.NotNull(result);
         Assert.Equal(expectedName, result.Name);
         Assert.Equal(new TimelinePhase(3, 6000), Assert.Single(result.Phases));
-        Assert.Equal(new TimelineEvent(1, 4000, null, "cast"), Assert.Single(result.Events));
-        Assert.Equal(new TimelineSpell(1, "Spell 1", null), Assert.Single(result.Spells));
+        Assert.Equal(new TimelineEvent(2, 4000, null, "cast"), Assert.Single(result.Events));
+        Assert.Equal(new TimelineSpell(2, "Spell 2", null), Assert.Single(result.Spells));
     }
 
     [Fact]
-    public async Task BossMeleeKeepsRecordedDamageAvoidanceAndMissingResultsDistinct()
+    public async Task BossMeleeKeepsRecordedDamageAndAvoidanceButDropsUnmatchedAutoAttacks()
     {
         const string metadata = """
             {"data":{"reportData":{"report":{"fights":[{"id":1,"name":"Boss",
@@ -1299,12 +1332,12 @@ public sealed class ReportTimelineServiceTests : IDisposable
             """));
         var result = await CreateService(handler).LoadBossAsync("report", 1, "anniversary", false, default);
         Assert.NotNull(result);
-        Assert.Equal(3, result.Events.Count);
+        Assert.Equal(2, result.Events.Count);
         Assert.Equal(new TimelineCastResult(7, "Tank", "damage", 3343),
             Assert.Single(result.Events[0].CastResults!));
         Assert.Equal(new TimelineCastResult(7, "Tank", "damage", 0, "Missed / avoided"),
             Assert.Single(result.Events[1].CastResults!));
-        Assert.Null(result.Events[2].CastResults);
+        Assert.All(result.Events, item => Assert.NotNull(item.CastResults));
     }
 
     [Fact]
@@ -1486,6 +1519,37 @@ public sealed class ReportTimelineServiceTests : IDisposable
         Assert.NotNull(cached);
         Assert.Equal(fresh.Phases, cached.Phases);
         Assert.Equal(2, handler.GraphQlRequests);
+    }
+
+    [Fact]
+    public async Task LoadBossReadsBeyondThreePagesAndReusesCompleteCachedCoverage()
+    {
+        const string metadata = """
+            {"data":{"reportData":{"report":{"fights":[{"id":30,"name":"Illidan Stormrage",
+            "encounterID":50609,"enemyNPCs":[{"id":10}],
+            "startTime":1000,"endTime":11000,"phaseTransitions":[{"id":2,"startTime":7000}]}],
+            "masterData":{"abilities":[],"actors":[]}}}}}
+            """;
+        using var handler = new QueueHandler(metadata,
+            EventPage("""[{"type":"cast","sourceID":10,"timestamp":2000,"abilityGameID":2}]""", 3000),
+            EventPage("""[{"type":"cast","sourceID":10,"timestamp":4000,"abilityGameID":2}]""", 5000),
+            EventPage("""[{"type":"cast","sourceID":10,"timestamp":6000,"abilityGameID":2}]""", 7000),
+            EventPage("""[{"type":"cast","sourceID":10,"timestamp":10000,"abilityGameID":2}]"""));
+        var service = CreateService(handler);
+
+        var fresh = await service.LoadBossAsync("multiPageBoss", 30, "anniversary", false, default);
+        var cached = await service.LoadBossAsync("multiPageBoss", 30, "anniversary", true, default);
+
+        Assert.NotNull(fresh);
+        Assert.True(fresh.IsComplete);
+        Assert.Equal("Illidan Stormrage", fresh.Name);
+        Assert.Equal(new double[] { 1000, 3000, 5000, 9000 }, fresh.Events.Select(item => item.Timestamp));
+        Assert.Equal(new TimelinePhase(2, 6000), Assert.Single(fresh.Phases));
+        Assert.NotNull(cached);
+        Assert.True(cached.IsComplete);
+        Assert.Equal(fresh.Events, cached.Events);
+        Assert.Equal(fresh.Phases, cached.Phases);
+        Assert.Equal(5, handler.GraphQlRequests);
     }
 
     private ReportTimelineService CreateService(QueueHandler handler) =>

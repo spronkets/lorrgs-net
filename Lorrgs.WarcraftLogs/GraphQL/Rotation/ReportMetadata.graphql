@@ -16,6 +16,10 @@ query ReportMetadata($code: String!) {
         endTime
         kill
         difficulty
+        phaseTransitions {
+          id
+          startTime
+        }
       }
       masterData {
         actors(type: "Player") {
@@ -23,6 +27,11 @@ query ReportMetadata($code: String!) {
           name
           subType
           type
+        }
+        abilities {
+          gameID
+          name
+          icon
         }
       }
     }

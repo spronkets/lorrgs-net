@@ -561,6 +561,71 @@ describe('TimelineMagnifier', () => {
     expect(container.querySelectorAll('.magnified-event')).toHaveLength(5);
   });
 
+  it('shows cast source labels only when they differ from the active timeline owner', () => {
+    const timeline = response(rows[0].report);
+    timeline.spells = [{ id: 1, name: 'Melee', icon: null }];
+    timeline.events = [
+      { spellId: 1, timestamp: 12000, duration: null, kind: 'cast', sourceName: timeline.playerName },
+      { spellId: 1, timestamp: 12000, duration: null, kind: 'cast', sourceName: 'Flame of Azzinoth' }
+    ];
+    const { container } = render(TimelineMagnifier, {
+      magnifier: {
+        timeline,
+        timestamp: 12000,
+        start: 10000,
+        span: 10000,
+        x: 200,
+        y: 400,
+        zoom: 800
+      },
+      inspected: null,
+      hidden: new Set<number>(),
+      castSpellIds: new Set([1]),
+      showCasts: true,
+      showBuffs: true,
+      showDeaths: true
+    });
+    const rowsByDetail = container.querySelectorAll('.event-details .detail-name');
+    expect(rowsByDetail).toHaveLength(2);
+    expect(rowsByDetail[0]).toHaveTextContent('Melee');
+    expect(rowsByDetail[0]).not.toHaveTextContent('(Player0)');
+    expect(rowsByDetail[1]).toHaveTextContent('Melee (Flame of Azzinoth)');
+  });
+
+  it('collapses repeated boss casts without matched results into one ability row', () => {
+    const timeline = response(rows[0].report);
+    timeline.spells = [{ id: 1, name: 'Melee', icon: null }];
+    timeline.events = [
+      { spellId: 1, timestamp: 81550, duration: null, kind: 'cast' },
+      { spellId: 1, timestamp: 81550, duration: null, kind: 'cast' },
+      { spellId: 1, timestamp: 81550, duration: null, kind: 'cast' }
+    ];
+    const { container } = render(TimelineMagnifier, {
+      magnifier: {
+        timeline,
+        boss: true,
+        timestamp: 81550,
+        start: 80000,
+        span: 10000,
+        x: 200,
+        y: 400,
+        zoom: 800
+      },
+      inspected: null,
+      hidden: new Set<number>(),
+      castSpellIds: new Set([1]),
+      showCasts: true,
+      showBuffs: true,
+      showDeaths: true
+    });
+    expect(container.querySelectorAll('.event-details li')).toHaveLength(1);
+    expect(container.querySelector('.event-details')).toHaveTextContent('Melee ×3');
+    expect(container.querySelector('.event-details')).toHaveTextContent(
+      'No direct damage/healing match'
+    );
+    expect(container.querySelectorAll('.magnified-event')).toHaveLength(3);
+  });
+
   it('lists the hovered instant cast and its time without including other casts of that spell', async () => {
     const timeline = response(rows[0].report);
     timeline.spells = [{ id: 1, name: 'Holy Shock', icon: 'spell_holy_holybolt.jpg' }];

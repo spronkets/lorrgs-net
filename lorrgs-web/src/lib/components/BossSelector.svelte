@@ -8,6 +8,7 @@
   export let label = 'Boss';
   export let placeholder = 'Select a boss...';
   export let disabled = false;
+  export let fallback: 'wowhead' | 'skull' = 'wowhead';
   let open = false;
   let active = 0;
   let root: HTMLDivElement;
@@ -99,7 +100,7 @@
       }
     }}
   >
-    <BossIcon slug={selected?.slug ?? ''} iconName={selected?.iconName} />
+    <BossIcon slug={selected?.slug ?? ''} iconName={selected?.iconName} {fallback} />
     <span>{selected?.name || placeholder}</span>
     <ChevronDown class="chevron" aria-hidden="true" size={16} />
   </button>
@@ -123,7 +124,7 @@
           onclick={() => choose(index)}
           onkeydown={handleKey}
         >
-          <BossIcon slug={boss.slug} iconName={boss.iconName} />
+          <BossIcon slug={boss.slug} iconName={boss.iconName} {fallback} />
           <span>{boss.name}</span>
         </div>
       {/each}

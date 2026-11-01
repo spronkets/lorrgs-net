@@ -17,7 +17,8 @@ public sealed class AnalyzeRotationHandler(ILogger<AnalyzeRotationHandler> logge
             {
                 ReportCode = request.ReportCode, FightId = request.FightId, SourceId = request.SourceId,
                 PlayerName = request.PlayerName, ParsePercentile = request.ParsePercentile,
-                ItemLevel = request.ItemLevel, EventLimit = request.EventLimit
+                ItemLevel = request.ItemLevel, AutoResolveParsePercentile = request.AutoResolveParsePercentile,
+                EventLimit = request.EventLimit
             }, cancellationToken);
             return TypedResults.Ok(new RotationAnalysisResponse
             {
@@ -37,7 +38,11 @@ public sealed class AnalyzeRotationHandler(ILogger<AnalyzeRotationHandler> logge
                 Score = result.Score,
                 Notes = result.Notes,
                 AbilitySummary = result.AbilitySummary,
+                DamageSummary = result.DamageSummary,
                 RotationTimeline = result.RotationTimeline,
+                Phases = result.Phases,
+                PhaseSummaries = result.PhaseSummaries,
+                SpellMetadata = result.SpellMetadata
             });
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

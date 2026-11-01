@@ -32,6 +32,7 @@
     difficulty?: string;
     specSlug?: string;
     compositionMode?: boolean;
+    linkedReport?: RankingReport | null;
   };
   let {
     reports = [],
@@ -41,7 +42,8 @@
     bossIconName,
     difficulty = 'mythic',
     specSlug = '',
-    compositionMode = false
+    compositionMode = false,
+    linkedReport = null
   }: Props = $props();
   const loader = new TimelineLoader(() => edition);
   let hidden = $state<Set<number>>(new Set());
@@ -115,7 +117,14 @@
     return bossTimeline ? { ...report, bossTimeline } : report;
   }
   const referenceReport = $derived(
-    reports.find(({ report }) => timelineKey(report) === referenceKey)?.report ?? reports[0]?.report
+    reports.find(({ report }) => timelineKey(report) === referenceKey)?.report ??
+      linkedReport ?? reports[0]?.report
+  );
+  const referenceTimeline = $derived(
+    referenceReport ? bossReferences[timelineKey(referenceReport)] : undefined
+  );
+  const referenceDuration = $derived(
+    referenceTimeline?.duration ?? (referenceReport ? fightDuration(referenceReport) : 0)
   );
   function roleGroup(report: RankingReport) {
     const role = report.players?.[0]?.roleCode;
@@ -227,6 +236,7 @@
   const viewportDuration = $derived(
     Math.max(
       1,
+      linkedReport && referenceReport === linkedReport ? referenceDuration : 0,
       ...(compositionMode ? reports : reports.slice(0, 3)).map(({ report }) =>
         fightDuration(report, loader.loaded.get(timelineKey(report)))
       )
@@ -235,6 +245,7 @@
   const axisDuration = $derived(
     Math.max(
       viewportDuration,
+      linkedReport && referenceReport === linkedReport ? referenceDuration : 0,
       ...reports.map(({ report }) => fightDuration(report, loader.loaded.get(timelineKey(report))))
     )
   );
@@ -420,6 +431,16 @@
   <p class="mobile-timeline-hint">
     Full fight fits at 100%. Increase Zoom to inspect crowded casts.
   </p>
+  {#if linkedReport}
+    <p>
+      Boss reference: {referenceReport?.title}, fight {referenceReport?.fights?.[0]?.fightId}.
+      Phase markers use each fight's own timings.
+      {#if referenceReport !== linkedReport}
+        <button class="button" data-tone="secondary" data-outline="true" data-size="small"
+          type="button" onclick={() => (referenceKey = '')}>Use linked fight as reference</button>
+      {/if}
+    </p>
+  {/if}
   <div class="timeline-panel composition-panel" class:composition-mode={compositionMode}>
     <div class="spell-inspector" aria-live="polite" aria-atomic="true">
       {#if inspected}
@@ -474,7 +495,7 @@
         style={`--timeline-zoom: ${zoom}; --timeline-scale: ${timelineScale}; --timeline-position-column-width: 24px; --timeline-position-width: ${compositionMode ? '0px' : 'calc(var(--timeline-position-column-width) + 8px)'}; --timeline-identity-width: ${identityWidth}px; --timeline-viewport-width: ${viewportWidth ? `${viewportWidth}px` : '100%'}`}
       >
         {#snippet bossRow()}
-          {#if referenceReport && canLoadTimeline(referenceReport)}
+          {#if referenceReport && (referenceReport.fights?.[0]?.fightId ?? 0) > 0}
             <BossTimelineRow
               {compositionMode}
               {bossSlug}
@@ -483,6 +504,7 @@
               bind:magnifier
               report={referenceReport}
               onloaded={(timeline) => {
+                if (referenceReport) bossReferences[timelineKey(referenceReport)] = timeline;
                 const matches = reports.filter(
                   ({ report }) =>
                     report.reportId === timeline.reportCode &&

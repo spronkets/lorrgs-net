@@ -1,0 +1,8 @@
+query RotationFightRankings($code: String!, $fightIds: [Int!]!) {
+  reportData {
+    report(code: $code) {
+      damageRankings: rankings(fightIDs: $fightIds, playerMetric: dps)
+      healingRankings: rankings(fightIDs: $fightIds, playerMetric: hps)
+    }
+  }
+}

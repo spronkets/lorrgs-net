@@ -1,9 +1,15 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import { afterEach, expect, it, vi } from 'vitest';
-import { getSpecRankings } from '../lib/api';
+import { getBossTimeline, getReportTimeline, getSpecRankings, lookupReport } from '../lib/api';
+import { bossResponse, response, rows } from '../lib/testing/timelineFixtures';
 import HomePage from './HomePage.svelte';
 
-vi.mock('../lib/api', () => ({ getSpecRankings: vi.fn() }));
+vi.mock('../lib/api', () => ({
+  getSpecRankings: vi.fn(),
+  lookupReport: vi.fn(),
+  getBossTimeline: vi.fn(),
+  getReportTimeline: vi.fn()
+}));
 
 const worldData = {
   bosses: [
@@ -48,6 +54,53 @@ afterEach(() => {
 function renderPage() {
   return render(HomePage, { worldData, raidCatalog });
 }
+
+it('resolves a linked fight before requesting rankings and corrects the encounter in the URL', async () => {
+  window.history.replaceState({}, '',
+    '/?page=spec&edition=Anniversary&raid=hyjalsummit&boss=archimonde&spec=retribution-paladin&reportCode=LinkedReport&fightId=30'
+  );
+  vi.mocked(lookupReport).mockResolvedValue({
+    reportData: { report: {
+      code: 'LinkedReport', title: 'Linked Illidan', startTime: 0,
+      fights: [{ id: 30, name: 'Illidan Stormrage', encounterID: 50609, kill: true,
+        difficulty: 3, startTime: 1000, endTime: 301000 }]
+    } }
+  });
+  vi.mocked(getSpecRankings).mockResolvedValue({
+    specSlug: 'retribution-paladin', bossSlug: 'illidan-stormrage', difficulty: 'normal',
+    metric: 'dps', updated: '', isDirty: false, percentile: null, reports: rows.map(row => row.report)
+  });
+  vi.mocked(getBossTimeline).mockImplementation(async report => bossResponse(report));
+  vi.mocked(getReportTimeline).mockImplementation(async report => response(report));
+  renderPage();
+  await screen.findByRole('heading', { name: 'Paladin Retribution Paladin vs. Illidan Stormrage' });
+  expect(getSpecRankings).toHaveBeenCalledTimes(1);
+  expect(getSpecRankings).toHaveBeenCalledWith(
+    'retribution-paladin', 'illidan-stormrage', 'Normal', 'dps', 'anniversary', expect.any(Object)
+  );
+  expect(new URLSearchParams(window.location.search).get('raid')).toBe('blacktemple');
+  expect(new URLSearchParams(window.location.search).get('boss')).toBe('illidan-stormrage');
+  await screen.findByText(/Boss reference: Linked Illidan, fight 30/);
+  expect(getBossTimeline).toHaveBeenCalledWith(
+    expect.objectContaining({ reportId: 'LinkedReport', fights: [expect.objectContaining({ fightId: 30 })] }),
+    'anniversary', expect.any(AbortSignal)
+  );
+});
+
+it('surfaces linked report errors instead of loading rankings for a mismatched encounter', async () => {
+  window.history.replaceState({}, '',
+    '/?edition=Anniversary&raid=blacktemple&boss=illidan-stormrage&spec=retribution-paladin&reportCode=LinkedReport&fightId=0'
+  );
+  const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    renderPage();
+    expect(await screen.findByRole('alert')).toHaveTextContent('positive fight ID');
+    expect(getSpecRankings).not.toHaveBeenCalled();
+    expect(lookupReport).not.toHaveBeenCalled();
+  } finally {
+    logged.mockRestore();
+  }
+});
 
 it('does not request rankings for an unavailable raid restored from the URL', async () => {
   window.history.replaceState(

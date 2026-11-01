@@ -212,7 +212,7 @@ public sealed class ReportTimelineService(
             fightIds = new[] { fightId },
             startTime = cursor,
             endTime = end
-        }, start, end, edition, cacheOnly, cancellationToken);
+        }, start, end, edition, cacheOnly, cancellationToken, maxPages: int.MaxValue);
         if (pages is null || (cacheOnly && !pages.Value.Complete)) return null;
         var events = BossTimelineEvents(pages.Value.Events, fight, start, end, pages.Value.Complete,
             ActorNames(metadata.GetProperty("masterData"), edition));
@@ -376,7 +376,10 @@ public sealed class ReportTimelineService(
         var enemies = fight.GetProperty("enemyNPCs").EnumerateArray()
             .Select(enemy => checked((int)Number(enemy, "id"))).ToHashSet();
         return enemies.SelectMany(actorId =>
-                NormalizeEvents(ordered, actorId, start, end, complete, actorNames, closeActiveBuffs: true))
+                NormalizeEvents(ordered, actorId, start, end, complete, actorNames,
+                    closeActiveBuffs: true, includeCastSourceNames: true))
+            .Where(item => item.Kind != "death")
+            .Where(item => item.Kind != "cast" || item.SpellId != 1 || item.CastResults is { Count: > 0 })
             .OrderBy(item => item.Timestamp).ToArray();
     }
 
@@ -708,7 +711,8 @@ public sealed class ReportTimelineService(
 
     internal static IReadOnlyList<TimelineEvent> NormalizeEvents(
         IEnumerable<JsonElement> rawEvents, int actorId, double start, double end, bool complete,
-        IReadOnlyDictionary<int, string>? actorNames = null, bool closeActiveBuffs = false)
+        IReadOnlyDictionary<int, string>? actorNames = null, bool closeActiveBuffs = false,
+        bool includeCastSourceNames = false)
     {
         var result = new List<TimelineEvent>();
         var orderedEvents = rawEvents.OrderBy(e => Number(e, "timestamp")).ToArray();
@@ -758,6 +762,7 @@ public sealed class ReportTimelineService(
                 result.Add(new TimelineEvent(spellId, relative,
                     castStart.HasValue ? relative - castStart.Value : null, "cast", CastStart: castStart,
                     CastResults: castResults.GetValueOrDefault((spellId, timestamp)),
+                    SourceName: includeCastSourceNames ? sourceName : null,
                     HealthBeforePercent: IsLifeTapSpell(spellId) ? healthBefore : null,
                     HealthAfterPercent: IsLifeTapSpell(spellId) ? healthAfter : null,
                     HealthBeforeIsPreviousSnapshot: IsLifeTapSpell(spellId) && healthBefore.HasValue));
@@ -952,6 +957,58 @@ public sealed class ReportTimelineService(
             entries.Add(new TimelineCastResult(targetId,
                 actorNames?.GetValueOrDefault(targetId) ?? $"Actor {targetId}", "damage", 0,
                 Outcome: "Missed / avoided"));
+        }
+        var usedFallbackDamage = new HashSet<(int SpellId, double Timestamp, int TargetId, double Amount)>();
+        foreach (var cast in castEvents)
+        {
+            var spellId = checked((int)Number(cast, "abilityGameID"));
+            var castTimestamp = Number(cast, "timestamp");
+            var key = (spellId, castTimestamp);
+            if (spellId == 1 || ambiguousCasts.Contains(key))
+                continue;
+            if (results.TryGetValue(key, out var existingEntries) &&
+                existingEntries.Any(entry => entry.Kind == "damage" && entry.Amount > 0))
+                continue;
+            var castTargetId = checked((int)Number(cast, "targetID"));
+            if (castTargetId <= 0)
+                continue;
+            var candidate = events
+                .Where(item =>
+                    Text(item, "type") == "damage" &&
+                    Number(item, "sourceID") == actorId &&
+                    Number(item, "timestamp") >= castTimestamp &&
+                    Number(item, "timestamp") <= castTimestamp + 500 &&
+                    item.TryGetProperty("amount", out var amountValue) &&
+                    amountValue.TryGetDouble(out var amount) &&
+                    amount > 0 &&
+                    (!item.TryGetProperty("tick", out var tick) || tick.ValueKind != JsonValueKind.True))
+                .OrderBy(item => Number(item, "targetID") == castTargetId ? 0 : 1)
+                .ThenBy(item => Number(item, "timestamp"))
+                .FirstOrDefault(item =>
+                {
+                    var targetId = checked((int)Number(item, "targetID"));
+                    var amount = Number(item, "amount");
+                    var damageKey = (checked((int)Number(item, "abilityGameID")), Number(item, "timestamp"), targetId, amount);
+                    return targetId > 0 && !usedFallbackDamage.Contains(damageKey);
+                });
+            if (candidate.ValueKind == JsonValueKind.Undefined)
+                continue;
+            var candidateTargetId = checked((int)Number(candidate, "targetID"));
+            var candidateAmount = Number(candidate, "amount");
+            var candidateDamageKey = (
+                checked((int)Number(candidate, "abilityGameID")),
+                Number(candidate, "timestamp"),
+                candidateTargetId,
+                candidateAmount
+            );
+            usedFallbackDamage.Add(candidateDamageKey);
+            if (!results.TryGetValue(key, out var entries))
+                results[key] = entries = [];
+            if (entries.Any(entry => entry.TargetId == candidateTargetId && entry.Kind == "damage"))
+                continue;
+            entries.Add(new TimelineCastResult(candidateTargetId,
+                actorNames?.GetValueOrDefault(candidateTargetId) ?? $"Actor {candidateTargetId}",
+                "damage", candidateAmount));
         }
         return results.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<TimelineCastResult>)pair.Value);
     }

@@ -108,6 +108,12 @@
         : null
   );
   const endTime = $derived(fightDuration(report, timeline));
+  const phases = $derived(
+    report.bossTimeline?.reportCode === report.reportId &&
+      report.bossTimeline.fightId === report.fights?.[0]?.fightId
+      ? report.bossTimeline.phases
+      : (report.fights?.[0]?.phases ?? [])
+  );
   const estimatedHealthRange = $derived.by(() => {
     const values = (timeline?.healthCapacities ?? []).flatMap((sample) =>
       sample.estimatedMaxHealth != null ? [sample.estimatedMaxHealth] : []
@@ -184,10 +190,7 @@
       showIcons,
       ...timelinePreview(rect, mouse.clientX, timeline.duration, axisDuration, zoom, window.innerWidth),
       resourceMode: survivalMode ? resourceMode : undefined,
-      phases:
-        report.bossTimeline && report.bossTimeline.fightId === report.fights?.[0]?.fightId
-          ? report.bossTimeline.phases
-          : report.fights?.[0]?.phases,
+      phases,
       x: mouse.clientX,
       y: mouse.clientY,
     };
@@ -363,12 +366,7 @@
           'Unavailable'}</span
       >
     {/if}
-    <TimelinePhases
-      phases={report.bossTimeline && report.bossTimeline.fightId === report.fights?.[0]?.fightId
-        ? report.bossTimeline.phases
-        : (report.fights?.[0]?.phases ?? [])}
-      {axisDuration}
-    />
+    <TimelinePhases {phases} {axisDuration} />
     {#if !timeline && endTime > 0}
       <span
         class="known-duration"

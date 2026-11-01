@@ -17,6 +17,48 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('ranking cooldown comparison', () => {
+  it('uses an external linked boss fight, fits its phases and preserves player timings', async () => {
+    const linkedReport = {
+      ...rows[0].report,
+      reportId: 'LinkedReport',
+      title: 'Linked report',
+      duration: 400000,
+      fights: [{ ...rows[0].report.fights[0], fightId: 30, duration: 400000 }],
+      players: []
+    };
+    vi.mocked(getBossTimeline).mockImplementation(async (report) => ({
+      ...bossResponse(report),
+      duration: report.reportId === 'LinkedReport' ? 400000 : 240000,
+      phases: [{ id: 2, timestamp: report.reportId === 'LinkedReport' ? 280000 : 60000 }]
+    }));
+    const { container } = render(RankingsTimeline, {
+      reports: rows.map(row => ({
+        ...row,
+        report: {
+          ...row.report,
+          fights: [{ ...row.report.fights[0], phases: [{ id: 3, timestamp: 20000 }] }]
+        }
+      })),
+      linkedReport,
+      edition: 'anniversary'
+    });
+    await waitFor(() => expect(getBossTimeline).toHaveBeenCalledWith(
+      linkedReport, 'anniversary', expect.any(AbortSignal)
+    ));
+    const phase = await screen.findByRole('img', { name: 'Phase 2 at 4:40' });
+    expect(phase.closest('.boss-row')).not.toBeNull();
+    expect(phase).toHaveStyle({ left: '70%' });
+    expect(container.querySelector('.axis .end-label')).toHaveTextContent('6:40');
+    expect(container.querySelectorAll('.player-row')).toHaveLength(rows.length);
+    expect(container.querySelector('.player-row .phase')).toHaveAttribute(
+      'aria-label', 'Phase 3 at 0:20'
+    );
+    expect(container.querySelector('.player-row .phase[aria-label="Phase 2 at 4:40"]')).toBeNull();
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Use as boss reference' })[0]);
+    await screen.findByRole('img', { name: 'Reference fight end at 4:00' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Use linked fight as reference' }));
+    expect(await screen.findByRole('img', { name: 'Phase 2 at 4:40' })).toBeInTheDocument();
+  });
   it('shows opt-in self-use mana events above the original timeline without adding rows', async () => {
     const report = {
       ...rows[0].report,
@@ -403,7 +445,7 @@ describe('ranking cooldown comparison', () => {
       edition: 'anniversary'
     });
     await fireEvent.mouseEnter(container.querySelector('.boss-event')!);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('No recorded result');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('No direct damage/healing match');
     expect(screen.getByRole('tooltip')).not.toHaveTextContent('Missed / avoided');
   });
 

@@ -19,5 +19,9 @@ public sealed record RotationAnalysisResult
     public int Score { get; init; }
     public required List<string> Notes { get; init; }
     public required List<RotationAbilitySummary> AbilitySummary { get; init; }
+    public IReadOnlyList<RotationDamageSummary> DamageSummary { get; init; } = [];
     public required List<RotationEventPoint> RotationTimeline { get; init; }
+    public IReadOnlyList<TimelinePhase> Phases { get; init; } = [];
+    public IReadOnlyList<RotationPhaseSummary> PhaseSummaries { get; init; } = [];
+    public IReadOnlyList<RotationSpellMetadata> SpellMetadata { get; init; } = [];
 }

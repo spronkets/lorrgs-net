@@ -13,6 +13,7 @@
 
   export let rankings: SpecRankingData | null = null;
   export let edition = '';
+  export let linkedReport: RankingReport | null = null;
   export let bossIconName: string | undefined = undefined;
 
   let filters: RankingFilters = emptyFilters();
@@ -140,6 +141,7 @@
   {#key `${edition}:${rankings?.specSlug}:${rankings?.bossSlug}:${rankings?.updated}`}
     <RankingsTimeline
       reports={visibleReports}
+      {linkedReport}
       {edition}
       bossSlug={rankings?.bossSlug ?? ''}
       {bossIconName}

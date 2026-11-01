@@ -9,5 +9,6 @@ public sealed record RotationAnalysisRequest
     public string? PlayerName { get; init; }
     public int? ParsePercentile { get; init; }
     public int? ItemLevel { get; init; }
+    public bool AutoResolveParsePercentile { get; init; }
     public int EventLimit { get; init; } = 5000;
 }

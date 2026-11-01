@@ -3,6 +3,7 @@
 </script>
 
 <script lang="ts">
+  import { Skull } from '@lucide/svelte';
   import { detectPortraitColor, portraitArtworkLayout } from '../portraitColor';
   import { getBossPortraitUrl } from '../bossPortraits';
   import { getWowheadCdnIconUrl } from '../selectionIcons';
@@ -12,9 +13,10 @@
     iconName?: string | null;
     alt?: string;
     size?: number;
+    fallback?: 'wowhead' | 'skull';
   };
 
-  let { slug, iconName, alt = '', size = 30 }: Props = $props();
+  let { slug, iconName, alt = '', size = 30, fallback = 'wowhead' }: Props = $props();
   const gradientId = $props.id();
   const src = $derived(
     iconName
@@ -23,7 +25,11 @@
         : iconName.startsWith('ui-ej-')
           ? `https://wow.zamimg.com/images/wow/journal/${iconName}`
           : getWowheadCdnIconUrl(iconName, 'medium')
-      : getBossPortraitUrl(slug)
+      : (() => {
+          const portrait = getBossPortraitUrl(slug);
+          if (fallback === 'skull' && portrait.endsWith('/boss.gif')) return '';
+          return portrait;
+        })()
   );
   let failedSource = $state<string | null>(null);
   let detected = $state<{
@@ -197,6 +203,26 @@
       }}
     />
   </span>
+{:else if fallback === 'skull'}
+  <span
+    class="boss-portrait boss-fallback-portrait"
+    style={`width: ${size}px; height: ${size}px`}
+    aria-hidden={alt ? undefined : 'true'}
+  >
+    <svg class="boss-rays" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+      <defs>
+        <radialGradient id={`${gradientId}-fallback`} cx="50%" cy="45%" r="70%">
+          <stop offset="0%" stop-color="color-mix(in srgb, var(--boss-accent) 55%, white)" />
+          <stop offset="45%" stop-color="color-mix(in srgb, var(--boss-accent) 55%, #273245)" />
+          <stop offset="100%" stop-color="color-mix(in srgb, var(--boss-accent) 45%, #06080f)" />
+        </radialGradient>
+      </defs>
+      <rect width="100" height="100" fill={`url(#${gradientId}-fallback)`} />
+    </svg>
+    <span class="boss-fallback-icon">
+      <Skull size={Math.max(12, Math.floor(size * 0.56))} />
+    </span>
+  </span>
 {/if}
 
 <style>
@@ -248,5 +274,20 @@
     object-position: center bottom;
     transform: translateY(0.5px) scale(1.2);
     transform-origin: center bottom;
+  }
+
+  .boss-fallback-portrait {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    --boss-accent: #7b8995;
+  }
+
+  .boss-fallback-icon {
+    position: relative;
+    z-index: 1;
+    color: #e5e7eb;
+    filter: drop-shadow(0 1px 1px #0008);
   }
 </style>

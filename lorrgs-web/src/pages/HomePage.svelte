@@ -1,8 +1,10 @@
 <script lang="ts">
   import Alert from '../lib/components/Alert.svelte';
   import Spinner from '../lib/components/Spinner.svelte';
-  import { onMount, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import * as API from '../lib/api';
+  import { manualRankingReport, parseReportCodes, readReportOverview } from '../lib/manualReports';
+  import type { RankingReport } from '../lib/models/RankingReport';
   import type { SpecRankingData } from '../lib/models/SpecRankingData';
   import type { WorldDataSnapshot } from '../lib/models/WorldDataSnapshot';
   import type { WowClass } from '../lib/models/WowClass';
@@ -43,6 +45,49 @@
   let isSelectionCollapsed = false;
   let lastRankingsRequestKey = '';
   let hasHydratedQuery = false;
+  let linkedReport: RankingReport | null = null;
+  let linkedEncounterKey = '';
+  let linkedReportLoading = false;
+  let linkedReportError = '';
+  const linkedController = new AbortController();
+  onDestroy(() => linkedController.abort());
+
+  async function loadLinkedReport() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('reportCode');
+    const fightIdValue = params.get('fightId');
+    if (!code && !fightIdValue) return;
+    linkedReportLoading = true;
+    linkedEncounterKey = `${selectedVersion}|${selectedRaid}|${selectedBoss}`;
+    try {
+      const fightId = Number(fightIdValue);
+      if (!code || !Number.isSafeInteger(fightId) || fightId <= 0)
+        throw new Error('A linked boss reference requires a report code and a positive fight ID.');
+      const reportCode = parseReportCodes(code)[0];
+      const overview = readReportOverview(await API.lookupReport(reportCode, linkedController.signal));
+      if (linkedController.signal.aborted) return;
+      const fight = overview.fights.find((entry) => entry.id === fightId);
+      if (!fight) throw new Error('The linked boss fight was not found in this report.');
+      const raid = raids.find((entry) =>
+        entry.isAvailable !== false &&
+        getRaidBossOptions(entry).some((boss) => boss.id === fight.encounterID)
+      );
+      const boss = getRaidBossOptions(raid).find((entry) => entry.id === fight.encounterID);
+      if (!raid || !boss)
+        throw new Error('The linked encounter is not available in the selected edition.');
+      selectedRaid = raid.slug;
+      selectedBoss = boss.slug;
+      selectedSpec = params.get('spec') || selectedSpec;
+      linkedReport = manualRankingReport(overview, fight);
+      linkedEncounterKey = `${selectedVersion}|${selectedRaid}|${selectedBoss}`;
+    } catch (failure) {
+      if (linkedController.signal.aborted) return;
+      linkedReportError = failure instanceof Error ? failure.message : 'Unable to load linked boss reference.';
+      console.error('Linked boss reference failed:', failure);
+    } finally {
+      if (!linkedController.signal.aborted) linkedReportLoading = false;
+    }
+  }
 
   const versionOrder = EDITION_OPTIONS;
   const versions = versionOrder;
@@ -272,18 +317,39 @@
   onMount(async () => {
     const shouldAutoLoad = loadSelectionsFromQuery();
     isSelectionCollapsed = shouldAutoLoad;
-    hasHydratedQuery = true;
+    const params = new URLSearchParams(window.location.search);
+    const hasLinkedReport = params.has('reportCode') || params.has('fightId');
+    if (!hasLinkedReport) hasHydratedQuery = true;
 
     // Wait one microtask so derived selections settle before loading.
     await tick();
+    if (hasLinkedReport) {
+      await loadLinkedReport();
+      if (linkedController.signal.aborted) return;
+      await tick();
+      isSelectionCollapsed = Boolean(selectedBoss && selectedSpec);
+      hasHydratedQuery = true;
+    }
 
-    if (shouldAutoLoad && selectedBoss && selectedSpec) {
+    if (shouldAutoLoad && selectedBoss && selectedSpec && !linkedReportError) {
       void loadRankings();
     }
   });
 
-  $: if (hasHydratedQuery && selectedBoss && selectedSpec) {
+  $: if (hasHydratedQuery && selectedBoss && selectedSpec && !linkedReportError) {
     void loadRankings();
+  }
+
+  $: if (
+    hasHydratedQuery && (linkedReport || linkedReportError) &&
+    linkedEncounterKey !== `${selectedVersion}|${selectedRaid}|${selectedBoss}`
+  ) {
+    linkedReport = null;
+    linkedReportError = '';
+    const url = new URL(window.location.href);
+    for (const key of ['reportCode', 'fightId', 'sourceId', 'playerName', 'autoAnalyze'])
+      url.searchParams.delete(key);
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
   }
 
   $: if (typeof window !== 'undefined' && hasHydratedQuery) {
@@ -300,6 +366,12 @@
     title="Spec Rankings"
     description="Compare cooldown usage across ranked players of a chosen specialization."
   />
+  {#if linkedReportLoading}
+    <div role="status"><Spinner inline />Loading linked boss reference...</div>
+  {/if}
+  {#if linkedReportError}
+    <Alert variant="error">{linkedReportError}</Alert>
+  {/if}
   {#if isSelectionCollapsed && selectedSpecMeta && selectedBoss}
     <div class={`selection-collapsed class-accent ${getSpecClassSlug(selectedSpecMeta)}`}>
       <p class="label">Current Selection</p>
@@ -406,7 +478,7 @@
     {:else if rankingsError}
       <Alert variant="error">{rankingsError}</Alert>
     {:else if rankings}
-      <RankingsList {rankings} edition={selectedEditionSlug} bossIconName={selectedBossIconName} />
+      <RankingsList {rankings} {linkedReport} edition={selectedEditionSlug} bossIconName={selectedBossIconName} />
     {:else if selectedBoss && selectedSpec && lastRankingsRequestKey}
       <Alert>No rankings found for this selection</Alert>
     {/if}

@@ -154,13 +154,30 @@
       )
   );
   const details = $derived(
-    [...activeEvents]
-      .sort(
-        (a, b) =>
-          Math.abs(a.timestamp - (magnifier?.timestamp ?? 0)) -
-          Math.abs(b.timestamp - (magnifier?.timestamp ?? 0))
-      )
-      .sort((a, b) => Number(b.kind === 'buff') - Number(a.kind === 'buff'))
+    (() => {
+      const sorted = [...activeEvents]
+        .sort(
+          (a, b) =>
+            Math.abs(a.timestamp - (magnifier?.timestamp ?? 0)) -
+            Math.abs(b.timestamp - (magnifier?.timestamp ?? 0))
+        )
+        .sort((a, b) => Number(b.kind === 'buff') - Number(a.kind === 'buff'));
+      const rows: { event: (typeof sorted)[number]; repeatCount: number }[] = [];
+      const indexByKey = new Map<string, number>();
+      for (const event of sorted) {
+        if (magnifier?.boss && event.kind === 'cast' && !event.castResults?.length) {
+          const key = `${event.kind}|${event.spellId}|${event.timestamp}|${event.castStart ?? ''}|${event.duration ?? ''}|${event.sourceName ?? ''}`;
+          const existing = indexByKey.get(key);
+          if (existing != null) {
+            rows[existing].repeatCount += 1;
+            continue;
+          }
+          indexByKey.set(key, rows.length);
+        }
+        rows.push({ event, repeatCount: 1 });
+      }
+      return rows;
+    })()
   );
 </script>
 
@@ -288,7 +305,8 @@
       <span>{timelineTime(start)}</span><span>{timelineTime(start + span)}</span>
     </div>
     <ul class="event-details">
-      {#each details as event, index (index)}
+      {#each details as row, index (index)}
+        {@const event = row.event}
         {@const healthEvent =
           event.kind === 'heal' || event.kind === 'hot' || event.kind === 'damage'}
         {@const spell = magnifier.timeline.spells.find((spell) => spell.id === event.spellId)}
@@ -310,9 +328,9 @@
           magnifier.timestamp < event.timestamp + (event.duration ?? 0)}
         <li
           class:ability-group={event.kind !== 'buff' &&
-            (index === 0 || details[index - 1].kind === 'buff')}
+            (index === 0 || details[index - 1].event.kind === 'buff')}
         >
-          {#if index === 0 || (event.kind !== 'buff' && details[index - 1].kind === 'buff')}
+          {#if index === 0 || (event.kind !== 'buff' && details[index - 1].event.kind === 'buff')}
             <strong class="detail-group-label"
               >{event.kind === 'buff' ? 'Buffs' : 'Abilities'}</strong
             >
@@ -326,9 +344,12 @@
                   : parts[0]}
             </span>
             <span class="detail-name">
-              {parts[1]}{#if event.sourceName}<span class="health-source"
+              {parts[1]}{#if event.sourceName && event.sourceName !== magnifier.timeline.playerName}<span class="health-source"
                   >{` (${event.sourceName})`}</span
                 >{/if}
+              {#if row.repeatCount > 1}
+                <span>{` ×${row.repeatCount}`}</span>
+              {/if}
               {#if manaCost > 0}<span class="mana-cost mana-loss"
                   >{` -${manaCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}</span
                 >{/if}
@@ -399,8 +420,8 @@
                     </span>
                   {/each}
                   {#if magnifier.boss && !event.castResults?.length}
-                    <span title="No damage or healing event could be matched to this cast in the fetched log. This is not a recorded zero or confirmed miss.">
-                      No recorded result
+                    <span title="No direct damage or healing event was matched to this cast in the fetched log. Some mechanics apply effects through separate debuff/buff events or under different ability IDs.">
+                      No direct damage/healing match
                     </span>
                   {/if}
                 </span>

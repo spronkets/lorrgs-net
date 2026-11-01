@@ -69,7 +69,8 @@ public sealed class WarcraftLogsHandlerTests : IDisposable
         using var handler = new QueueHandler("""
             {"data":{"reportData":{"report":{"fights":[{"id":1,"name":"Boss","startTime":0,"endTime":60000}],
             "masterData":{"actors":[{"id":7,"name":"Player","subType":"Holy"}]}}}}}
-            """, """{"data":{"reportData":{"report":{"events":{"data":[]}}}}}""");
+            """, """{"data":{"reportData":{"report":{"events":{"data":[]}}}}}""",
+            """{"data":{"reportData":{"report":{"events":{"data":[]}}}}}""");
 
         var response = HttpResultAssertions.Status(200, await Handlers(handler).Analyze.Handle(
             new() { ReportCode = "abc", FightId = 1, SourceId = 7 }));

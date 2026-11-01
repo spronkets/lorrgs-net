@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import TimelineRow from './TimelineRow.svelte';
-import { rows, response } from '../testing/timelineFixtures';
+import { bossResponse, rows, response } from '../testing/timelineFixtures';
 import { TIMELINE_ZOOM_LEVELS } from '../timelineUtils';
 
 function props() {
@@ -25,6 +25,23 @@ function props() {
 }
 
 describe('TimelineRow', () => {
+  it('rejects another report’s boss phases even when the fight IDs match', async () => {
+    const input = props();
+    const report = {
+      ...input.report,
+      fights: [{ ...input.report.fights[0], phases: [{ id: 3, timestamp: 20000 }] }],
+      bossTimeline: { ...bossResponse(input.report), reportCode: 'DifferentReport' }
+    };
+    const { rerender } = render(TimelineRow, { ...input, report });
+    expect(screen.getByRole('img', { name: 'Phase 3 at 0:20' })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Phase 2 at 1:00' })).not.toBeInTheDocument();
+    await rerender({
+      ...input,
+      report: { ...report, bossTimeline: bossResponse(input.report) }
+    });
+    expect(screen.getByRole('img', { name: 'Phase 2 at 1:00' })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Phase 3 at 0:20' })).not.toBeInTheDocument();
+  });
   it('links the player name to their profile separately from the report', () => {
     const input = props();
     render(TimelineRow, {

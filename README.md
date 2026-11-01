@@ -18,7 +18,9 @@ cached to reduce external requests.
   wipes without searching rankings.
 - **Shared timelines:** compare player abilities, received effects, boss casts,
   and observed phases; filter spells, zoom, and export MRT or NSRT raid notes.
-- **Tools:** browse World Data or inspect casts with the Rotation Analyzer.
+- **Tools:** browse World Data or inspect casts with the Rotation Analyzer, including
+  phase-aware rotation summaries, role-aware throughput highlights (damage/healing),
+  and cooldown windows.
 - Share encounter and report selections through URLs.
 
 > **Use timings as a reference.** Another player's cast sequence is not a universal

@@ -64,18 +64,43 @@
   let loading = $state(false);
   let error = $state('');
   let attempt = $state(0);
+  let showActorRows = $state(false);
   const previewTimeline = $derived(timeline ? {
     ...timeline,
     sourceId: 0,
     playerName: timeline.name
   } : null);
-  const events = $derived(previewTimeline ? withResourceLanes(
+  const allEvents = $derived(previewTimeline ? withResourceLanes(
     visibleTimelineEvents(previewTimeline, hidden, {
       showCasts, showBuffs, showDeaths, showDirectHeals, showHots, showDamageTaken, showManaReceived
     }), previewTimeline.spells, previewTimeline.events, showReceivedBuffs, previewTimeline.playerName
   ) : []);
-  const height = $derived(events.some((event) => event.displayBelow) ? 108 : 68);
-  function updateMagnifier(mouse: MouseEvent) {
+  const actorRows = $derived.by(() => {
+    if (!timeline) return [] as Array<{ name: string; events: typeof allEvents }>;
+    const rows = new Map<string, typeof allEvents>();
+    for (const event of allEvents) {
+      const source = event.sourceName?.trim();
+      if (!source || source === timeline.name) continue;
+      const grouped = rows.get(source);
+      if (grouped) grouped.push(event);
+      else rows.set(source, [event]);
+    }
+    return [...rows.entries()]
+      .map(([name, events]) => ({ name, events }))
+      .filter((row) => row.events.length > 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  });
+  const bossEvents = $derived.by(() => {
+    if (!timeline || actorRows.length === 0) return allEvents;
+    return allEvents.filter((event) => {
+      const source = event.sourceName?.trim();
+      return !source || source === timeline.name;
+    });
+  });
+  function rowHeight(events: typeof allEvents): number {
+    return events.some((event) => event.displayBelow) ? 108 : 68;
+  }
+  function updateMagnifier(mouse: MouseEvent, rowEvents: typeof allEvents) {
     if (!previewTimeline || !(mouse.currentTarget instanceof HTMLElement) ||
         zoom === TIMELINE_ZOOM_LEVELS.at(-1)) {
       magnifier = null;
@@ -88,10 +113,10 @@
     magnifier = {
       timeline: previewTimeline,
       boss: true,
-      events,
+      events: rowEvents,
       mergedResources: true,
       hoveredEvent: eventElement
-        ? events[Number(eventElement.getAttribute('data-event-index'))] : undefined,
+        ? rowEvents[Number(eventElement.getAttribute('data-event-index'))] : undefined,
       phases: timeline?.phases,
       showIcons,
       ...timelinePreview(track.getBoundingClientRect(), mouse.clientX,
@@ -100,6 +125,14 @@
       y: mouse.clientY
     };
   }
+  $effect(() => {
+    void timeline?.reportCode;
+    void timeline?.fightId;
+    showActorRows = false;
+  });
+  $effect(() => {
+    if (actorRows.length === 0) showActorRows = false;
+  });
   $effect(() => {
     const current = report;
     const currentEdition = edition;
@@ -134,23 +167,10 @@
   });
 </script>
 
-<div class="boss-row" aria-label="Boss reference timeline">
-  {#if !compositionMode}
-  <div class="position-placeholder" aria-hidden="true">
-    <Skull size={20} aria-hidden="true" />
-  </div>
-  {/if}
-  <div class="identity">
-    <div class="boss-heading"
-      title="Boss abilities and phases from the selected reference report."
-    >
-      <BossIcon slug={bossSlug} iconName={bossIconName} size={24} />
-      <span>{timeline?.name || report.fights?.[0]?.name || 'Boss'}</span>
-    </div>
-  </div>
-  <div class="track" role="group" aria-label="Boss ability timeline"
-    style:height={`${height}px`}
-    onmousemove={updateMagnifier}
+{#snippet renderTrack(rowEvents, label, rowKey, showPhases, showEmptyState)}
+  <div class="track" role="group" aria-label={label}
+    style:height={`${rowHeight(rowEvents)}px`}
+    onmousemove={(mouse) => updateMagnifier(mouse, rowEvents)}
     onblur={() => { if (magnifier) magnifier = null; }}
     onmouseout={(mouse) => {
       if (!(mouse.relatedTarget instanceof Node) || !mouse.currentTarget.contains(mouse.relatedTarget))
@@ -176,55 +196,59 @@
         </Alert>
       </div>
     {:else if timeline}
-      <TimelinePhases phases={timeline.phases} {axisDuration} />
+      {#if showPhases}
+        <TimelinePhases phases={timeline.phases} {axisDuration} />
+      {/if}
       {#if magnifier?.timeline.reportCode === timeline.reportCode &&
-        magnifier.timeline.fightId === timeline.fightId && magnifier.timeline.sourceId === 0}
+        magnifier.timeline.fightId === timeline.fightId &&
+        magnifier.timeline.sourceId === 0 &&
+        magnifier.events === rowEvents}
         <span class="magnified-section"
           style={`left: ${magnifier.start / axisDuration * 100}%; width: ${magnifier.span / axisDuration * 100}%`}
           aria-hidden="true"></span>
       {/if}
-        {#each events as event, index (index)}
-          {@const spell = timeline.spells.find((item) => item.id === event.spellId)}
-          {@const title = event.kind === 'cast'
-            ? `${timelineTime(event.timestamp)} · ${spell?.name || `Spell ${event.spellId}`}`
-            : timelineEventDetail(event, spell)}
-          {@const color = resourceEventColor(event, spell) ?? spellAppearance(spell, event.kind === 'cast').color}
-          {#if event.kind === 'cast' || isResourceHit(event) || event.displayBelow}
-            <span class="cast-connectors"
-              class:below={event.displayBelow}
-              class:instant={event.castStart == null || event.castStart === event.timestamp}
-              style={`--spell-color: ${color}; left: ${(event.castStart ?? event.timestamp) / axisDuration * 100}%; width: ${(event.timestamp - (event.castStart ?? event.timestamp)) / axisDuration * 100}%; top: ${event.displayBelow ? 47 : timelineEventTop(event)}px`}
-              aria-hidden="true"></span>
+      {#each rowEvents as event, index (`${rowKey}-${index}`)}
+        {@const spell = timeline.spells.find((item) => item.id === event.spellId)}
+        {@const title = event.kind === 'cast'
+          ? `${timelineTime(event.timestamp)} · ${spell?.name || `Spell ${event.spellId}`}`
+          : timelineEventDetail(event, spell)}
+        {@const color = resourceEventColor(event, spell) ?? spellAppearance(spell, event.kind === 'cast').color}
+        {#if event.kind === 'cast' || isResourceHit(event) || event.displayBelow}
+          <span class="cast-connectors"
+            class:below={event.displayBelow}
+            class:instant={event.castStart == null || event.castStart === event.timestamp}
+            style={`--spell-color: ${color}; left: ${(event.castStart ?? event.timestamp) / axisDuration * 100}%; width: ${(event.timestamp - (event.castStart ?? event.timestamp)) / axisDuration * 100}%; top: ${event.displayBelow ? 47 : timelineEventTop(event)}px`}
+            aria-hidden="true"></span>
+        {/if}
+        {#if event.kind === 'cast' && event.castStart != null || event.displayBelow && event.kind === 'buff'}
+          {@const start = event.castStart ?? event.timestamp}
+          {@const end = event.kind === 'buff' ? event.timestamp + (event.duration ?? 0) : event.timestamp}
+          <span class="cast-window"
+            style={`left: ${start / axisDuration * 100}%; width: ${(end - start) / axisDuration * 100}%; --spell-color: ${color}`}
+            aria-label={title}></span>
+        {/if}
+        <button
+          class={['button', ['boss-timeline-row-button', 'boss-event',
+            { buff: event.kind === 'buff' && !event.displayBelow, death: event.kind === 'death',
+              'cast-icon': event.kind === 'cast' || isResourceHit(event) || event.displayBelow }]]}
+          data-tone="unstyled"
+          data-outline="false"
+          data-size="medium"
+          type="button"
+          data-event-index={index}
+          onmouseenter={(mouse) => updateMagnifier(mouse, rowEvents)}
+          style={`left: ${(event.timestamp / axisDuration) * 100}%; top: ${timelineEventTop(event)}px; width: ${event.kind === 'buff' && !event.displayBelow ? `max(2px, ${(event.duration ?? 0) / axisDuration * 100}%)` : event.kind === 'death' ? '2px' : '22px'}; --spell-color: ${color}`}
+          aria-label={title}
+        >
+          {#if event.kind === 'death'}
+            <span aria-hidden="true">†</span>
+          {:else if event.kind !== 'buff' || event.displayBelow}
+          {#if showIcons && spellIconUrl(spell?.icon ?? null)}
+            <img src={spellIconUrl(spell?.icon ?? null)} alt="" loading="lazy" />
+          {:else}<span aria-hidden="true">◆</span>{/if}
           {/if}
-          {#if event.kind === 'cast' && event.castStart != null || event.displayBelow && event.kind === 'buff'}
-            {@const start = event.castStart ?? event.timestamp}
-            {@const end = event.kind === 'buff' ? event.timestamp + (event.duration ?? 0) : event.timestamp}
-            <span class="cast-window"
-              style={`left: ${start / axisDuration * 100}%; width: ${(end - start) / axisDuration * 100}%; --spell-color: ${color}`}
-              aria-label={title}></span>
-          {/if}
-          <button
-            class={['button', ['boss-timeline-row-button', 'boss-event',
-              { buff: event.kind === 'buff' && !event.displayBelow, death: event.kind === 'death',
-                'cast-icon': event.kind === 'cast' || isResourceHit(event) || event.displayBelow }]]}
-            data-tone="unstyled"
-            data-outline="false"
-            data-size="medium"
-            type="button"
-            data-event-index={index}
-            onmouseenter={updateMagnifier}
-            style={`left: ${(event.timestamp / axisDuration) * 100}%; top: ${timelineEventTop(event)}px; width: ${event.kind === 'buff' && !event.displayBelow ? `max(2px, ${(event.duration ?? 0) / axisDuration * 100}%)` : event.kind === 'death' ? '2px' : '22px'}; --spell-color: ${color}`}
-            aria-label={title}
-          >
-            {#if event.kind === 'death'}
-              <span aria-hidden="true">†</span>
-            {:else if event.kind !== 'buff' || event.displayBelow}
-            {#if showIcons && spellIconUrl(spell?.icon ?? null)}
-              <img src={spellIconUrl(spell?.icon ?? null)} alt="" loading="lazy" />
-            {:else}<span aria-hidden="true">◆</span>{/if}
-            {/if}
-          </button>
-        {/each}
+        </button>
+      {/each}
       <span
         class="fight-end"
         style={`left: min(calc(100% - 2px), ${(timeline.duration / axisDuration) * 100}%)`}
@@ -233,15 +257,66 @@
       >
         <span>{timelineTime(timeline.duration)}</span>
       </span>
-      {#if !timeline.isComplete}<div class="incomplete">
-          <Alert variant="warning" compact>Partial boss timeline — event limit reached</Alert>
-        </div>
-      {:else if timeline.events.length === 0}<div class="message">
+      {#if showEmptyState && timeline.events.length === 0}
+        <div class="message">
           <Alert compact>No enemy events were recorded for this fight.</Alert>
-        </div>{/if}
+        </div>
+      {/if}
     {/if}
   </div>
+{/snippet}
+
+<div class="boss-row" aria-label="Boss reference timeline">
+  {#if !compositionMode}
+  <div class="position-placeholder" aria-hidden="true">
+    <Skull size={20} aria-hidden="true" />
+  </div>
+  {/if}
+  <div class="identity">
+    <div class="boss-heading"
+      title="Boss abilities and phases from the selected reference report."
+    >
+      <BossIcon slug={bossSlug} iconName={bossIconName} size={24} />
+      <span>{timeline?.name || report.fights?.[0]?.name || 'Boss'}</span>
+    </div>
+    {#if actorRows.length > 0}
+      <button
+        class="button actor-toggle"
+        type="button"
+        data-tone="neutral"
+        data-outline="true"
+        data-size="small"
+        aria-expanded={showActorRows}
+        aria-controls="boss-add-rows"
+        onclick={() => showActorRows = !showActorRows}
+      >
+        {showActorRows ? 'Hide' : 'Show'} other enemies ({actorRows.length})
+      </button>
+    {/if}
+    {#if timeline && !timeline.isComplete}
+      <div class="identity-warning">
+        <Alert variant="warning" compact>Partial boss timeline — event limit reached</Alert>
+      </div>
+    {/if}
+  </div>
+  {@render renderTrack(bossEvents, 'Boss ability timeline', 'boss-main', true, true)}
 </div>
+
+{#if showActorRows}
+  <div id="boss-add-rows">
+    {#each actorRows as actor (actor.name)}
+      <div class="boss-row boss-add-row" aria-label={`Boss add timeline row for ${actor.name}`}>
+        {#if !compositionMode}
+          <div class="position-placeholder" aria-hidden="true"></div>
+        {/if}
+        <div class="identity add-identity">
+          <span class="add-name">{actor.name}</span>
+        </div>
+        {@render renderTrack(actor.events, `Enemy ability timeline for ${actor.name}`, actor.name, false, false)}
+      </div>
+    {/each}
+  </div>
+{/if}
 
 <style>
   .boss-row {
@@ -280,7 +355,10 @@
   }
   .identity {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 4px;
     width: var(--timeline-identity-width, 220px);
     flex-shrink: 0;
     padding: 6px 8px;
@@ -297,6 +375,23 @@
     color: var(--text);
     font-size: 13px;
     font-weight: 600;
+  }
+  :global(.actor-toggle.button) {
+    font-size: 11px;
+    line-height: 1.25;
+  }
+  .boss-add-row .position-placeholder {
+    background: var(--panel-subtle);
+  }
+  .add-identity {
+    background: var(--panel-subtle);
+  }
+  .add-name {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .identity-warning {
+    margin-top: 4px;
   }
   .track {
     position: relative;
@@ -417,10 +512,5 @@
     bottom: 2px;
     color: var(--muted);
     font: 10px monospace;
-  }
-  .incomplete {
-    position: absolute;
-    bottom: 0;
-    left: 8px;
   }
 </style>

@@ -84,17 +84,13 @@ it('validates manual lookup and analysis inputs, then renders resolved and fallb
     }
   });
   await fireEvent.click(screen.getByRole('button', { name: 'Lookup Report' }));
-  expect(await screen.findByRole('option', { name: 'Second Boss (ID 4)' })).toBeInTheDocument();
+  await fireEvent.click(await screen.findByRole('button', { name: 'Fight' }));
+  const secondBossOption = await screen.findByRole('option', { name: 'Second Boss (ID 4)' });
+  expect(secondBossOption).toBeInTheDocument();
+  await fireEvent.click(secondBossOption);
   expect(API.lookupReport).toHaveBeenCalledWith('ReportB');
 
   await fireEvent.change(screen.getByLabelText('Player'), { target: { value: '8' } });
-  await fireEvent.change(screen.getByLabelText('Fight'), { target: { value: '4' } });
-  await fireEvent.input(screen.getByLabelText('Parse Percentile (optional)'), {
-    target: { value: '95' }
-  });
-  await fireEvent.input(screen.getByLabelText('Item Level (optional)'), {
-    target: { value: '520' }
-  });
   vi.mocked(API.analyzeRotation).mockResolvedValue({
     verdict: 'Good',
     score: 90,
@@ -121,9 +117,9 @@ it('validates manual lookup and analysis inputs, then renders resolved and fallb
 
   await fireEvent.click(screen.getByRole('button', { name: 'Analyze Rotation' }));
   await waitFor(() => expect(WorldDataApi.getSpell).toHaveBeenCalledWith(123, 'retail'));
-  await waitFor(() => expect(container.querySelector('.table')).toHaveTextContent('Unknown Spell'));
-  expect(screen.getByText('Unknown Spell (#123)')).toBeInTheDocument();
-  expect(screen.getByText('Unknown Spell (#456)')).toBeInTheDocument();
+  await waitFor(() => expect(container.querySelector('.table')).toHaveTextContent('Spell 123'));
+  expect(screen.getByText('Spell 123 (#123)')).toBeInTheDocument();
+  expect(screen.getByText('Spell 456 (#456)')).toBeInTheDocument();
   expect(screen.getByText('Auto Attack')).toBeInTheDocument();
   expect(screen.getByText('Unknown')).toBeInTheDocument();
   expect(screen.getByText('30.0s')).toBeInTheDocument();
@@ -133,8 +129,9 @@ it('validates manual lookup and analysis inputs, then renders resolved and fallb
     reportCode: 'ReportB',
     fightId: 4,
     sourceId: 8,
-    parsePercentile: 95,
-    itemLevel: 520,
+    parsePercentile: null,
+    itemLevel: null,
+    autoResolveParsePercentile: true,
     eventLimit: 5000
   });
   expect(WorldDataApi.getSpell).toHaveBeenCalledTimes(2);
@@ -183,13 +180,14 @@ it('resolves linked actors by explicit ID, applies query filters, and falls back
 
   render(RotationAnalyzerPage);
 
-  expect(await screen.findByText('Unknown Spell (#901)')).toBeInTheDocument();
+  expect(await screen.findByText(/#901/)).toBeInTheDocument();
   expect(API.analyzeRotation).toHaveBeenCalledWith({
     reportCode: 'ReportC',
     fightId: 3,
     sourceId: 8,
     parsePercentile: 88,
     itemLevel: 515,
+    autoResolveParsePercentile: true,
     eventLimit: 5000
   });
   expect(WorldDataApi.getSpell).toHaveBeenCalledWith(901, 'retail');
@@ -234,4 +232,68 @@ it('handles API analysis failures and empty ability summaries', async () => {
   vi.mocked(API.analyzeRotation).mockRejectedValueOnce('failed');
   await fireEvent.click(screen.getByRole('button', { name: 'Analyze Rotation' }));
   expect(await screen.findByText('Failed to analyze rotation')).toBeInTheDocument();
+});
+
+it('renders phase-aware rotation summaries with per-phase cooldown windows', async () => {
+  window.history.replaceState({}, '', '/');
+  lookup([{ id: 8, name: 'Alice' }]);
+  render(RotationAnalyzerPage);
+  await fireEvent.input(screen.getByPlaceholderText('e.g. abcDEF123xyz'), {
+    target: { value: 'ReportF' }
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Lookup Report' }));
+  await screen.findByLabelText('Player');
+
+  vi.mocked(API.analyzeRotation).mockResolvedValueOnce({
+    verdict: 'optimal',
+    score: 88,
+    playerName: 'Alice',
+    roleHint: 'dps',
+    specHint: 'Paladin',
+    fightName: 'Boss',
+    castsPerMinute: 35,
+    notes: ['Phase-aware rotation summary generated across 2 phases.'],
+    abilitySummary: [],
+    damageSummary: [
+      { spellId: 31884, ability: 'Spell:31884', totalDamage: 125000, hitCount: 2, sharePercent: 18.4 }
+    ],
+    phaseSummaries: [
+      {
+        phaseId: 1,
+        startSeconds: 0,
+        endSeconds: 40,
+        durationSeconds: 40,
+        castCount: 25,
+        castsPerMinute: 37.5,
+        rotationPattern: 'spell #20271 → spell #20375 → wait → spell #35395',
+        topAbilities: [{ spellId: 20271, castCount: 8, sharePercent: 32 }],
+        cooldownSpellIds: [31884]
+      },
+      {
+        phaseId: 2,
+        startSeconds: 40,
+        endSeconds: 80,
+        durationSeconds: 40,
+        castCount: 20,
+        castsPerMinute: 30,
+        rotationPattern: 'spell #20271 → spell #20375 → spell #31892',
+        topAbilities: [{ spellId: 31892, castCount: 10, sharePercent: 50 }],
+        cooldownSpellIds: []
+      }
+    ]
+  });
+  vi.mocked(WorldDataApi.getSpell).mockResolvedValue({
+    name: 'Avenging Wrath',
+    icon: 'spell_holy_avenginewrath',
+    type: ''
+  });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Analyze Rotation' }));
+  expect(await screen.findByText('Phase-aware Rotation')).toBeInTheDocument();
+  expect(screen.getByText('P1')).toBeInTheDocument();
+  expect(screen.getByText('P2')).toBeInTheDocument();
+  expect(screen.getByText('spell #20271 → spell #20375 → wait → spell #35395')).toBeInTheDocument();
+  expect(screen.getByText('None detected')).toBeInTheDocument();
+  expect(screen.getByText('Top Damage Contribution')).toBeInTheDocument();
+  expect(screen.getAllByText(/#31884/).length).toBeGreaterThan(0);
 });

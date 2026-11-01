@@ -1,7 +1,11 @@
 <script lang="ts">
   import * as WorldDataApi from '../lib/worldDataApi';
+  import { getBossPortraitUrl } from '../lib/bossPortraits';
+  import { spellIconUrl } from '../lib/timelineUtils';
+  import { slugifyBossName } from '../lib/raidCatalog';
 
   import Alert from '../lib/components/Alert.svelte';
+  import BossSelector from '../lib/components/BossSelector.svelte';
   import Spinner from '../lib/components/Spinner.svelte';
 
   import { onMount } from 'svelte';
@@ -21,6 +25,50 @@
   let error = '';
   let analysis = null;
   let resolvedSpellNames: Record<number, string> = {};
+  let resolvedSpellIcons: Record<number, string | null> = {};
+
+  function formatClock(secondsValue: unknown): string {
+    const seconds = typeof secondsValue === 'number' && Number.isFinite(secondsValue) ? secondsValue : 0;
+    const rounded = Math.max(0, Math.round(seconds));
+    const minutes = Math.floor(rounded / 60);
+    const remainder = String(rounded % 60).padStart(2, '0');
+    return `${minutes}:${remainder}`;
+  }
+
+  function spellLabelById(spellId: number): string {
+    const resolved = resolvedSpellNames[spellId];
+    return resolved ? `${resolved} (#${spellId})` : `Spell #${spellId}`;
+  }
+
+  function spellIconById(spellId: number): string | null {
+    return resolvedSpellIcons[spellId] ?? null;
+  }
+
+  function throughputNoun(roleHint: unknown): string {
+    if (typeof roleHint !== 'string') {
+      return 'damage';
+    }
+
+    const normalized = roleHint.toLowerCase();
+    if (normalized === 'healer') {
+      return 'healing';
+    }
+
+    if (normalized === 'tank') {
+      return 'damage';
+    }
+
+    return 'damage';
+  }
+
+  function cooldownLabels(spellIds: unknown): string {
+    if (!Array.isArray(spellIds) || spellIds.length === 0) {
+      return 'None detected';
+    }
+
+    const normalized = spellIds.filter((value): value is number => typeof value === 'number');
+    return normalized.length ? normalized.map((spellId) => spellLabelById(spellId)).join(', ') : 'None detected';
+  }
 
   function parseSpellIdFromAbility(ability: unknown): number | null {
     if (typeof ability !== 'string') {
@@ -61,14 +109,14 @@
     }
 
     const resolved = resolvedSpellNames[spellId];
-    return resolved ? `${resolved} (#${spellId})` : `Unknown Spell (#${spellId})`;
+    return resolved ? `${resolved} (#${spellId})` : `Spell ${spellId} (#${spellId})`;
   }
 
   function formatAbilityRowLabel(row: unknown): string {
     const spellId = readSpellId(row);
     if (spellId) {
       const resolved = resolvedSpellNames[spellId];
-      return resolved ? `${resolved} (#${spellId})` : `Unknown Spell (#${spellId})`;
+      return resolved ? `${resolved} (#${spellId})` : `Spell ${spellId} (#${spellId})`;
     }
 
     const ability =
@@ -80,36 +128,97 @@
   }
 
   async function resolveSpellNamesFromAnalysis(): Promise<void> {
-    const rows = analysis?.abilitySummary;
-    if (!Array.isArray(rows) || rows.length === 0) {
+    const abilityRows = Array.isArray(analysis?.abilitySummary) ? analysis.abilitySummary : [];
+    const damageRows = Array.isArray(analysis?.damageSummary) ? analysis.damageSummary : [];
+    const phaseRows = Array.isArray(analysis?.phaseSummaries) ? analysis.phaseSummaries : [];
+    const metadataRows = Array.isArray(analysis?.spellMetadata) ? analysis.spellMetadata : [];
+    if (abilityRows.length === 0 && damageRows.length === 0 && phaseRows.length === 0) {
       resolvedSpellNames = {};
+      resolvedSpellIcons = {};
       return;
     }
 
     const spellIds = Array.from(
       new Set(
-        rows.map((row) => readSpellId(row)).filter((id): id is number => typeof id === 'number')
+        [
+          ...abilityRows.map((row) => readSpellId(row)),
+          ...damageRows.map((row) => readSpellId(row)),
+          ...phaseRows.flatMap((phase) =>
+            Array.isArray(phase?.topAbilities)
+              ? phase.topAbilities.map((row) => readSpellId(row))
+              : []
+          ),
+          ...phaseRows.flatMap((phase) =>
+            Array.isArray(phase?.topDamageAbilities)
+              ? phase.topDamageAbilities.map((row) => readSpellId(row))
+              : []
+          ),
+          ...phaseRows.flatMap((phase) =>
+            Array.isArray(phase?.cooldownSpellIds)
+              ? phase.cooldownSpellIds.filter((id): id is number => typeof id === 'number')
+              : []
+          )
+        ].filter((id): id is number => typeof id === 'number')
       )
     );
 
     if (spellIds.length === 0) {
       resolvedSpellNames = {};
+      resolvedSpellIcons = {};
+      return;
+    }
+
+    const namesFromMetadata: Record<number, string> = {};
+    const iconsFromMetadata: Record<number, string | null> = {};
+
+    for (const row of metadataRows) {
+      const spellId = readSpellId(row);
+      if (!spellId) {
+        continue;
+      }
+
+      const name =
+        row && typeof row === 'object' && 'name' in row ? (row as { name?: unknown }).name : null;
+      const icon =
+        row && typeof row === 'object' && 'icon' in row ? (row as { icon?: unknown }).icon : null;
+      const normalizedName = typeof name === 'string' ? name.trim() : '';
+      const normalizedIcon = typeof icon === 'string' && icon.trim() ? spellIconUrl(icon.trim()) : null;
+
+      namesFromMetadata[spellId] = normalizedName || `Spell ${spellId}`;
+      iconsFromMetadata[spellId] = normalizedIcon;
+    }
+
+    const unresolvedSpellIds = spellIds.filter((spellId) => !namesFromMetadata[spellId]);
+    if (unresolvedSpellIds.length === 0) {
+      resolvedSpellNames = namesFromMetadata;
+      resolvedSpellIcons = iconsFromMetadata;
       return;
     }
 
     const entries = await Promise.all(
-      spellIds.map(async (spellId) => {
+      unresolvedSpellIds.map(async (spellId) => {
         try {
-          const spell = (await WorldDataApi.getSpell(spellId, edition)) as { name?: string };
+          const spell = (await WorldDataApi.getSpell(spellId, edition)) as { name?: string; icon?: string };
           const name = typeof spell?.name === 'string' ? spell.name.trim() : '';
-          return [spellId, name || `Spell ${spellId}`] as const;
+          const icon =
+            typeof spell?.icon === 'string' && spell.icon.trim()
+              ? spellIconUrl(spell.icon.trim())
+              : null;
+          return [spellId, { name: name || `Spell ${spellId}`, icon }] as const;
         } catch {
-          return [spellId, `Spell ${spellId}`] as const;
+          return [spellId, { name: `Spell ${spellId}`, icon: null }] as const;
         }
       })
     );
 
-    resolvedSpellNames = Object.fromEntries(entries);
+    resolvedSpellNames = {
+      ...namesFromMetadata,
+      ...Object.fromEntries(entries.map(([spellId, value]) => [spellId, value.name]))
+    };
+    resolvedSpellIcons = {
+      ...iconsFromMetadata,
+      ...Object.fromEntries(entries.map(([spellId, value]) => [spellId, value.icon]))
+    };
   }
 
   async function initializeFromQuery() {
@@ -216,6 +325,7 @@
     loadingAnalysis = true;
     error = '';
     resolvedSpellNames = {};
+    resolvedSpellIcons = {};
 
     try {
       analysis = await API.analyzeRotation({
@@ -224,6 +334,7 @@
         sourceId: Number(selectedSourceId),
         parsePercentile: parsePercentile ? Number(parsePercentile) : null,
         itemLevel: itemLevel ? Number(itemLevel) : null,
+        autoResolveParsePercentile: true,
         eventLimit: 5000
       });
       await resolveSpellNamesFromAnalysis();
@@ -231,6 +342,7 @@
       error = err instanceof Error ? err.message : 'Failed to analyze rotation';
       analysis = null;
       resolvedSpellNames = {};
+      resolvedSpellIcons = {};
     } finally {
       loadingAnalysis = false;
     }
@@ -238,6 +350,16 @@
 
   $: fights = lookup?.reportData?.report?.fights || [];
   $: players = lookup?.reportData?.report?.masterData?.actors || [];
+  $: selectedFight = fights.find((fight) => String(fight.id) === selectedFightId) ?? null;
+  $: fightOptions = fights.map((fight) => {
+    const bossSlug = slugifyBossName(fight.name || '');
+    const iconUrl = getBossPortraitUrl(bossSlug);
+    return {
+      slug: String(fight.id),
+      name: `${fight.name} (ID ${fight.id})`,
+      iconName: typeof iconUrl === 'string' && !iconUrl.endsWith('/boss.gif') ? iconUrl : null
+    };
+  });
 
   onMount(() => {
     void initializeFromQuery();
@@ -279,52 +401,23 @@
 
   {#if lookup}
     <div class="panel grid">
-      <label>
-        Fight
-        <select bind:value={selectedFightId}>
-          {#each fights as fight (fight.id)}
-            <option value={String(fight.id)}>{fight.name} (ID {fight.id})</option>
-          {/each}
-        </select>
-      </label>
+      <BossSelector
+        label="Fight"
+        bosses={fightOptions}
+        bind:value={selectedFightId}
+        placeholder="Select a fight..."
+      />
 
       <label>
         Player
         <select bind:value={selectedSourceId}>
           {#each players as player (player.id)}
-            <option value={String(player.id)}>{player.name} [{player.subType || 'Unknown'}]</option>
+            <option value={String(player.id)}
+              >{player.name}{player.subType ? ` [${player.subType}]` : ''}</option
+            >
           {/each}
         </select>
       </label>
-
-      <div class="form-field">
-        <label for="rotationanalyzerpage-field-2">Parse Percentile (optional)</label>
-        <div class="input-frame">
-          <input
-            id="rotationanalyzerpage-field-2"
-            class="input"
-            bind:value={parsePercentile}
-            type="number"
-            min="0"
-            max="100"
-            placeholder="0-100"
-          />
-        </div>
-      </div>
-
-      <div class="form-field">
-        <label for="rotationanalyzerpage-field-3">Item Level (optional)</label>
-        <div class="input-frame">
-          <input
-            id="rotationanalyzerpage-field-3"
-            class="input"
-            bind:value={itemLevel}
-            type="number"
-            min="1"
-            placeholder="e.g. 525"
-          />
-        </div>
-      </div>
 
       <button
         class={['button', ['rotation-analyzer-page-button']]}
@@ -346,6 +439,8 @@
   {/if}
 
   {#if analysis}
+    {@const throughput = throughputNoun(analysis.roleHint)}
+    {@const throughputLabel = `${throughput.charAt(0).toUpperCase()}${throughput.slice(1)}`}
     <div class="panel">
       <h3>Result: {analysis.verdict}</h3>
       <p>Score: {analysis.score}/100</p>
@@ -359,6 +454,50 @@
         {/each}
       </ul>
 
+      <h4>Phase-aware Rotation</h4>
+      {#if analysis.phaseSummaries?.length}
+        <div class="phase-cards">
+          {#each analysis.phaseSummaries as phaseSummary, phaseSummaryIdx (`${phaseSummary.phaseId}-${phaseSummaryIdx}`)}
+            <article class="phase-card">
+              <header class="phase-card__header">
+                <span class="phase-badge">P{phaseSummary.phaseId}</span>
+                <span>{formatClock(phaseSummary.startSeconds)} - {formatClock(phaseSummary.endSeconds)}</span>
+                <span>{phaseSummary.castsPerMinute} casts/min</span>
+              </header>
+              <p class="phase-pattern">{phaseSummary.rotationPattern || 'No cast sequence detected.'}</p>
+              <p class="phase-meta">
+                Casts: {phaseSummary.castCount} · Duration: {phaseSummary.durationSeconds}s
+              </p>
+              <p class="phase-meta">
+                {throughputLabel}: {Number(phaseSummary.totalDamage || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </p>
+              <p class="phase-meta"><strong>Cooldown windows:</strong> {cooldownLabels(phaseSummary.cooldownSpellIds)}</p>
+              {#if phaseSummary.topDamageAbilities?.length}
+                <div class="phase-damage">
+                  <strong>Top {throughput}:</strong>
+                  <ul>
+                    {#each phaseSummary.topDamageAbilities as damageRow (`${damageRow.spellId}-${damageRow.ability}`)}
+                      <li>
+                        {#if damageRow.spellId && spellIconById(damageRow.spellId)}
+                          <img src={spellIconById(damageRow.spellId)} alt="" loading="lazy" />
+                        {/if}
+                        <span>{formatAbilityRowLabel(damageRow)}</span>
+                        <span>
+                          {Number(damageRow.totalDamage || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          ({damageRow.sharePercent}%)
+                        </span>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+            </article>
+          {/each}
+        </div>
+      {:else}
+        <p class="phase-meta">No phase transitions detected for this fight.</p>
+      {/if}
+
       <h4>Top Ability Usage</h4>
       <div class="table">
         <div class="row header">
@@ -366,7 +505,12 @@
         </div>
         {#each analysis.abilitySummary || [] as row, rowIdx (`${row.ability}-${rowIdx}`)}
           <div class="row">
-            <span>{formatAbilityRowLabel(row)}</span>
+            <span class="spell-cell">
+              {#if row.spellId && spellIconById(row.spellId)}
+                <img src={spellIconById(row.spellId)} alt="" loading="lazy" />
+              {/if}
+              {formatAbilityRowLabel(row)}
+            </span>
             <span>{row.castCount}</span>
             <span>{row.sharePercent}%</span>
             <span
@@ -374,6 +518,26 @@
                 ? `${row.medianIntervalSeconds.toFixed(1)}s`
                 : 'N/A'}</span
             >
+          </div>
+        {/each}
+      </div>
+
+      <h4>Top {throughputLabel} Contribution</h4>
+      <div class="table">
+        <div class="row header row-damage">
+          <span>Ability</span><span>Total {throughput}</span><span>Share</span><span>Hits</span>
+        </div>
+        {#each analysis.damageSummary || [] as row, rowIdx (`${row.spellId}-${rowIdx}`)}
+          <div class="row row-damage">
+            <span class="spell-cell">
+              {#if row.spellId && spellIconById(row.spellId)}
+                <img src={spellIconById(row.spellId)} alt="" loading="lazy" />
+              {/if}
+              {formatAbilityRowLabel(row)}
+            </span>
+            <span>{Number(row.totalDamage || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            <span>{row.sharePercent}%</span>
+            <span>{row.hitCount}</span>
           </div>
         {/each}
       </div>
@@ -430,6 +594,70 @@
     overflow: hidden;
   }
 
+  .phase-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.8rem;
+  }
+
+  .phase-card {
+    border: 1px solid #333;
+    border-radius: 0.5rem;
+    background: #141414;
+    padding: 0.75rem;
+  }
+
+  .phase-card__header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    font-weight: 600;
+  }
+
+  .phase-badge {
+    color: #54bb68;
+    border: 1px solid #54bb68;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    padding: 0.1rem 0.45rem;
+  }
+
+  .phase-pattern {
+    margin: 0.55rem 0 0.4rem;
+    font-size: 0.9rem;
+  }
+
+  .phase-meta {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #bebebe;
+  }
+
+  .phase-damage ul {
+    list-style: none;
+    margin: 0.35rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .phase-damage li {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.6rem;
+    align-items: center;
+    font-size: 0.82rem;
+    color: #d7d7d7;
+  }
+
+  .phase-damage li span:first-of-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
   .row {
     display: grid;
     grid-template-columns: 2fr 0.7fr 0.7fr 1fr;
@@ -446,5 +674,23 @@
 
   .row:last-child {
     border-bottom: none;
+  }
+
+  .row-damage {
+    grid-template-columns: 2fr 1fr 0.7fr 0.7fr;
+  }
+
+  .spell-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .spell-cell img,
+  .phase-damage img {
+    width: 18px;
+    height: 18px;
+    border-radius: 2px;
+    object-fit: cover;
   }
 </style>
