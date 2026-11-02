@@ -297,3 +297,45 @@ it('renders phase-aware rotation summaries with per-phase cooldown windows', asy
   expect(screen.getByText('Top Damage Contribution')).toBeInTheDocument();
   expect(screen.getAllByText(/#31884/).length).toBeGreaterThan(0);
 });
+
+it('renders tank throughput labels and metadata-backed spell rows without extra lookups', async () => {
+  window.history.replaceState({}, '', '/');
+  lookup([{ id: 8, name: 'Alice' }]);
+  render(RotationAnalyzerPage);
+  await fireEvent.input(screen.getByPlaceholderText('e.g. abcDEF123xyz'), {
+    target: { value: 'ReportG' }
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Lookup Report' }));
+  await screen.findByLabelText('Player');
+
+  vi.mocked(API.analyzeRotation).mockResolvedValueOnce({
+    verdict: 'Tank check',
+    score: 75,
+    playerName: 'Alice',
+    roleHint: 'tank',
+    specHint: 'Protection',
+    fightName: 'Boss',
+    castsPerMinute: 9,
+    abilitySummary: [{ spellId: 20484, castCount: 3, sharePercent: 100 }],
+    spellMetadata: [{ spellId: 20484, name: 'Rebirth', icon: 'spell_nature_reincarnation' }],
+    phaseSummaries: [
+      {
+        phaseId: 1,
+        startSeconds: 0,
+        endSeconds: 30,
+        durationSeconds: 30,
+        castCount: 3,
+        castsPerMinute: 6,
+        topAbilities: [{ spellId: 20484, castCount: 3, sharePercent: 100 }],
+        topDamageAbilities: [{ spellId: 20484, totalDamage: 0, hitCount: 0, sharePercent: 0 }],
+        cooldownSpellIds: [20484]
+      }
+    ]
+  });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Analyze Rotation' }));
+  expect(await screen.findByRole('heading', { name: 'Top Damage Contribution' })).toBeInTheDocument();
+  expect(screen.getByText('Top damage:')).toBeInTheDocument();
+  expect(screen.getAllByText('Rebirth (#20484)').length).toBeGreaterThan(0);
+  expect(WorldDataApi.getSpell).not.toHaveBeenCalled();
+});

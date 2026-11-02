@@ -396,3 +396,13 @@ it('opens real shared player and boss timelines with the Everything preset', asy
   await waitFor(() => expect(container.querySelector('.player-row')).toHaveTextContent('Healer'));
   expect(container).not.toHaveTextContent('bossIconName=');
 });
+
+it('shows upstream spec filters and validates date ordering before requesting data', async () => {
+  const { container } = renderPage('&spec=unknown-spec.eq.1&fromDate=2026-10-31&toDate=2026-10-01');
+  expect(await screen.findByText('unknown-spec (upstream spec)')).toBeInTheDocument();
+  expect(container.querySelector('.specialization-filters')).toHaveTextContent('Other');
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Search compositions' }));
+  expect(await screen.findByText('From date must not be after To date.')).toBeInTheDocument();
+  expect(API.getCompRankings).not.toHaveBeenCalled();
+});

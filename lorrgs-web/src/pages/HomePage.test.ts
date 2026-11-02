@@ -355,3 +355,29 @@ it('keeps a valid ranking selection when class metadata is missing and uses role
     expect.objectContaining({ className: undefined, specName: 'Retribution' })
   );
 });
+
+it('falls back invalid query sort and difficulty values to default shareable params', async () => {
+  window.history.replaceState(
+    {},
+    '',
+    '/?edition=Anniversary&raid=blacktemple&boss=illidan-stormrage&spec=retribution-paladin&difficultyId=foo&sort=unsupported&killtime_min=02:10&killtime_max=03:20'
+  );
+  vi.mocked(getSpecRankings).mockResolvedValueOnce(null as never);
+  renderPage();
+
+  await screen.findByText('No rankings found for this selection');
+  const params = new URLSearchParams(window.location.search);
+  expect(params.get('edition')).toBe('Anniversary');
+  expect(params.has('difficultyId')).toBe(false);
+  expect(params.has('sort')).toBe(false);
+  expect(params.get('killtime_min')).toBe('2:10');
+  expect(params.get('killtime_max')).toBe('3:20');
+  expect(getSpecRankings).toHaveBeenCalledWith(
+    'retribution-paladin',
+    'illidan-stormrage',
+    'Normal',
+    'dps',
+    'anniversary',
+    expect.objectContaining({ difficultyId: 3 })
+  );
+});

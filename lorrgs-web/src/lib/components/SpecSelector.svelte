@@ -20,14 +20,10 @@
     Tank: 'Tanks',
     Other: 'Other'
   };
-  const roleRank = (roleName: string) => {
-    const index = roleOrder.indexOf(roleName);
-    return index >= 0 ? index : roleOrder.length;
-  };
   $: groupedOptions = roleOrder
     .map((roleName) => ({
       roleName,
-      label: roleLabel[roleName] ?? roleName,
+      label: roleLabel[roleName],
       options: options
         .filter((option) => option.roleName === roleName)
         .sort((a, b) => a.fullName.localeCompare(b.fullName))
