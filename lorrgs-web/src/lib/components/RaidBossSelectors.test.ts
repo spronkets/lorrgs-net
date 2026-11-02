@@ -41,8 +41,12 @@ describe('RaidBossSelectors', () => {
     });
     expect(screen.getByRole('combobox', { name: 'Raid' })).toHaveValue('blacktemple');
     expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Illidan Stormrage');
-    expect(container.querySelectorAll('img')).toHaveLength(2);
+    expect(container.querySelectorAll('.selection-icon img')).toHaveLength(1);
     expect(container.querySelector('.selection-icon img')).toHaveAttribute('src', '/raid.jpg');
+    expect(container.querySelector('.boss-selector img')).toHaveAttribute(
+      'src',
+      'https://wow.zamimg.com/images/wow/icons/medium/boss.jpg'
+    );
     await rerender({
       ...props,
       selectedRaid: 'blacktemple',
@@ -50,18 +54,15 @@ describe('RaidBossSelectors', () => {
       raidIconUrl: '/other-raid.jpg',
       bosses: [{ ...props.bosses[0], iconName: 'other-boss' }]
     });
+    expect(container.querySelector('.selection-icon img')).toHaveAttribute('src', '/other-raid.jpg');
     expect(container.querySelector('.boss-selector img')).toHaveAttribute(
       'src',
       'https://wow.zamimg.com/images/wow/icons/medium/other-boss.jpg'
     );
   });
 
-  it('omits missing raid icons, uses the generic boss icon, and preserves selection states', async () => {
+  it('omits missing raid icons and preserves boss selection states', async () => {
     const { container } = render(RaidBossSelectors, props);
-    expect(container.querySelector('.boss-selector img')).toHaveAttribute(
-      'src',
-      'https://wow.zamimg.com/images/icons/boss.gif'
-    );
     expect(container.querySelector('.selection-icon')).toBeNull();
     expect(screen.getByRole('combobox', { name: 'Raid' })).not.toHaveClass('has-icon');
     expect(screen.getByRole('button', { name: 'Boss' })).toBeDisabled();
@@ -70,9 +71,6 @@ describe('RaidBossSelectors', () => {
     });
     expect(screen.getByRole('button', { name: 'Boss' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Illidan Stormrage');
-    expect(container.querySelector('.boss-selector img')).toHaveAttribute(
-      'src',
-      'https://wow.zamimg.com/images/icons/boss.gif'
-    );
+    expect(container.querySelector('.boss-selector .lucide-skull')).not.toBeNull();
   });
 });

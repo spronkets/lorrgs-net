@@ -13,7 +13,19 @@ public sealed class RequestLoggingMiddleware(RequestDelegate next, ILogger<Reque
             ["RequestId"] = context.TraceIdentifier
         });
         context.Response.Headers["X-Correlation-ID"] = correlationId;
-        await next(context);
+        try
+        {
+            await next(context);
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            if (!context.Response.HasStarted)
+                context.Response.StatusCode = 499;
+            logger.LogInformation("Request canceled endpoint={Endpoint} status={StatusCode}",
+                context.GetEndpoint()?.DisplayName, context.Response.StatusCode);
+            return;
+        }
+
         if (context.Response.StatusCode >= StatusCodes.Status400BadRequest)
             logger.LogWarning("Request failed endpoint={Endpoint} status={StatusCode}",
                 context.GetEndpoint()?.DisplayName, context.Response.StatusCode);

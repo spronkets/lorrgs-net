@@ -191,13 +191,14 @@ export function getCompRankingDetails(
   report: RankingReport,
   edition: string,
   refresh = false,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  timeoutMs?: number
 ): Promise<RankingReport> {
   const params = new URLSearchParams({ edition });
   if (refresh) params.set('refresh', 'true');
   return get<RankingReport>(
     `/rankings/comp/reports/${encodeURIComponent(report.reportId)}/fights/${report.fights?.[0]?.fightId ?? 0}?${params}`,
-    { signal }
+    timeoutMs === undefined ? { signal } : { signal, timeoutMs }
   );
 }
 

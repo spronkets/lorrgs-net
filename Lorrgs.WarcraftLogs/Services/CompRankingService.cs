@@ -85,7 +85,7 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
     }
 
     public async Task<RankingReport> LoadDetailsAsync(string code, int fightId, string edition,
-        bool refresh, CancellationToken cancellationToken)
+        bool refresh, CancellationToken cancellationToken, bool includeTimelines = true)
     {
         var data = await client.QueryGraphQLAsync(RosterQuery, new { code, fightIds = new[] { fightId } },
             edition, refresh, cancellationToken);
@@ -139,9 +139,16 @@ public sealed class CompRankingService(WarcraftLogsClient client, IReportTimelin
                 ApplyRaidIdentity(report, entry);
         }
         ReportTimelineService.ApplyFightMetadata(report, metadata.GetProperty("fights"));
-        await Task.WhenAll(
-            PopulateGuildsAsync(players, characterIds, edition, refresh, cancellationToken),
-            timelines.PopulateRosterTimelinesAsync(report, edition, refresh, cancellationToken));
+        if (includeTimelines)
+        {
+            await Task.WhenAll(
+                PopulateGuildsAsync(players, characterIds, edition, refresh, cancellationToken),
+                timelines.PopulateRosterTimelinesAsync(report, edition, refresh, cancellationToken));
+        }
+        else
+        {
+            await PopulateGuildsAsync(players, characterIds, edition, refresh, cancellationToken);
+        }
         return report;
     }
 

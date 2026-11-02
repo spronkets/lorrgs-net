@@ -2,6 +2,8 @@ import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { getCompRankingDetails } from './api';
 import type { RankingReport } from './models/RankingReport';
 
+const INITIAL_WARMUP_TIMEOUT_MS = 6000;
+
 export function compKey(report: RankingReport): string {
   return `${report.reportId}:${report.fights?.[0]?.fightId ?? 0}`;
 }
@@ -20,7 +22,13 @@ export class CompDetailLoader {
 
   async start(reports: RankingReport[]) {
     // Exactly the first three kills, not the first three matches. No backfill on failures.
-    await Promise.all(reports.slice(0, 3).map((report) => this.load(report)));
+    // Do not block initial rendering indefinitely when one upstream detail request is slow.
+    const initial = reports.slice(0, 3).map((report) => this.load(report));
+    if (!initial.length) return;
+    await Promise.race([
+      Promise.all(initial),
+      new Promise((resolve) => setTimeout(resolve, INITIAL_WARMUP_TIMEOUT_MS))
+    ]);
   }
 
   async load(report: RankingReport): Promise<boolean> {

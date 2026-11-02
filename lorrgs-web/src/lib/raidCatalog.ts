@@ -27,7 +27,7 @@ const versionToEditionSlug: Record<string, string> = {
 const versionToApiEditionSlug: Record<string, string> = {
   Anniversary: 'anniversary',
   Era: 'era',
-  Retail: 'midnight',
+  Retail: 'retail',
   'Mists of Pandaria': 'mop',
   'Season of Discovery': 'classic_sod'
 };

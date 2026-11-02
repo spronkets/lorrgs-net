@@ -1,4 +1,5 @@
 using System.Net;
+using Lorrgs.Api.Shared;
 using Lorrgs.WarcraftLogs;
 using Lorrgs.WarcraftLogs.Services;
 
@@ -9,7 +10,8 @@ public sealed class TimelineLoader(IReportTimelineService service, ILogger<Timel
     internal async Task<IResult> Load(string reportCode, int fightId, int? sourceId,
         string? playerName, string edition, bool boss, CancellationToken cancellationToken, int? specId)
     {
-        if (!IsValid(reportCode, fightId, sourceId, playerName, edition, boss))
+        var normalizedEdition = WorldDataEditions.NormalizeEdition(edition);
+        if (!IsValid(reportCode, fightId, sourceId, playerName, normalizedEdition, boss))
         {
             logger.LogWarning("Invalid timeline request");
             return TypedResults.Problem(statusCode: 400, detail: "Provide a valid report, fight, player and edition.");
@@ -17,9 +19,9 @@ public sealed class TimelineLoader(IReportTimelineService service, ILogger<Timel
         try
         {
             if (boss)
-                return TypedResults.Ok(await service.LoadBossAsync(reportCode, fightId, edition, false, cancellationToken)
+                return TypedResults.Ok(await service.LoadBossAsync(reportCode, fightId, normalizedEdition!, false, cancellationToken)
                     ?? throw new InvalidOperationException("The boss timeline could not be loaded."));
-            return TypedResults.Ok(await service.LoadAsync(reportCode, fightId, sourceId, playerName, edition,
+            return TypedResults.Ok(await service.LoadAsync(reportCode, fightId, sourceId, playerName, normalizedEdition!,
                 cancellationToken, specId));
         }
         catch (WarcraftLogsReportPrivateException ex)
@@ -51,10 +53,10 @@ public sealed class TimelineLoader(IReportTimelineService service, ILogger<Timel
         }
     }
 
-    private static bool IsValid(string reportCode, int fightId, int? sourceId, string? playerName, string edition, bool boss) =>
+    private static bool IsValid(string reportCode, int fightId, int? sourceId, string? playerName, string? edition, bool boss) =>
         !string.IsNullOrWhiteSpace(reportCode) && reportCode.Length <= 32 &&
         reportCode.All(char.IsAsciiLetterOrDigit) && fightId > 0 &&
         (boss || sourceId is > 0 || !string.IsNullOrWhiteSpace(playerName)) &&
-        new[] { "retail", "anniversary", "mistsofpandaria", "era", "classic_sod" }.Contains(edition);
+        edition is not null;
 
 }

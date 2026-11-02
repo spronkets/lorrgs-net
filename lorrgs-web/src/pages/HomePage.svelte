@@ -10,19 +10,25 @@
   import type { WowClass } from '../lib/models/WowClass';
   import type { WowRole } from '../lib/models/WowRole';
   import type { WowSpec } from '../lib/models/WowSpec';
-  import EncounterFilters from '../lib/components/EncounterFilters.svelte';
+  import type { RankingFilters } from '../lib/models/rankings/RankingFilters';
+  import type { RankingSort } from '../lib/models/rankings/RankingSort';
+  import EditionSelector from '../lib/components/EditionSelector.svelte';
   import PageHeader from '../lib/components/PageHeader.svelte';
+  import RaidBossSelectors from '../lib/components/RaidBossSelectors.svelte';
   import RankingsList from '../lib/components/RankingsList.svelte';
-  import BossIcon from '../lib/components/BossIcon.svelte';
-  import { getClassIconUrl, getSpecIconUrl } from '../lib/wowAssets';
+  import SpecSelector from '../lib/components/SpecSelector.svelte';
+  import { getVersionIconUrl } from '../lib/selectionIcons';
   import {
+    DISABLED_EDITION_OPTIONS,
     EDITION_OPTIONS,
     getApiEditionSlug,
     getAvailableSpecsForVersion,
+    groupRaidsByPhase,
     getRaidBossOptions,
     getRaidsForEdition
   } from '../lib/raidCatalog';
   import type { RaidCatalog } from '../lib/models/RaidCatalog';
+  import { toKillTimeInput } from '../lib/rankingUtils';
 
   export let worldData: WorldDataSnapshot = {
     roles: [],
@@ -42,13 +48,21 @@
   let rankings: SpecRankingData | null = null;
   let rankingsLoading = false;
   let rankingsError = '';
-  let isSelectionCollapsed = false;
   let lastRankingsRequestKey = '';
   let hasHydratedQuery = false;
   let linkedReport: RankingReport | null = null;
   let linkedEncounterKey = '';
   let linkedReportLoading = false;
   let linkedReportError = '';
+  let rankingFilters: RankingFilters = {
+    region: '',
+    minDuration: '',
+    maxDuration: '',
+    fromDate: '',
+    toDate: ''
+  };
+  let rankingSort: RankingSort = 'rank';
+  let selectedDifficultyId = 3;
   const linkedController = new AbortController();
   onDestroy(() => linkedController.abort());
 
@@ -91,9 +105,25 @@
 
   const versionOrder = EDITION_OPTIONS;
   const versions = versionOrder;
+  const difficultyOptionsFor = (version: string) =>
+    version === 'Retail'
+      ? [
+          { value: 2, label: 'LFR' },
+          { value: 3, label: 'Normal' },
+          { value: 4, label: 'Heroic' },
+          { value: 5, label: 'Mythic' }
+        ]
+      : version === 'Mists of Pandaria'
+        ? [
+            { value: 2, label: 'LFR' },
+            { value: 3, label: 'Normal' },
+            { value: 4, label: 'Heroic' }
+          ]
+        : [{ value: 3, label: 'Normal' }];
+  const defaultDifficultyIdFor = (version: string) => (version === 'Retail' ? 5 : 3);
 
   $: raids = getRaidsForEdition(raidCatalog, selectedVersion);
-  $: if (!selectedVersion && versions.length) {
+  $: if ((!selectedVersion || !versions.includes(selectedVersion)) && versions.length) {
     selectedVersion =
       versions.find((version) => getRaidsForEdition(raidCatalog, version).length > 0) ||
       versions[0];
@@ -110,6 +140,10 @@
     };
   });
   $: selectedBossIconName = bossOptions.find((boss) => boss.slug === selectedBoss)?.iconName;
+  $: difficultyOptions = difficultyOptionsFor(selectedVersion);
+  $: if (!difficultyOptions.some((option) => option.value === selectedDifficultyId)) {
+    selectedDifficultyId = defaultDifficultyIdFor(selectedVersion);
+  }
 
   $: if (
     selectedRaid &&
@@ -122,61 +156,37 @@
     selectedBoss = '';
   }
 
-  // Group specs by roleId, then map to role objects
   $: versionSpecs = getAvailableSpecsForVersion(worldData.specs || [], selectedVersion);
   $: classesById = new Map((worldData.classes || []).map((cls) => [Number(cls.id), cls]));
   $: rolesById = new Map((worldData.roles || []).map((role) => [Number(role.id), role]));
   $: selectedSpecMeta = versionSpecs.find((spec) => spec.fullNameSlug === selectedSpec);
+  $: specOptions = versionSpecs.map((spec) => ({
+    slug: spec.fullNameSlug,
+    fullName: spec.fullName,
+    roleName: getRoleGroupName(spec),
+    classSlug: getSpecClassSlug(spec),
+    specSlug: spec.nameSlug
+  }));
   $: selectedClassMeta = selectedSpecMeta ? getSpecClass(selectedSpecMeta) : null;
   $: selectedBossMeta = bosses.find((boss) => boss.slug === selectedBoss);
   $: selectedWorldBoss = (worldData.bosses || []).find((boss) => boss.nameSlug === selectedBoss);
   $: selectedEditionSlug = getApiEditionSlug(selectedVersion);
-  $: supportsDifficulty = selectedVersion === 'Retail' || selectedVersion === 'Mists of Pandaria';
   $: selectedMetric = selectedSpecMeta ? resolveMetricForSpec(selectedSpecMeta) : 'dps';
-  $: selectedDifficulty = supportsDifficulty
-    ? selectedVersion === 'Retail'
-      ? 'Mythic'
-      : 'Normal'
-    : 'Normal';
+  $: selectedDifficulty =
+    difficultyOptions.find((option) => option.value === selectedDifficultyId)?.label || 'Normal';
   $: selectedZoneId = selectedRaidOption?.zoneId || selectedWorldBoss?.raidId || 0;
   $: selectedEncounterId = selectedBossMeta?.id || selectedWorldBoss?.id || 0;
-  $: selectedDifficultyId =
-    selectedDifficulty === 'Mythic'
-      ? 5
-      : selectedDifficulty === 'Heroic'
-        ? 4
-        : selectedDifficulty === 'Normal'
-          ? 3
-          : selectedDifficulty === 'LFR'
-            ? 2
-            : 0;
-  $: specsByRole = (worldData.roles || [])
-    .map((role) => ({
-      role,
-      specs: versionSpecs.filter((s) => s.roleId === role.id)
-    }))
-    .filter((g) => g.specs.length > 0);
-
   $: if (selectedSpec && !versionSpecs.some((spec) => spec.fullNameSlug === selectedSpec)) {
     selectedSpec = '';
   }
 
-  $: if (!selectedBoss && selectedSpec) {
+  function selectVersion(version: string) {
+    if (selectedVersion === version || DISABLED_EDITION_OPTIONS.includes(version)) return;
+    selectedVersion = version;
+    selectedRaid = '';
+    selectedBoss = '';
     selectedSpec = '';
-  }
-
-  $: if (!selectedSpec) {
-    isSelectionCollapsed = false;
-  }
-
-  function selectSpec(spec: WowSpec) {
-    if (!selectedBoss) return;
-    selectedSpec = spec.fullNameSlug;
-    isSelectionCollapsed = true;
-  }
-
-  function expandSelections() {
-    isSelectionCollapsed = false;
+    oneditionchange?.(version);
   }
 
   function resolveMetricForSpec(spec: WowSpec) {
@@ -194,6 +204,16 @@
   function getSpecClassSlug(spec: WowSpec): string {
     const matchedClass = getSpecClass(spec);
     return matchedClass?.nameSlug || 'other';
+  }
+
+  function getRoleGroupName(spec: WowSpec): string {
+    const role = rolesById.get(Number(spec.roleId));
+    const code = String(role?.code || '').toLowerCase();
+    const name = String(role?.name || '').toLowerCase();
+    if (code === 'tank' || name.includes('tank')) return 'Tank';
+    if (code === 'heal' || name.includes('heal')) return 'Healer';
+    if (code === 'dps' || code === 'mdps' || code === 'rdps' || name.includes('dps')) return 'DPS';
+    return 'Other';
   }
 
   function loadSelectionsFromQuery() {
@@ -218,6 +238,22 @@
     if (querySpec) {
       selectedSpec = querySpec;
     }
+    const queryDifficulty = Number(params.get('difficultyId') ?? defaultDifficultyIdFor(selectedVersion));
+    if (Number.isInteger(queryDifficulty)) {
+      selectedDifficultyId = queryDifficulty;
+    }
+
+    rankingFilters = {
+      region: params.get('region') ?? '',
+      minDuration: toKillTimeInput(params.get('killtime_min') ?? ''),
+      maxDuration: toKillTimeInput(params.get('killtime_max') ?? ''),
+      fromDate: params.get('fromDate') ?? '',
+      toDate: params.get('toDate') ?? ''
+    };
+    const querySort = (params.get('sort') ?? 'rank') as RankingSort;
+    rankingSort = ['rank', 'performance', 'duration', 'date'].includes(querySort)
+      ? querySort
+      : 'rank';
 
     return Boolean(queryBoss && querySpec);
   }
@@ -251,6 +287,24 @@
     } else {
       url.searchParams.delete('spec');
     }
+    if (difficultyOptions.length > 1) {
+      url.searchParams.set('difficultyId', String(selectedDifficultyId));
+    } else {
+      url.searchParams.delete('difficultyId');
+    }
+
+    if (rankingFilters.region) url.searchParams.set('region', rankingFilters.region);
+    else url.searchParams.delete('region');
+    if (rankingFilters.minDuration) url.searchParams.set('killtime_min', rankingFilters.minDuration);
+    else url.searchParams.delete('killtime_min');
+    if (rankingFilters.maxDuration) url.searchParams.set('killtime_max', rankingFilters.maxDuration);
+    else url.searchParams.delete('killtime_max');
+    if (rankingFilters.fromDate) url.searchParams.set('fromDate', rankingFilters.fromDate);
+    else url.searchParams.delete('fromDate');
+    if (rankingFilters.toDate) url.searchParams.set('toDate', rankingFilters.toDate);
+    else url.searchParams.delete('toDate');
+    if (rankingSort !== 'rank') url.searchParams.set('sort', rankingSort);
+    else url.searchParams.delete('sort');
 
     url.searchParams.delete('size');
 
@@ -302,6 +356,7 @@
           className: selectedClassMeta?.name || undefined,
           specName: selectedSpecMeta?.name || undefined,
           difficultyId: selectedDifficultyId || undefined,
+          serverRegion: rankingFilters.region || undefined,
           includeOtherPlayers: false
         }
       );
@@ -315,8 +370,7 @@
   }
 
   onMount(async () => {
-    const shouldAutoLoad = loadSelectionsFromQuery();
-    isSelectionCollapsed = shouldAutoLoad;
+    loadSelectionsFromQuery();
     const params = new URLSearchParams(window.location.search);
     const hasLinkedReport = params.has('reportCode') || params.has('fightId');
     if (!hasLinkedReport) hasHydratedQuery = true;
@@ -327,16 +381,12 @@
       await loadLinkedReport();
       if (linkedController.signal.aborted) return;
       await tick();
-      isSelectionCollapsed = Boolean(selectedBoss && selectedSpec);
       hasHydratedQuery = true;
-    }
-
-    if (shouldAutoLoad && selectedBoss && selectedSpec && !linkedReportError) {
-      void loadRankings();
     }
   });
 
   $: if (hasHydratedQuery && selectedBoss && selectedSpec && !linkedReportError) {
+    void selectedDifficultyId;
     void loadRankings();
   }
 
@@ -357,11 +407,12 @@
     void selectedRaid;
     void selectedBoss;
     void selectedSpec;
+    void selectedDifficultyId;
     syncSelectionsToQuery();
   }
 </script>
 
-<div class="home-page" class:comparison-open={isSelectionCollapsed}>
+<div class="home-page">
   <PageHeader
     title="Spec Rankings"
     description="Compare cooldown usage across ranked players of a chosen specialization."
@@ -372,121 +423,68 @@
   {#if linkedReportError}
     <Alert variant="error">{linkedReportError}</Alert>
   {/if}
-  {#if isSelectionCollapsed && selectedSpecMeta && selectedBoss}
-    <div class={`selection-collapsed class-accent ${getSpecClassSlug(selectedSpecMeta)}`}>
-      <p class="label">Current Selection</p>
-      <div class="selection-overview">
-        <div>
-          <p class="value">
-            {selectedVersion} / {selectedRaidOption?.name || selectedRaid}
-          </p>
-          <h2 class="selection-title">
-            <span class="selected-spec">
-              <span class="spec-media selection-spec-media">
-                <img
-                  class="spec-icon"
-                  src={getSpecIconUrl(
-                    getSpecClassSlug(selectedSpecMeta),
-                    selectedSpecMeta.nameSlug
-                  )}
-                  alt=""
-                />
-                <img
-                  class={`class-icon ${getSpecClassSlug(selectedSpecMeta)}`}
-                  src={getClassIconUrl(getSpecClassSlug(selectedSpecMeta))}
-                  alt={selectedClassMeta?.name || 'Class'}
-                />
-              </span>
-              <span class="spec-value">{selectedSpecMeta.fullName}</span>
-            </span>
-            <span class="versus">vs.</span>
-            <span class="selected-boss">
-              <BossIcon slug={selectedBoss} iconName={selectedBossIconName} size={38} />
-              <span>{selectedBossMeta?.name || selectedBoss}</span>
-            </span>
-          </h2>
-        </div>
-      </div>
-      <button
-        class={['button', ['home-page-button', `edit-selection`]]}
-        data-tone="secondary"
-        data-outline="true"
-        data-size="small"
-        type="button"
-        onclick={expandSelections}>Change selection</button
-      >
-    </div>
-  {:else}
-    <EncounterFilters
-      {worldData}
-      {raidCatalog}
-      bind:selectedVersion
+  <section class="edition-filter" aria-label="Edition selection">
+    <h3 class="edition-label">Edition</h3>
+    <EditionSelector
+      versions={versions}
+      {selectedVersion}
+      disabledVersions={DISABLED_EDITION_OPTIONS}
+      {getVersionIconUrl}
+      onselect={selectVersion}
+    />
+  </section>
+  <section class="spec-filters" aria-label="Specialization selection">
+    <SpecSelector
+      label="Specialization"
+      placeholder="— choose a specialization —"
+      bind:value={selectedSpec}
+      disabled={!specOptions.length}
+      options={specOptions}
+    />
+  </section>
+  {#if selectedSpecMeta || selectedBoss}
+    <p class="selection-separator">vs.</p>
+  {/if}
+  <section class="encounter-and-difficulty" aria-label="Encounter and difficulty selection">
+    <RaidBossSelectors
+      raidPhaseGroups={groupRaidsByPhase(raids)}
+      bosses={bossOptions}
       bind:selectedRaid
       bind:selectedBoss
-      {oneditionchange}
+      raidPlaceholder="— choose a raid —"
+      bossPlaceholder="— choose a boss —"
     />
-    {#each specsByRole as { role, specs } (role.id)}
-      <div class="role-section">
-        <h3 class="role-header">
-          {role.name}
-        </h3>
-        <div class="spec-grid">
-          {#each specs as spec (spec.fullNameSlug)}
-            <button
-              class={[
-                'button',
-                [
-                  'home-page-button',
-                  `spec-card`,
-                  'class-accent',
-                  getSpecClassSlug(spec),
-                  { disabled: !selectedBoss, active: selectedSpec === spec.fullNameSlug }
-                ]
-              ]}
-              data-tone="unstyled"
-              data-outline="false"
-              data-size="medium"
-              type="button"
-              onclick={() => selectSpec(spec)}
-              title={selectedBoss ? `View ${spec.fullName}` : 'Select a boss first'}
-            >
-              <div class="spec-media">
-                <img
-                  class="spec-icon"
-                  src={getSpecIconUrl(getSpecClassSlug(spec), spec.nameSlug)}
-                  alt={spec.fullName}
-                  loading="lazy"
-                />
-                <img
-                  class={`class-icon ${getSpecClassSlug(spec)}`}
-                  src={getClassIconUrl(getSpecClassSlug(spec))}
-                  alt={getSpecClass(spec)?.name || 'Class'}
-                  loading="lazy"
-                />
-              </div>
-              <span class="spec-name">{spec.fullName}</span>
-            </button>
+    {#if difficultyOptions.length > 1}
+      <label class="difficulty-control"
+        >Difficulty
+        <select bind:value={selectedDifficultyId} aria-label="Difficulty">
+          {#each difficultyOptions as option (option.value)}
+            <option value={option.value}>{option.label}</option>
           {/each}
-        </div>
-      </div>
-    {/each}
-  {/if}
-
-  {#if isSelectionCollapsed}
-    {#if rankingsLoading}
-      <Spinner loadingText="Loading rankings..." />
-    {:else if rankingsError}
-      <Alert variant="error">{rankingsError}</Alert>
-    {:else if rankings}
-      <RankingsList {rankings} {linkedReport} edition={selectedEditionSlug} bossIconName={selectedBossIconName} />
-    {:else if selectedBoss && selectedSpec && lastRankingsRequestKey}
-      <Alert>No rankings found for this selection</Alert>
+        </select>
+      </label>
     {/if}
+  </section>
+
+  {#if rankingsLoading}
+    <Spinner loadingText="Loading rankings..." />
+  {:else if rankingsError}
+    <Alert variant="error">{rankingsError}</Alert>
+  {:else if rankings}
+    <RankingsList
+      {rankings}
+      {linkedReport}
+      edition={selectedEditionSlug}
+      bossIconName={selectedBossIconName}
+      initialFilters={rankingFilters}
+      initialSort={rankingSort}
+    />
+  {:else if selectedBoss && selectedSpec && lastRankingsRequestKey}
+    <Alert>No rankings found for this selection</Alert>
   {/if}
 </div>
 
 <style lang="scss">
-  @use '../lib/styles/classes';
   @use '../lib/styles/selection-tokens' as selectionTokens;
 
   .home-page {
@@ -496,330 +494,59 @@
     margin: 0 auto;
   }
 
-  .comparison-open .selection-collapsed {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
-    border-radius: 4px;
-    margin-bottom: 10px;
-  }
-  .comparison-open .selection-collapsed > .label {
-    display: none;
-  }
-  .comparison-open .selection-collapsed .value {
-    font-size: 12px;
-    margin: 0;
-  }
-  .comparison-open .selection-collapsed .selection-overview {
-    flex: 1;
-    margin: 0;
-  }
-  .comparison-open .selection-spec-media {
-    width: 40px;
-    height: 40px;
-  }
-  .comparison-open .selection-spec-media .spec-icon {
-    width: 38px;
-    height: 38px;
-  }
-  .comparison-open .selection-spec-media .class-icon {
-    width: 20px;
-    height: 20px;
-  }
-  .comparison-open :global(.edit-selection.home-page-button) {
-    margin: 0;
-    padding: 6px 10px;
-    font-size: 12px;
+  .edition-filter {
+    display: grid;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
   }
 
-  .role-section {
-    margin-bottom: var(--space-11);
+  .edition-label {
+    @include selectionTokens.selection-label;
+
+    margin: 0;
   }
 
-  .role-header {
+  .spec-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5, 0.8rem);
+    margin-bottom: var(--space-4);
+  }
+
+  .selection-separator {
+    margin: 0 0 var(--space-4);
     font-size: 1rem;
+    line-height: 1.25;
+    color: var(--summary-label);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    margin: 0 0 0.75rem;
-    padding-bottom: 0;
   }
 
-  .spec-grid {
+  .encounter-and-difficulty {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-    gap: var(--space-3);
+    gap: var(--space-5, 0.8rem);
+    margin-bottom: var(--space-6);
   }
 
-  :global(.spec-card.home-page-button) {
+  .difficulty-control {
+    @include selectionTokens.selection-label;
+
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .difficulty-control select {
+    @include selectionTokens.selection-dropdown;
+
     width: 100%;
-    border: 1px solid
-      color-mix(in srgb, var(--class-accent, var(--select-border)) 22%, var(--select-border));
-    border-radius: var(--radius-md);
-    background: var(--spec-bg);
-    color: color-mix(
-      in srgb,
-      var(--summary-value) 72%,
-      var(--class-accent, var(--summary-value)) 28%
-    );
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    padding: 0.48rem 0.52rem;
-    text-align: left;
-    font-size: 0.94rem;
-    cursor: pointer;
-    transition:
-      border-color var(--transition-fast),
-      background-color var(--transition-fast),
-      box-shadow var(--transition-fast),
-      transform var(--transition-fast);
-  }
-
-  :global(.spec-card.home-page-button:hover:not(.disabled)) {
-    border-color: color-mix(
-      in srgb,
-      var(--class-accent, var(--select-hover-border)) 48%,
-      var(--select-hover-border)
-    );
-    background: var(--spec-hover-bg);
-    box-shadow: var(--spec-hover-ring);
-    transform: translateY(-1px);
-  }
-
-  :global(.spec-card.active.home-page-button) {
-    border-color: color-mix(
-      in srgb,
-      var(--class-accent, var(--select-focus-border)) 72%,
-      #ffffff 28%
-    );
-    background: color-mix(
-      in srgb,
-      var(--class-accent, var(--select-hover-bg)) 12%,
-      var(--spec-hover-bg)
-    );
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--class-accent, var(--select-focus-border)) 42%, transparent),
-      var(--select-focus-ring);
-  }
-
-  :global(.spec-card.disabled.home-page-button) {
-    background: linear-gradient(160deg, var(--disabled-bg), var(--disabled-bg-alt));
-    border-color: var(--disabled-border);
-    color: var(--disabled-text);
-    cursor: not-allowed;
-    opacity: 0.88;
-    box-shadow:
-      inset 0 0 0 1px color-mix(in srgb, var(--disabled-border) 75%, #ffffff 25%),
-      0 1px 2px rgba(67, 88, 111, 0.12);
-  }
-
-  :global(.spec-card.disabled.home-page-button) .spec-icon {
-    border-color: var(--disabled-border);
-    filter: grayscale(0.78) saturate(0.2) brightness(0.9);
-  }
-
-  :global(.spec-card.disabled.home-page-button) .class-icon {
-    border-color: var(--disabled-icon-bg);
-    background: var(--disabled-icon-bg);
-    filter: grayscale(0.78) saturate(0.2) brightness(0.9);
-  }
-
-  :global(.spec-card.disabled.home-page-button) .spec-name {
-    color: var(--disabled-text);
-    font-weight: 500;
-  }
-
-  .spec-media {
-    position: relative;
-    width: 36px;
-    height: 36px;
-    flex-shrink: 0;
-  }
-
-  .spec-icon {
-    width: var(--icon-size);
-    height: var(--icon-size);
-    border-radius: var(--radius-sm);
-    object-fit: cover;
-    border: 1px solid var(--spec-icon-border);
-  }
-
-  .class-icon {
-    position: absolute;
-    width: var(--class-icon-size);
-    height: var(--class-icon-size);
-    border-radius: 999px;
-    object-fit: cover;
-    right: -4px;
-    bottom: -4px;
-    border: 2px solid var(--class-icon-border);
-    background: var(--class-icon-bg);
-  }
-
-  .spec-name {
-    text-align: left;
-    line-height: 1.2;
-    font-weight: 600;
-    color: color-mix(in srgb, currentColor 82%, var(--class-accent, currentColor) 18%);
-  }
-
-  :global(.spec-card.active.home-page-button) .spec-name {
-    color: color-mix(in srgb, currentColor 62%, var(--class-accent, currentColor) 38%);
-  }
-
-  .selection-collapsed {
-    background: transparent;
-    border: 0;
-    border-bottom: 1px solid var(--summary-border);
-    border-radius: 0;
-    box-shadow: none;
-    padding: 0.35rem 0 0.75rem;
-    margin-bottom: var(--selector-block-gap);
-    display: grid;
-    gap: var(--space-2);
-  }
-
-  .selection-overview {
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-  }
-
-  .selection-spec-media {
-    width: 40px;
-    height: 40px;
-  }
-
-  .selection-collapsed .label {
-    margin: 0;
-    font-size: 0.76rem;
-    text-transform: uppercase;
-    letter-spacing: 0.09em;
-    color: var(--summary-label);
-    font-weight: 700;
-  }
-
-  .selection-collapsed .value {
-    margin: 0;
-    font-size: 0.95rem;
-    color: color-mix(
-      in srgb,
-      var(--summary-value) 70%,
-      var(--class-accent, var(--summary-value)) 30%
-    );
-    font-weight: 600;
-  }
-
-  .selection-title {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.65rem;
-    margin: 0.5rem 0 0.25rem;
-    font-size: 1.4rem;
-    line-height: 1.3;
-    color: var(--summary-value);
-  }
-
-  .selection-title .spec-value {
-    @include classes.text-color(var(--class-accent, var(--summary-value)));
-  }
-
-  .versus {
-    color: var(--summary-label);
-    font-size: 1rem;
-    font-weight: 400;
-  }
-
-  .selected-spec,
-  .selected-boss {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  :global(.edit-selection.home-page-button) {
-    justify-self: start;
-    margin-top: var(--space-2);
   }
 
   @media (max-width: 700px) {
-    .comparison-open .selection-collapsed {
-      position: relative;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 4px;
-      padding: 44px 0 10px;
+    .selection-separator {
+      font-size: 0.95rem;
     }
-    .comparison-open .selection-collapsed .selection-overview {
-      min-width: 0;
-    }
-    .comparison-open .selection-collapsed .value {
-      position: absolute;
-      top: 12px;
-      left: 0;
-      max-width: calc(100% - 135px);
-    }
-    .selection-overview > div {
-      width: 100%;
-      min-width: 0;
-    }
-    .selection-title {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-      gap: 8px;
-      width: 100%;
-      font-size: clamp(11px, 3vw, 16px);
-    }
-    .selection-title .selected-spec,
-    .selection-title .selected-boss {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-width: 0;
-      gap: 8px;
-      text-align: center;
-      overflow-wrap: anywhere;
-    }
-    .selection-title .versus {
-      text-align: center;
-      font-size: 0.8rem;
-    }
-    .comparison-open :global(.edit-selection.home-page-button) {
-      position: absolute;
-      top: 0;
-      right: 0;
-      min-height: 40px;
-    }
-    .spec-grid {
-      grid-template-columns: 1fr 1fr;
-    }
-  }
-
-  :global(.theme-dark) :global(.spec-card.disabled.home-page-button) {
-    background: linear-gradient(160deg, var(--disabled-bg), var(--disabled-bg-alt));
-    border-color: var(--disabled-border);
-    color: var(--disabled-text);
-    cursor: not-allowed;
-    opacity: 1;
-    box-shadow: var(--disabled-icon-ring);
-  }
-
-  :global(.theme-dark) :global(.spec-card.disabled.home-page-button) .spec-icon {
-    border-color: var(--disabled-border);
-    filter: grayscale(0.68) saturate(0.28) brightness(0.85);
-  }
-
-  :global(.theme-dark) :global(.spec-card.disabled.home-page-button) .class-icon {
-    border-color: var(--disabled-icon-bg);
-    background: var(--disabled-icon-bg);
-    filter: grayscale(0.68) saturate(0.28) brightness(0.85);
-  }
-
-  :global(.theme-dark) :global(.spec-card.disabled.home-page-button) .spec-name {
-    color: var(--disabled-text);
-    font-weight: 500;
   }
 </style>

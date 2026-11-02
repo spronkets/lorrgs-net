@@ -177,7 +177,6 @@ public sealed class WorldDataEndpointTests(ApiEndpointFixture fixture)
     [InlineData(" Era ")]
     [InlineData("classic")]
     [InlineData("Retail")]
-    [InlineData("midnight")]
     [InlineData("Mists of Pandaria")]
     [InlineData("mop")]
     [InlineData("classic_sod")]

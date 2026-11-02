@@ -15,9 +15,12 @@
   export let edition = '';
   export let linkedReport: RankingReport | null = null;
   export let bossIconName: string | undefined = undefined;
+  export let initialFilters: RankingFilters | undefined = undefined;
+  export let initialSort: RankingSort | undefined = undefined;
 
   let filters: RankingFilters = emptyFilters();
   let sort: RankingSort = 'rank';
+  let lastSeed = '';
 
   function emptyFilters(): RankingFilters {
     return { region: '', minDuration: '', maxDuration: '', fromDate: '', toDate: '' };
@@ -26,6 +29,15 @@
   function resetFilters() {
     filters = emptyFilters();
     sort = 'rank';
+  }
+
+  $: {
+    const seed = JSON.stringify({ initialFilters, initialSort });
+    if (seed !== lastSeed) {
+      filters = initialFilters ? { ...initialFilters } : emptyFilters();
+      sort = initialSort ?? 'rank';
+      lastSeed = seed;
+    }
   }
 
   $: apiReports = Array.isArray(rankings?.reports) ? rankings.reports : ([] as RankingReport[]);

@@ -259,7 +259,7 @@ public sealed class ApiEndpointTests(ApiEndpointFixture fixture) : IClassFixture
         Assert.True(service.Cancellation.CanBeCanceled);
         await host.Client.GetFromJsonAsync<JsonElement>(
             "/api/rankings/comp/reports/ReportA/fights/7?edition=classic&refresh=true");
-        Assert.Equal(("ReportA", 7, "era", true), service.Details);
+        Assert.Equal(("ReportA", 7, "era", true, false), service.Details);
         Assert.True(service.Cancellation.CanBeCanceled);
     }
 
@@ -327,7 +327,7 @@ public sealed class ApiEndpointTests(ApiEndpointFixture fixture) : IClassFixture
     private sealed class CompositionService : ICompRankingService
     {
         public CompRankingSearch? Search { get; private set; }
-        public (string, int, string, bool)? Details { get; private set; }
+        public (string, int, string, bool, bool)? Details { get; private set; }
         public CancellationToken Cancellation { get; private set; }
 
         public Task<CompRankingData?> LoadAsync(CompRankingSearch search, CancellationToken cancellationToken)
@@ -338,9 +338,9 @@ public sealed class ApiEndpointTests(ApiEndpointFixture fixture) : IClassFixture
         }
 
         public Task<RankingReport> LoadDetailsAsync(string code, int fightId, string edition,
-            bool refresh, CancellationToken cancellationToken)
+            bool refresh, CancellationToken cancellationToken, bool includeTimelines = true)
         {
-            Details = (code, fightId, edition, refresh);
+            Details = (code, fightId, edition, refresh, includeTimelines);
             Cancellation = cancellationToken;
             return Task.FromResult(new RankingReport { ReportId = code, Title = code });
         }

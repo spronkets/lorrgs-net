@@ -35,9 +35,9 @@ describe('App version mapping', () => {
     expect(WorldDataApi.getBosses).toHaveBeenLastCalledWith('anniversary');
     expect(WorldDataApi.getClasses).toHaveBeenLastCalledWith('anniversary');
     await fireEvent.click(screen.getByRole('button', { name: 'Retail' }));
-    await waitFor(() => expect(WorldDataApi.getBosses).toHaveBeenLastCalledWith('midnight'));
-    expect(WorldDataApi.getClasses).toHaveBeenLastCalledWith('midnight');
-    expect(WorldDataApi.getSeasons).toHaveBeenLastCalledWith('midnight');
+    await waitFor(() => expect(WorldDataApi.getBosses).toHaveBeenLastCalledWith('retail'));
+    expect(WorldDataApi.getClasses).toHaveBeenLastCalledWith('retail');
+    expect(WorldDataApi.getSeasons).toHaveBeenLastCalledWith('retail');
   });
 
   it('loads Season of Discovery using its API edition slug', async () => {
@@ -58,7 +58,7 @@ describe('App version mapping', () => {
       value: Awaited<ReturnType<typeof WorldDataApi.getBosses>>
     ) => void = () => {};
     vi.mocked(WorldDataApi.getBosses).mockImplementation((edition) =>
-      edition === 'midnight'
+      edition === 'retail'
         ? new Promise((resolve) => {
             resolveOlder = resolve;
           })
@@ -67,7 +67,7 @@ describe('App version mapping', () => {
     render(App);
     await screen.findByRole('heading', { name: 'Edition' });
     await fireEvent.click(screen.getByRole('button', { name: 'Retail' }));
-    await waitFor(() => expect(WorldDataApi.getBosses).toHaveBeenLastCalledWith('midnight'));
+    await waitFor(() => expect(WorldDataApi.getBosses).toHaveBeenLastCalledWith('retail'));
     await fireEvent.click(screen.getByRole('button', { name: 'Era' }));
     await waitFor(() => expect(WorldDataApi.getBosses).toHaveBeenLastCalledWith('era'));
     resolveOlder([{ id: 1, name: 'Wrong edition boss', nameSlug: 'wrong', icon: '', raidId: 1 }]);
@@ -188,7 +188,6 @@ describe('App version mapping', () => {
     expect(API.getCompRankings).not.toHaveBeenCalled();
     await fireEvent.click(within(landing).getByRole('button', { name: 'Comp Rankings' }));
     await screen.findByRole('button', { name: 'Search compositions' });
-    expect(screen.getAllByRole('button', { name: 'Boss' })).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Illidan');
     expect(screen.getByRole('combobox', { name: 'Raid' })).toHaveValue('blacktemple');
     expect(API.getCompRankings).not.toHaveBeenCalled();
@@ -258,16 +257,7 @@ describe('App version mapping', () => {
         roleId: 1
       }
     ]);
-    vi.spyOn(API, 'getSpecRankings').mockResolvedValue({
-      specSlug: 'retribution-paladin',
-      bossSlug: 'archimonde',
-      difficulty: 'normal',
-      metric: 'dps',
-      updated: '',
-      isDirty: false,
-      percentile: null,
-      reports: []
-    });
+    vi.spyOn(API, 'getSpecRankings').mockResolvedValue(null as never);
     vi.spyOn(API, 'getCompRankings').mockResolvedValue({
       bossSlug: 'archimonde',
       difficulty: '3',
@@ -283,7 +273,7 @@ describe('App version mapping', () => {
       '/?page=spec&edition=Anniversary&raid=hyjalsummit&boss=archimonde&spec=retribution-paladin'
     );
     render(App);
-    await fireEvent.click(await screen.findByRole('button', { name: 'Change selection' }));
+    await screen.findByRole('heading', { name: 'Spec Rankings' });
     expect(screen.getByRole('combobox', { name: 'Raid' })).toHaveValue('hyjalsummit');
     expect(screen.getByRole('button', { name: 'Boss' })).toHaveTextContent('Archimonde');
     const nav = screen.getByRole('navigation', { name: 'Main navigation' });

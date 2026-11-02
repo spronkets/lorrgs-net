@@ -13,7 +13,7 @@ public sealed class GetDetailsHandler(ICompRankingService service, ILogger<GetDe
         var normalized = WorldDataEditions.NormalizeEdition(request.Edition);
         if (normalized is null || request.FightId <= 0 || request.Code.Length > 32 || !request.Code.All(char.IsAsciiLetterOrDigit))
             return TypedResults.Problem(statusCode: 400, title: "Provide a valid report, fight ID and supported edition.");
-        try { return TypedResults.Ok(await service.LoadDetailsAsync(request.Code, request.FightId, normalized, request.Refresh, cancellationToken)); }
+        try { return TypedResults.Ok(await service.LoadDetailsAsync(request.Code, request.FightId, normalized, request.Refresh, cancellationToken, includeTimelines: false)); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (WarcraftLogsReportPrivateException) { return TypedResults.Problem(statusCode: 403, title: "This Warcraft Logs report is private or archived."); }
         catch (WarcraftLogsReportNotFoundException) { return TypedResults.Problem(statusCode: 404, title: "This Warcraft Logs report or fight is unavailable."); }

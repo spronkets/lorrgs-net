@@ -8,7 +8,11 @@
   import ReportIdentity from './ReportIdentity.svelte';
   import Spinner from './Spinner.svelte';
   import { timelineTime } from '../timelineUtils';
-  import { getTopPercentLabel } from '../rankingUtils';
+  import {
+    getRankingFilterError,
+    getTopPercentLabel,
+    normalizeRankingRegion
+  } from '../rankingUtils';
   import { SvelteSet } from 'svelte/reactivity';
   import { getSpecIconUrl } from '../wowAssets';
   import { onMount } from 'svelte';
@@ -29,7 +33,16 @@
     worldData,
     edition,
     bossIconName,
-    filters = { roles: [], specs: [], minSeconds: 0, maxSeconds: 0 },
+    filters = {
+      roles: [],
+      specs: [],
+      minSeconds: 0,
+      maxSeconds: 0,
+      region: '',
+      fromDate: '',
+      toDate: '',
+      sort: 'rank'
+    },
     refresh = false,
     manualMode = false,
     onprogress
@@ -77,15 +90,84 @@
         matchesCompExpressions(composition.specs, filters.specs))
     );
   }
-  const inspected = $derived(rankings.reports.filter((report) => loader.loaded.has(key(report))));
-  const matches = $derived(
-    inspected.filter(
-      (report) => durationMatches(report) && compositionMatches(loader.loaded.get(key(report))!)
-    )
+  function regionMatches(report: RankingReport) {
+    if (!filters.region) return true;
+    const region = normalizeRankingRegion(
+      report.serverRegion ?? report.players?.[0]?.serverRegion ?? ''
+    );
+    return region === filters.region;
+  }
+  function rankingFilterMatches(report: RankingReport) {
+    const min = filters.minSeconds > 0 ? filters.minSeconds * 1000 : null;
+    const max = filters.maxSeconds > 0 ? filters.maxSeconds * 1000 : null;
+    if (min !== null || max !== null) {
+      if (typeof report.duration !== 'number' || !Number.isFinite(report.duration)) return false;
+      if (min !== null && report.duration < min) return false;
+      if (max !== null && report.duration > max) return false;
+    }
+    if (filters.fromDate || filters.toDate) {
+      const date = report.startTime ? new Date(report.startTime).getTime() : NaN;
+      if (!Number.isFinite(date)) return false;
+      const from = filters.fromDate
+        ? new Date(`${filters.fromDate}T00:00:00`).getTime()
+        : null;
+      const to = filters.toDate ? new Date(`${filters.toDate}T00:00:00`) : null;
+      if (to) to.setDate(to.getDate() + 1);
+      if (from !== null && date < from) return false;
+      if (to !== null && date >= to.getTime()) return false;
+    }
+    return regionMatches(report);
+  }
+  function compareReports(left: RankingReport, right: RankingReport) {
+    if (filters.sort === 'rank') return 0;
+    const value = (report: RankingReport): number | null => {
+      const fight = report.fights?.[0];
+      const raw =
+        filters.sort === 'performance'
+          ? fight?.execution?.rankPercent
+          : filters.sort === 'duration'
+            ? report.duration
+            : filters.sort === 'date'
+              ? new Date(report.startTime ?? '').getTime()
+              : null;
+      return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
+    };
+    const leftValue = value(left);
+    const rightValue = value(right);
+    if (leftValue === null) return rightValue === null ? 0 : 1;
+    if (rightValue === null) return -1;
+    return (filters.sort === 'duration' ? leftValue - rightValue : rightValue - leftValue) || 0;
+  }
+  const rankingFilterError = $derived(
+    getRankingFilterError({
+      region: filters.region,
+      minDuration: filters.minSeconds > 0 ? `${Math.floor(filters.minSeconds / 60)}:${String(filters.minSeconds % 60).padStart(2, '0')}` : '',
+      maxDuration: filters.maxSeconds > 0 ? `${Math.floor(filters.maxSeconds / 60)}:${String(filters.maxSeconds % 60).padStart(2, '0')}` : '',
+      fromDate: filters.fromDate,
+      toDate: filters.toDate
+    })
   );
+  const inspected = $derived(rankings.reports.filter((report) => loader.loaded.has(key(report))));
+  const filteredSummaries = $derived.by(() => {
+    const candidates = rankings.reports
+      .map((summary, index) => ({
+        summary,
+        report: loader.loaded.get(key(summary)) ?? summary,
+        position: (rankings.page - 1) * 50 + index + 1
+      }))
+      .filter(
+        ({ summary, report }) =>
+          durationMatches(summary) && compositionMatches(report) && rankingFilterMatches(report)
+      );
+    if (filters.sort === 'rank') return candidates;
+    return [...candidates].sort(
+      (left, right) =>
+        compareReports(left.report, right.report) || left.position - right.position
+    );
+  });
+  const matches = $derived(filteredSummaries.filter(({ report }) => loader.loaded.has(key(report))));
   const pendingCount = $derived(
-    rankings.reports.filter((report) => durationMatches(report) && !loader.loaded.has(key(report)))
-      .length
+    filteredSummaries.filter(({ report }) => !loader.loaded.has(key(report))).length
   );
   function rosterReports(report: RankingReport, roleFilter: string, specFilter: string) {
     const roleOrder = ['tank', 'heal', 'mdps', 'rdps'];
@@ -136,15 +218,16 @@
       loadingText={`Loading raid compositions and cooldown timelines… ${loader.loaded.size} of ${Math.min(3, rankings.reports.length)} reports ready.`}
     />
   {:else if !initialLoading}
+    {#if rankingFilterError}<Alert variant="error">{rankingFilterError}</Alert>{/if}
     {#if loader.stopped}
       <Alert variant="error">
         Some report details could not be loaded. Retry those rows or load another kill when ready.
       </Alert>
     {/if}
-    {#if !matches.length && !pendingCount}<p>
+    {#if !rankingFilterError && !matches.length && !pendingCount}<p>
         No inspected kills match these filters on this page.
       </p>{/if}
-    {#each rankings.reports as summary, index (key(summary))}
+    {#each filteredSummaries as { summary, position } (key(summary))}
       {@const report = loader.loaded.get(key(summary)) ?? summary}
       {@const fight = report.fights?.[0]}
       {@const guildName = report.guildName || summary.guildName}
@@ -156,8 +239,8 @@
         fight?.composition?.roles ?? fight?.roleCounts ?? summary.fights?.[0]?.roleCounts ?? {}}
       {@const playerCount =
         report.players?.length || Object.values(roles).reduce((sum, count) => sum + count, 0)}
-      {#if durationMatches(summary) && compositionMatches(report)}
-        <article data-position={(rankings.page - 1) * 50 + index + 1}>
+      {#if !rankingFilterError}
+        <article data-position={position}>
           {#snippet reportHeading()}
             <div class="heading">
               <div class="title-block">

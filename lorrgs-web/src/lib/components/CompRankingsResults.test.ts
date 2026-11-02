@@ -126,6 +126,45 @@ it('shows explicit zero and positive death counts', async () => {
   expect(stats[1]).toHaveTextContent('2 deaths');
 });
 
+it('applies region, kill time, date range, and sort selections from page filters', async () => {
+  const reports = [0, 1, 2].map((index) => ({
+    ...summaries[index],
+    reportId: `Filtered${index + 1}`,
+    title: `Filtered ${index + 1}`,
+    duration: [180000, 210000, 240000][index],
+    startTime: ['2026-10-27T12:00:00Z', '2026-10-29T12:00:00Z', '2026-10-28T12:00:00Z'][index],
+    serverRegion: ['us', 'eu', 'us'][index]
+  }));
+  vi.mocked(getCompRankingDetails).mockImplementation(async (summary) => {
+    const report = detail(summary);
+    report.serverRegion = summary.serverRegion;
+    report.fights![0].execution = {
+      rank: 100 + summary.fights![0].fightId,
+      best: 1,
+      totalParses: 1000,
+      rankPercent: [91, 98, 95][summary.fights![0].fightId - 1]
+    };
+    return report;
+  });
+  const { container } = render(CompRankingsResults, {
+    rankings: { ...rankings, reports },
+    filters: {
+      roles: [],
+      specs: [],
+      minSeconds: 210,
+      maxSeconds: 240,
+      region: 'us',
+      fromDate: '2026-10-28',
+      toDate: '2026-10-28',
+      sort: 'date'
+    },
+    worldData: {},
+    edition: 'anniversary'
+  });
+  await waitFor(() => expect(container.querySelectorAll('article')).toHaveLength(1));
+  expect(container.querySelector('article')?.getAttribute('data-position')).toBe('3');
+});
+
 it('preserves detail totals when manual summaries have none and labels unavailable totals honestly', async () => {
   const reports = summaries.slice(0, 2).map((report) => ({
     ...report,

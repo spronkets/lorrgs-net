@@ -73,7 +73,7 @@ describe('raid catalog version mapping', () => {
   it('maps API editions separately for Anniversary and Era', () => {
     expect(getApiEditionSlug('Anniversary')).toBe('anniversary');
     expect(getApiEditionSlug('Era')).toBe('era');
-    expect(getApiEditionSlug('Retail')).toBe('midnight');
+    expect(getApiEditionSlug('Retail')).toBe('retail');
     expect(getApiEditionSlug('Season of Discovery')).toBe('classic_sod');
     expect(getApiEditionSlug('Unknown')).toBe('');
   });

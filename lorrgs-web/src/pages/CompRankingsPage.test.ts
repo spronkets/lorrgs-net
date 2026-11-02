@@ -145,7 +145,11 @@ it('uses labeled native fields and affixed composition inputs without duplicate 
   expect(frame?.querySelector('.suffix select')).not.toBeNull();
   const ids = [...container.querySelectorAll('[id]')].map((element) => element.id);
   expect(new Set(ids).size).toBe(ids.length);
-  expect(screen.getByRole('button', { name: 'Clear filters' })).toHaveAttribute('type', 'button');
+  expect(screen.getByRole('button', { name: 'Reset filters' })).toHaveAttribute('type', 'button');
+  expect(screen.getByRole('button', { name: 'Clear composition filters' })).toHaveAttribute(
+    'type',
+    'button'
+  );
 });
 
 it('does not request compositions for an unavailable raid restored from the URL', async () => {
@@ -169,6 +173,38 @@ it('does not request compositions for an unavailable raid restored from the URL'
   });
   expect(await screen.findByRole('option', { name: 'Black Temple' })).toBeDisabled();
   expect(API.getCompRankings).not.toHaveBeenCalled();
+});
+
+it('shows difficulty beside the boss only when multiple options exist', async () => {
+  renderPage();
+  expect(screen.queryByRole('combobox', { name: 'Difficulty' })).not.toBeInTheDocument();
+
+  window.history.replaceState(
+    {},
+    '',
+    '/?page=comp&edition=Retail&raid=the-venomous-abyss&boss=ulatek&compPage=1'
+  );
+  render(CompRankingsPage, {
+    worldData,
+    selectedVersion: 'Retail',
+    raidCatalog: {
+      editions: [],
+      instances: {
+        retail: [
+          {
+            zoneId: 1001,
+            slug: 'the-venomous-abyss',
+            name: 'The Venomous Abyss',
+            edition: 'retail',
+            phase: 1,
+            isAvailable: true,
+            bosses: [{ id: 3020, name: "Ula'tek", slug: 'ulatek', mapped: true }]
+          }
+        ]
+      }
+    }
+  });
+  expect(await screen.findByRole('combobox', { name: 'Difficulty' })).toBeInTheDocument();
 });
 
 it('explains missing mappings instead of claiming a selected encounter is unselected', async () => {
@@ -204,7 +240,7 @@ it('explains missing mappings instead of claiming a selected encounter is unsele
 
 it('hydrates repeated filters and kill times, then requests the correct edition and encounter', async () => {
   const { container } = renderPage(
-    '&role=heal.gte.2&role=mdps.eq.0&spec=holy-paladin.lte.2&killtime_min=2:00&killtime_max=300&compPage=2'
+    '&role=heal.gte.2&role=mdps.eq.0&spec=holy-paladin.lte.2&killtime_min=2:00&killtime_max=300&region=eu&fromDate=2026-10-01&toDate=2026-10-31&sort=date&compPage=2'
   );
   await screen.findByText('No inspected kills match these filters on this page.');
   expect(API.getCompRankings).toHaveBeenCalledWith(
@@ -226,6 +262,10 @@ it('hydrates repeated filters and kill times, then requests the correct edition 
   expect(screen.getByLabelText('Holy Paladin count')).toHaveValue(2);
   expect(screen.getByLabelText('Minimum kill time')).toHaveValue('2:00');
   expect(screen.getByLabelText('Maximum kill time')).toHaveValue('5:00');
+  expect(screen.getByRole('button', { name: 'Region EU' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByLabelText('From date')).toHaveValue('2026-10-01');
+  expect(screen.getByLabelText('To date')).toHaveValue('2026-10-31');
+  expect(screen.getByRole('combobox', { name: 'Sort by' })).toHaveValue('date');
   expect(container.querySelector('.icon-select img')).toBeNull();
 });
 

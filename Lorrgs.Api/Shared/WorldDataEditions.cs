@@ -9,7 +9,7 @@ public static class WorldDataEditions
     {
         "anniversary" => "anniversary",
         "era" or "classic" => "era",
-        "retail" or "midnight" => "retail",
+        "retail" => "retail",
         "mistsofpandaria" or "mists of pandaria" or "mop" => "mistsofpandaria",
         "classic_sod" => "classic_sod",
         _ => null

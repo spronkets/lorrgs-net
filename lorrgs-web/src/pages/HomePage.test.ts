@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, expect, it, vi } from 'vitest';
 import { getBossTimeline, getReportTimeline, getSpecRankings, lookupReport } from '../lib/api';
 import { bossResponse, response, rows } from '../lib/testing/timelineFixtures';
@@ -46,6 +46,23 @@ const raidCatalog = {
   }
 };
 
+const retailRaidCatalog = {
+  editions: [],
+  instances: {
+    retail: [
+      {
+        zoneId: 1060,
+        slug: 'blacktemple',
+        name: 'Black Temple',
+        edition: 'retail',
+        phase: 3,
+        isAvailable: true,
+        bosses: [{ id: 50609, name: 'Illidan Stormrage', slug: 'illidan-stormrage', mapped: true }]
+      }
+    ]
+  }
+};
+
 afterEach(() => {
   window.history.replaceState({}, '', '/');
   vi.resetAllMocks();
@@ -73,11 +90,17 @@ it('resolves a linked fight before requesting rankings and corrects the encounte
   vi.mocked(getBossTimeline).mockImplementation(async report => bossResponse(report));
   vi.mocked(getReportTimeline).mockImplementation(async report => response(report));
   renderPage();
-  await screen.findByRole('heading', { name: 'Paladin Retribution Paladin vs. Illidan Stormrage' });
-  expect(getSpecRankings).toHaveBeenCalledTimes(1);
-  expect(getSpecRankings).toHaveBeenCalledWith(
-    'retribution-paladin', 'illidan-stormrage', 'Normal', 'dps', 'anniversary', expect.any(Object)
-  );
+  await screen.findByText('vs.');
+  await waitFor(() => {
+    expect(getSpecRankings).toHaveBeenCalledWith(
+      'retribution-paladin',
+      'illidan-stormrage',
+      'Normal',
+      'dps',
+      'anniversary',
+      expect.any(Object)
+    );
+  });
   expect(new URLSearchParams(window.location.search).get('raid')).toBe('blacktemple');
   expect(new URLSearchParams(window.location.search).get('boss')).toBe('illidan-stormrage');
   await screen.findByText(/Boss reference: Linked Illidan, fight 30/);
@@ -125,7 +148,7 @@ it('does not request rankings for an unavailable raid restored from the URL', as
   expect(getSpecRankings).not.toHaveBeenCalled();
 });
 
-it('combines the spec icons and encounter heading inside the selection panel', async () => {
+it('combines the spec icons and selection separator inside the selection panel', async () => {
   window.history.replaceState(
     {},
     '',
@@ -143,37 +166,73 @@ it('combines the spec icons and encounter heading inside the selection panel', a
     reports: []
   });
   const { container } = renderPage();
-  const heading = await screen.findByRole('heading', {
-    name: 'Paladin Retribution Paladin vs. Illidan Stormrage'
-  });
+  const separator = await screen.findByText('vs.');
   expect(screen.getByRole('heading', { name: 'Spec Rankings', level: 2 })).toBeInTheDocument();
   expect(container.querySelector('.page-header')).toHaveTextContent(
     'Compare cooldown usage across ranked players of a chosen specialization.'
   );
-  expect(heading.closest('.selection-collapsed')).not.toBeNull();
-  expect(container.querySelector('.selection-overview .value')).toHaveTextContent(
-    /^Anniversary \/ Black Temple$/
+  expect(separator.closest('.selection-separator')).not.toBeNull();
+  expect(container.querySelector('.spec-selector .spec-icon')?.nextElementSibling).toHaveClass(
+    'class-icon'
   );
-  expect(heading.querySelector('.spec-icon')?.nextElementSibling).toHaveClass('class-icon');
-  expect(within(heading).getByRole('img', { name: 'Paladin' })).toBeInTheDocument();
   await screen.findByRole('region', { name: 'Cooldown comparison timelines' });
   expect(vi.mocked(getSpecRankings).mock.calls[0][5]).toMatchObject({
     includeOtherPlayers: false
   });
   const expectedIcon =
     'https://wow.zamimg.com/images/wow/icons/medium/achievement_boss_illidan.jpg';
-  expect(heading.querySelector('.boss-icon')).toHaveAttribute('src', expectedIcon);
+  expect(container.querySelector('.raid-boss-row .boss-selector .boss-icon')).toHaveAttribute(
+    'src',
+    expectedIcon
+  );
   expect(container.querySelector('.rankings-header')).toBeNull();
   expect(screen.queryByText(/Updated:/)).not.toBeInTheDocument();
-  await fireEvent.click(screen.getByRole('button', { name: 'Change selection' }));
-  const bossSelector = screen.getByRole('button', { name: 'Boss' });
-  expect(bossSelector.querySelector('img')).toHaveAttribute('src', expectedIcon);
-  await fireEvent.click(bossSelector);
-  expect(
-    screen.getByRole('option', { name: 'Illidan Stormrage' }).querySelector('img')
-  ).toHaveAttribute('src', expectedIcon);
-  expect(screen.queryByRole('heading', { name: /vs\. Illidan/ })).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Retribution Paladin/ })).toBeInTheDocument();
+  expect(screen.getByText('Specialization')).toBeInTheDocument();
+  expect(screen.queryByRole('combobox', { name: 'Role' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('combobox', { name: 'Class' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Retribution Paladin' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Boss' })).toBeInTheDocument();
+});
+
+it('shows difficulty beside boss for retail and uses the selected difficulty', async () => {
+  window.history.replaceState(
+    {},
+    '',
+    '/?edition=Retail&raid=blacktemple&boss=illidan-stormrage&spec=retribution-paladin&difficultyId=4'
+  );
+  vi.mocked(getSpecRankings).mockResolvedValue({
+    specSlug: 'retribution-paladin',
+    bossSlug: 'illidan-stormrage',
+    difficulty: 'heroic',
+    metric: 'dps',
+    updated: '',
+    isDirty: false,
+    percentile: null,
+    reports: []
+  });
+  render(HomePage, { worldData, raidCatalog: retailRaidCatalog });
+  await screen.findByText('vs.');
+  const difficulty = screen.getByRole('combobox', { name: 'Difficulty' });
+  expect(difficulty).toHaveValue('4');
+  expect(getSpecRankings).toHaveBeenCalledWith(
+    'retribution-paladin',
+    'illidan-stormrage',
+    'Heroic',
+    'dps',
+    'retail',
+    expect.objectContaining({ difficultyId: 4 })
+  );
+  await fireEvent.change(difficulty, { target: { value: '5' } });
+  await waitFor(() => {
+    expect(getSpecRankings).toHaveBeenCalledWith(
+      'retribution-paladin',
+      'illidan-stormrage',
+      'Mythic',
+      'dps',
+      'retail',
+      expect.objectContaining({ difficultyId: 5 })
+    );
+  });
 });
 
 it('selects an encounter before loading, then exposes API errors and lets the user change selection', async () => {
@@ -182,13 +241,12 @@ it('selects an encounter before loading, then exposes API errors and lets the us
   vi.mocked(getSpecRankings).mockRejectedValueOnce('upstream unavailable');
   renderPage();
 
-  const spec = screen.getByRole('button', { name: /Retribution Paladin/ });
-  await fireEvent.click(spec);
+  const specSelect = screen.getByRole('button', { name: 'Retribution Paladin' });
   expect(getSpecRankings).not.toHaveBeenCalled();
-  expect(spec).toHaveAttribute('title', 'Select a boss first');
+  expect(specSelect).toBeEnabled();
 
   await fireEvent.change(screen.getByLabelText('Raid'), { target: { value: 'blacktemple' } });
-  await fireEvent.click(screen.getByRole('button', { name: /Retribution Paladin/ }));
+  await fireEvent.click(screen.getByRole('button', { name: 'Retribution Paladin' }));
   expect(await screen.findByText('Failed to load rankings.')).toBeInTheDocument();
   expect(getSpecRankings).toHaveBeenCalledWith(
     'retribution-paladin',
@@ -201,9 +259,6 @@ it('selects an encounter before loading, then exposes API errors and lets the us
   expect(error).toHaveBeenCalled();
   expect(new URLSearchParams(location.search).has('version')).toBe(false);
   expect(new URLSearchParams(location.search).has('size')).toBe(false);
-
-  await fireEvent.click(screen.getByRole('button', { name: 'Change selection' }));
-  expect(screen.getByRole('button', { name: /Retribution Paladin/ })).toBeInTheDocument();
 });
 
 it('reports missing encounter mappings and distinguishes an empty ranking response', async () => {
@@ -260,7 +315,7 @@ it('ignores invalid query selections and removes them from the shareable URL', a
   );
   renderPage();
   expect(screen.getByRole('heading', { name: 'Spec Rankings' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Retribution Paladin/ })).toBeInTheDocument();
+  expect(screen.getByText('Specialization')).toBeInTheDocument();
   expect(getSpecRankings).not.toHaveBeenCalled();
   expect(new URLSearchParams(location.search).get('edition')).toBe('Anniversary');
   expect(new URLSearchParams(location.search).has('raid')).toBe(false);
@@ -286,8 +341,8 @@ it('keeps a valid ranking selection when class metadata is missing and uses role
   const { container } = render(HomePage, { worldData: sparseWorldData, raidCatalog });
 
   expect(await screen.findByText('No rankings found for this selection')).toBeInTheDocument();
-  expect(screen.getByRole('img', { name: 'Class' })).toBeInTheDocument();
-  expect(container.querySelector('.selection-spec-media .spec-icon')).toHaveAttribute(
+  expect(container.querySelector('.spec-selector .class-icon')).not.toBeNull();
+  expect(container.querySelector('.spec-selector .spec-icon')).toHaveAttribute(
     'src',
     '/images/wow/specs/other-retribution.jpg'
   );

@@ -48,7 +48,7 @@ describe('World Data API', () => {
   it('passes edition on every world-data collection and individual request', async () => {
     const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
     vi.stubGlobal('fetch', fetch);
-    for (const edition of ['anniversary', 'era', 'midnight', 'mop']) {
+    for (const edition of ['anniversary', 'era', 'retail', 'mop']) {
       for (const collection of [
         getRoles,
         getClasses,

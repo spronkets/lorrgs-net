@@ -61,6 +61,7 @@
     label={bossLabel}
     placeholder={bossPlaceholder}
     disabled={!selectedRaid}
+    fallback="skull"
   />
 </div>
 
@@ -102,15 +103,10 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-2, 0.5rem);
-    font-size: var(--label-font-size, 0.9rem);
-    color: var(--section-heading);
-    font-weight: 600;
   }
 
   label span {
-    font-size: var(--meta-font-size, 0.82rem);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    @include selectionTokens.selection-label;
   }
 
   select {

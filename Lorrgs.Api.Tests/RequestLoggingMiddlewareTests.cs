@@ -40,6 +40,29 @@ public sealed class RequestLoggingMiddlewareTests
             Assert.Empty(logger.Messages);
     }
 
+    [Fact]
+    public async Task TreatsClientAbortAsHandledCancellation()
+    {
+        var logger = new RecordingLogger();
+        var source = new CancellationTokenSource();
+        var context = new DefaultHttpContext
+        {
+            TraceIdentifier = "server-request-id",
+            RequestAborted = source.Token
+        };
+        context.SetEndpoint(new Endpoint(_ => Task.CompletedTask, new EndpointMetadataCollection(), "GetCompDetails"));
+        var middleware = new RequestLoggingMiddleware(_ =>
+        {
+            source.Cancel();
+            throw new OperationCanceledException(source.Token);
+        }, logger);
+
+        await middleware.InvokeAsync(context);
+
+        Assert.Equal(499, context.Response.StatusCode);
+        Assert.Contains("Request canceled endpoint=GetCompDetails status=499", Assert.Single(logger.Messages));
+    }
+
     private sealed class RecordingLogger : ILogger<RequestLoggingMiddleware>
     {
         public Dictionary<string, object?>? Scope { get; private set; }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Skull } from '@lucide/svelte';
+  import { ChevronDown, ChevronRight, Skull } from '@lucide/svelte';
   import Alert from './Alert.svelte';
 
   import Spinner from './Spinner.svelte';
@@ -266,7 +266,7 @@
   </div>
 {/snippet}
 
-<div class="boss-row" aria-label="Boss reference timeline">
+<div class="boss-row" class:expandable={actorRows.length > 0} aria-label="Boss reference timeline">
   {#if !compositionMode}
   <div class="position-placeholder" aria-hidden="true">
     <Skull size={20} aria-hidden="true" />
@@ -279,20 +279,6 @@
       <BossIcon slug={bossSlug} iconName={bossIconName} size={24} />
       <span>{timeline?.name || report.fights?.[0]?.name || 'Boss'}</span>
     </div>
-    {#if actorRows.length > 0}
-      <button
-        class="button actor-toggle"
-        type="button"
-        data-tone="neutral"
-        data-outline="true"
-        data-size="small"
-        aria-expanded={showActorRows}
-        aria-controls="boss-add-rows"
-        onclick={() => showActorRows = !showActorRows}
-      >
-        {showActorRows ? 'Hide' : 'Show'} other enemies ({actorRows.length})
-      </button>
-    {/if}
     {#if timeline && !timeline.isComplete}
       <div class="identity-warning">
         <Alert variant="warning" compact>Partial boss timeline — event limit reached</Alert>
@@ -300,6 +286,34 @@
     {/if}
   </div>
   {@render renderTrack(bossEvents, 'Boss ability timeline', 'boss-main', true, true)}
+  {#if actorRows.length > 0}
+    <div
+      class="boss-expand-handle"
+      role="button"
+      tabindex="0"
+      aria-expanded={showActorRows}
+      aria-controls="boss-add-rows"
+      aria-label={`${showActorRows ? 'Collapse' : 'Expand'} enemy rows (${actorRows.length})`}
+      title={showActorRows
+        ? 'Collapse other enemy timeline rows'
+        : 'Expand to load and show other enemy timeline rows'}
+      onclick={() => (showActorRows = !showActorRows)}
+      onkeydown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          showActorRows = !showActorRows;
+        }
+      }}
+    >
+      <span class="chevron" aria-hidden="true">
+        {#if showActorRows}
+          <ChevronDown size={12} aria-hidden="true" />
+        {:else}
+          <ChevronRight size={12} aria-hidden="true" />
+        {/if}
+      </span>
+    </div>
+  {/if}
 </div>
 
 {#if showActorRows}
@@ -321,9 +335,14 @@
 <style>
   .boss-row {
     display: flex;
+    position: relative;
     min-height: 68px;
     border-bottom: 1px solid var(--line);
     background: var(--panel);
+  }
+  .boss-row.expandable {
+    border-bottom-style: dotted;
+    border-bottom-color: color-mix(in srgb, #ffffff 38%, var(--line));
   }
   @media (max-width: 600px) {
     .boss-row {
@@ -337,6 +356,9 @@
     }
     .boss-row .track {
       width: calc(100% - 34px);
+    }
+    .boss-expand-handle {
+      padding-left: 8px;
     }
   }
   .position-placeholder {
@@ -376,9 +398,35 @@
     font-size: 13px;
     font-weight: 600;
   }
-  :global(.actor-toggle.button) {
+  .boss-expand-handle {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 12px;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0;
+    color: var(--text-subtle, var(--text-muted));
+    user-select: none;
+    z-index: 6;
+  }
+  .boss-expand-handle:focus-visible {
+    outline: 2px solid var(--select-focus-border);
+    outline-offset: -2px;
+  }
+  .chevron {
     font-size: 11px;
-    line-height: 1.25;
+    line-height: 1;
+    opacity: 0.75;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 2px;
+    transform: translateY(1px);
   }
   .boss-add-row .position-placeholder {
     background: var(--panel-subtle);

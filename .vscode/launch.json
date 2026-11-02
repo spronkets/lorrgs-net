@@ -44,11 +44,10 @@
       "presentation": { "order": 7 }
     },
     {
-      "name": "Open Swagger",
-      "type": "chrome",
+      "name": "Open Swagger (no debug)",
+      "type": "node-terminal",
       "request": "launch",
-      "userDataDir": "${env:TEMP}\\lorrgs-net-swagger-debug",
-      "url": "http://localhost:5247/swagger/index.html",
+      "command": "Start-Process \"http://localhost:5247/swagger/index.html\"",
       "presentation": {
         "hidden": true
       }
@@ -66,14 +65,14 @@
     {
       "name": "Run All",
       "preLaunchTask": "Dev: run full stack",
-      "configurations": ["Attach to API (.NET)", "Debug running Web App", "Open Swagger"],
+      "configurations": ["Run Web App (Svelte)", "Open Swagger (no debug)"],
       "stopAll": true,
       "presentation": { "order": 1 }
     },
     {
       "name": "Run API (.NET)",
       "preLaunchTask": "API: run",
-      "configurations": ["Attach to API (.NET)", "Open Swagger"],
+      "configurations": ["Open Swagger (no debug)"],
       "stopAll": true,
       "presentation": { "order": 2 }
     }

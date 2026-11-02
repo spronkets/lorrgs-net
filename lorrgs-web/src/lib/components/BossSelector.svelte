@@ -146,13 +146,10 @@
     color: var(--section-heading);
   }
   .field-label {
-    font-size: 1rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    font-weight: 600;
+    @include selectionTokens.selection-label;
   }
   :global(.trigger.boss-selector-button) {
-    @include selectionTokens.selection-control;
+    @include selectionTokens.selection-dropdown;
 
     display: flex;
     align-items: center;
@@ -160,6 +157,8 @@
     width: 100%;
     text-align: left;
     padding-block: 6px;
+    padding-right: var(--select-padding-x, 0.6rem);
+    background-image: none;
     cursor: pointer;
   }
   .options:focus-visible {
