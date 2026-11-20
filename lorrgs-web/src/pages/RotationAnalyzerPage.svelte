@@ -350,7 +350,6 @@
 
   $: fights = lookup?.reportData?.report?.fights || [];
   $: players = lookup?.reportData?.report?.masterData?.actors || [];
-  $: selectedFight = fights.find((fight) => String(fight.id) === selectedFightId) ?? null;
   $: fightOptions = fights.map((fight) => {
     const bossSlug = slugifyBossName(fight.name || '');
     const iconUrl = getBossPortraitUrl(bossSlug);

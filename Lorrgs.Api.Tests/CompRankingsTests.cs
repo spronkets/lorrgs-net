@@ -120,7 +120,6 @@ public sealed class CompRankingsTests : IDisposable
                 {"id":123,"name":"Healer","class":"Paladin"}]}}}]}
                 """);
         var guildStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var timelineStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var guildCanceled = false;
         using var handler = new CallbackHandler(async (request, cancellationToken) =>
@@ -141,8 +140,7 @@ public sealed class CompRankingsTests : IDisposable
         });
         var timeline = new RecordingTimeline
         {
-            Completion = release.Task,
-            OnStart = () => timelineStarted.TrySetResult()
+            Completion = release.Task
         };
         var service = new CompRankingService(fixture.CreateClient(handler), timeline,
             NullLogger<CompRankingService>.Instance, new WarcraftReferenceData(WorldDataService.Instance));
@@ -151,15 +149,14 @@ public sealed class CompRankingsTests : IDisposable
         var task = endpointHandler.Handle(new GetDetailsRequest("ReportA", 1, "anniversary"), cancellation.Token);
         try
         {
-            await Task.WhenAll(guildStarted.Task, timelineStarted.Task).WaitAsync(TimeSpan.FromSeconds(5));
+            await guildStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.False(task.IsCompleted);
             if (cancel)
             {
                 cancellation.Cancel();
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task.WaitAsync(TimeSpan.FromSeconds(5)));
                 Assert.True(guildCanceled);
-                Assert.Equal(cancellation.Token, timeline.Cancellation);
-                Assert.True(timeline.Cancellation.IsCancellationRequested);
+                Assert.False(timeline.Cancellation.CanBeCanceled);
             }
         }
         finally
@@ -170,7 +167,7 @@ public sealed class CompRankingsTests : IDisposable
         var report = Assert.IsType<RankingReport>(HttpResultAssertions.Read(await task).Value);
         var player = Assert.Single(report.Players);
         Assert.Equal("Raid Guild", player.GuildName);
-        Assert.NotNull(player.Timeline);
+        Assert.Null(player.Timeline);
     }
 
     [Theory]

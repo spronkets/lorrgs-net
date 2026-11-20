@@ -310,7 +310,9 @@ public sealed class ApiEndpointTests(ApiEndpointFixture fixture) : IClassFixture
                 """
                 {"data":{"reportData":{"report":{"fights":[{"id":1,"name":"Boss","startTime":0,"endTime":60000}],
                 "masterData":{"actors":[{"id":7,"name":"Player","subType":"Holy"}]}}}}}
-                """, """{"data":{"reportData":{"report":{"events":{"data":[]}}}}}""")
+                """,
+                """{"data":{"reportData":{"report":{"events":{"data":[]}}}}}""",
+                """{"data":{"reportData":{"report":{"events":{"data":[]}}}}}""")
         };
         await host.InitializeAsync();
         var lookup = await host.Client.GetFromJsonAsync<JsonElement>("/api/WarcraftLogs/reports/ReportA/lookup");
@@ -321,7 +323,7 @@ public sealed class ApiEndpointTests(ApiEndpointFixture fixture) : IClassFixture
         var analysis = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Player", analysis.GetProperty("playerName").GetString());
         Assert.Equal("ReportB", analysis.GetProperty("reportCode").GetString());
-        Assert.Equal(3, host.Upstream.GraphQlRequests);
+        Assert.Equal(4, host.Upstream.GraphQlRequests);
     }
 
     private sealed class CompositionService : ICompRankingService

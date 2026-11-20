@@ -4,6 +4,7 @@
 
   import Spinner from './Spinner.svelte';
   import { untrack } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
   import { timelineErrorSummary } from '../timelineError';
   import TimelinePhases from './TimelinePhases.svelte';
   import BossIcon from './BossIcon.svelte';
@@ -77,7 +78,7 @@
   ) : []);
   const actorRows = $derived.by(() => {
     if (!timeline) return [] as Array<{ name: string; events: typeof allEvents }>;
-    const rows = new Map<string, typeof allEvents>();
+    const rows = new SvelteMap<string, typeof allEvents>();
     for (const event of allEvents) {
       const source = event.sourceName?.trim();
       if (!source || source === timeline.name) continue;

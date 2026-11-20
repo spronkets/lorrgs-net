@@ -163,7 +163,7 @@
         )
         .sort((a, b) => Number(b.kind === 'buff') - Number(a.kind === 'buff'));
       const rows: { event: (typeof sorted)[number]; repeatCount: number }[] = [];
-      const indexByKey = new Map<string, number>();
+      const indexByKey = new SvelteMap<string, number>();
       for (const event of sorted) {
         if (magnifier?.boss && event.kind === 'cast' && !event.castResults?.length) {
           const key = `${event.kind}|${event.spellId}|${event.timestamp}|${event.castStart ?? ''}|${event.duration ?? ''}|${event.sourceName ?? ''}`;

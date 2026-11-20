@@ -111,10 +111,9 @@
       const from = filters.fromDate
         ? new Date(`${filters.fromDate}T00:00:00`).getTime()
         : null;
-      const to = filters.toDate ? new Date(`${filters.toDate}T00:00:00`) : null;
-      if (to) to.setDate(to.getDate() + 1);
+      const to = filters.toDate ? new Date(`${filters.toDate}T00:00:00`).getTime() : null;
       if (from !== null && date < from) return false;
-      if (to !== null && date >= to.getTime()) return false;
+      if (to !== null && date >= to + 24 * 60 * 60 * 1000) return false;
     }
     return regionMatches(report);
   }
@@ -147,7 +146,6 @@
       toDate: filters.toDate
     })
   );
-  const inspected = $derived(rankings.reports.filter((report) => loader.loaded.has(key(report))));
   const filteredSummaries = $derived.by(() => {
     const candidates = rankings.reports
       .map((summary, index) => ({

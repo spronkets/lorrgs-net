@@ -898,14 +898,22 @@ public class RotationAnalysisService(
         {
             _logger.LogInformation(
                 "No parse percentile match found report={ReportCode} fight={FightId} actor={ActorName} class={ActorClass} role={RoleHint}",
-                reportCode, fightId, actorName, actorClass, roleHint);
+                SanitizeForLog(reportCode),
+                fightId,
+                SanitizeForLog(actorName),
+                SanitizeForLog(actorClass),
+                SanitizeForLog(roleHint));
             return null;
         }
 
         var parse = (int)Math.Round(matches.Max(), MidpointRounding.AwayFromZero);
         _logger.LogInformation(
             "Resolved parse percentile report={ReportCode} fight={FightId} actor={ActorName} role={RoleHint} percentile={ParsePercentile}",
-            reportCode, fightId, actorName, roleHint, parse);
+            SanitizeForLog(reportCode),
+            fightId,
+            SanitizeForLog(actorName),
+            SanitizeForLog(roleHint),
+            parse);
         return parse;
     }
 
@@ -1051,6 +1059,18 @@ public class RotationAnalysisService(
 
         report = new JsonReport(reportElement);
         return true;
+    }
+
+    private static string SanitizeForLog(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return value
+            .Replace("\r", "\\r", StringComparison.Ordinal)
+            .Replace("\n", "\\n", StringComparison.Ordinal);
     }
 
     private readonly record struct JsonReport(JsonElement element);

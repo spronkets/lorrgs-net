@@ -20,7 +20,6 @@
 
   let filters: RankingFilters = emptyFilters();
   let sort: RankingSort = 'rank';
-  let lastSeed = '';
 
   function emptyFilters(): RankingFilters {
     return { region: '', minDuration: '', maxDuration: '', fromDate: '', toDate: '' };
@@ -31,13 +30,9 @@
     sort = 'rank';
   }
 
-  $: {
-    const seed = JSON.stringify({ initialFilters, initialSort });
-    if (seed !== lastSeed) {
-      filters = initialFilters ? { ...initialFilters } : emptyFilters();
-      sort = initialSort ?? 'rank';
-      lastSeed = seed;
-    }
+  $: if (initialFilters || initialSort) {
+    filters = initialFilters ? { ...initialFilters } : emptyFilters();
+    sort = initialSort ?? 'rank';
   }
 
   $: apiReports = Array.isArray(rankings?.reports) ? rankings.reports : ([] as RankingReport[]);
